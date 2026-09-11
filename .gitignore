@@ -1,0 +1,38 @@
+﻿# Secrets
+.env
+*.secret
+
+# .NET
+**/bin/
+**/obj/
+*.user
+*.suo
+
+# Node
+web/node_modules/
+web/dist/
+
+# Python
+ai-service/.venv/
+ai-service/__pycache__/
+ai-service/**/__pycache__/
+*.py[cod]
+
+# Flutter/Dart
+mobile/.dart_tool/
+mobile/.packages
+mobile/build/
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
+
+# Editors and OS
+.vs/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Generated TypeScript build metadata
+web/*.tsbuildinfo
+web/vite.config.js
+web/vite.config.d.ts
