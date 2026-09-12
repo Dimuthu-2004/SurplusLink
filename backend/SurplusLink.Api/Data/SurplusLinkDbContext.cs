@@ -19,6 +19,8 @@ public sealed class SurplusLinkDbContext(DbContextOptions<SurplusLinkDbContext> 
 
     public DbSet<Reservation> Reservations => Set<Reservation>();
 
+    public DbSet<MarketplaceTransaction> Transactions => Set<MarketplaceTransaction>();
+
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)

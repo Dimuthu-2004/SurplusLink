@@ -13,6 +13,7 @@ public enum MaterialRequestStatus
 {
     OPEN,
     MATCHED,
+    PENDING_APPROVAL,
     FULFILLED,
     CANCELLED,
     EXPIRED
@@ -33,4 +34,12 @@ public enum ReservationStatus
     CONFIRMED,
     RELEASED,
     CANCELLED
+}
+
+public enum TransactionStatus
+{
+    PENDING_APPROVAL,
+    APPROVED,
+    REJECTED,
+    COMPLETED
 }
