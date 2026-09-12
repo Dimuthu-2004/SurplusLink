@@ -20,12 +20,23 @@ var builder = WebApplication.CreateBuilder(args);
 
 // The ASP.NET Core API is the sole public backend for web and mobile clients.
 builder.Logging.ClearProviders();
-builder.Logging.AddJsonConsole(options =>
+if (builder.Environment.IsDevelopment())
 {
-    options.IncludeScopes = true;
-    options.TimestampFormat = "yyyy-MM-ddTHH:mm:ss.fffZ";
-    options.UseUtcTimestamp = true;
-});
+    builder.Logging.AddSimpleConsole(options =>
+    {
+        options.SingleLine = true;
+        options.TimestampFormat = "HH:mm:ss ";
+    });
+}
+else
+{
+    builder.Logging.AddJsonConsole(options =>
+    {
+        options.IncludeScopes = true;
+        options.TimestampFormat = "yyyy-MM-ddTHH:mm:ss.fffZ";
+        options.UseUtcTimestamp = true;
+    });
+}
 
 builder.Services.AddProblemDetails(options =>
 {
@@ -172,6 +183,18 @@ app.MapHealthChecks("/health", new HealthCheckOptions
     AllowCachingResponses = false
 }).AllowAnonymous();
 app.MapControllers();
+
+app.Lifetime.ApplicationStarted.Register(() =>
+{
+    foreach (var address in app.Urls)
+    {
+        var baseUrl = address.TrimEnd('/');
+        app.Logger.LogInformation(
+            "SurplusLink API ready | Swagger: {SwaggerUrl} | Health: {HealthUrl}",
+            $"{baseUrl}/swagger",
+            $"{baseUrl}/health");
+    }
+});
 
 app.Run();
 
