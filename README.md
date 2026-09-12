@@ -68,4 +68,6 @@ python -m uvicorn app.main:app --app-dir ai-service --reload
 
 In development, Swagger UI is available at `/swagger` and describes JWT bearer authentication. The unauthenticated `/health` endpoint is a lightweight liveness check.
 
+Database integrity rules, migration and rollback commands, and viva notes are documented in [`docs/database-integrity.md`](docs/database-integrity.md).
+
 

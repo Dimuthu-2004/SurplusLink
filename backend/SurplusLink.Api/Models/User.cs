@@ -7,7 +7,7 @@ public enum UserRole
     MANAGER
 }
 
-public sealed class User
+public sealed class User : AuditableEntity
 {
     public Guid Id { get; set; }
 
@@ -17,5 +17,4 @@ public sealed class User
 
     public UserRole Role { get; set; }
 
-    public DateTime CreatedAtUtc { get; set; }
 }
