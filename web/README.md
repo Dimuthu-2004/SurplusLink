@@ -1,13 +1,6 @@
 # SurplusLink React authentication shell
 
-This Vite/React TypeScript client contains the shared authentication shell and the manager analytics dashboard. It uses the ASP.NET endpoints `POST /api/auth/login` and authenticated `GET /api/auth/me`.
-
-The manager route also hosts the analytics dashboard and reads these manager-only component summaries:
-
-- `GET /api/materials/analytics/summary`
-- `GET /api/requirements/analytics/summary`
-- `GET /api/matches/analytics/summary`
-- `GET /api/transactions/analytics/summary`
+This Vite/React TypeScript client contains shared authentication infrastructure only. It uses the ASP.NET endpoints `POST /api/auth/login` and authenticated `GET /api/auth/me`.
 
 ## Runtime packages
 

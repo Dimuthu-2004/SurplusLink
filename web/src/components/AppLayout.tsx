@@ -27,7 +27,7 @@ export function AppLayout() {
         <aside className="side-nav">
           <nav aria-label={`${roleLabels[user.role]} navigation`}>
             <NavLink to={roleHomePath(user.role)}>
-              {user.role === 'MANAGER' ? 'Manager dashboard' : `${roleLabels[user.role]} home`}
+              {roleLabels[user.role]} home
             </NavLink>
           </nav>
         </aside>

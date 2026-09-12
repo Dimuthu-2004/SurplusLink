@@ -3,7 +3,6 @@ import { AppLayout } from '../components/AppLayout';
 import { LoginPage } from '../pages/LoginPage';
 import { NotFoundPage } from '../pages/NotFoundPage';
 import { RoleHomePage } from '../pages/RoleHomePage';
-import { ManagerDashboardPage } from '../features/dashboard/ManagerDashboardPage';
 import {
   GuestRoute,
   ProtectedRoute,
@@ -28,7 +27,7 @@ export function App() {
             <Route path="buyer" element={<RoleHomePage role="BUYER" />} />
           </Route>
           <Route element={<RoleRoute role="MANAGER" />}>
-            <Route path="manager" element={<ManagerDashboardPage />} />
+            <Route path="manager" element={<RoleHomePage role="MANAGER" />} />
           </Route>
         </Route>
       </Route>

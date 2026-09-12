@@ -213,49 +213,6 @@ namespace SurplusLink.Api.Data.Migrations
                         });
                 });
 
-            modelBuilder.Entity("SurplusLink.Api.Models.MarketplaceTransaction", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime?>("ApprovedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime?>("CompletedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<Guid>("ReservationId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(24)
-                        .HasColumnType("character varying(24)");
-
-                    b.Property<DateTime>("UpdatedAtUtc")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.HasKey("Id")
-                        .HasName("PK_Transactions");
-
-                    b.HasIndex("ReservationId")
-                        .IsUnique()
-                        .HasDatabaseName("UX_Transactions_ReservationId");
-
-                    b.HasIndex("Status")
-                        .HasDatabaseName("IX_Transactions_Status");
-
-                    b.ToTable("Transactions", (string)null);
-                });
-
             modelBuilder.Entity("SurplusLink.Api.Models.MaterialMatch", b =>
                 {
                     b.Property<Guid>("Id")
@@ -267,19 +224,11 @@ namespace SurplusLink.Api.Data.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
-                    b.Property<decimal?>("DistanceKm")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("numeric(10,2)");
-
                     b.Property<Guid>("ListingId")
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("MaterialRequestId")
                         .HasColumnType("uuid");
-
-                    b.Property<string>("RejectionReason")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
 
                     b.Property<decimal>("Score")
                         .HasPrecision(5, 4)
@@ -527,18 +476,6 @@ namespace SurplusLink.Api.Data.Migrations
                     b.Navigation("Category");
 
                     b.Navigation("Seller");
-                });
-
-            modelBuilder.Entity("SurplusLink.Api.Models.MarketplaceTransaction", b =>
-                {
-                    b.HasOne("SurplusLink.Api.Models.Reservation", "Reservation")
-                        .WithMany()
-                        .HasForeignKey("ReservationId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("FK_Transactions_Reservations_ReservationId");
-
-                    b.Navigation("Reservation");
                 });
 
             modelBuilder.Entity("SurplusLink.Api.Models.MaterialMatch", b =>
