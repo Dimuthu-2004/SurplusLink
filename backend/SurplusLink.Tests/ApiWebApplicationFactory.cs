@@ -11,15 +11,18 @@ public sealed class ApiWebApplicationFactory : WebApplicationFactory<Program>
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        builder.UseEnvironment("Development");
+        builder.UseEnvironment("Testing");
         builder.ConfigureAppConfiguration((_, configuration) =>
         {
             configuration.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["ConnectionStrings:SurplusLink"] =
                     "Host=localhost;Database=surpluslink_tests;Username=test;Password=test",
-                ["Authentication:JwtBearer:Authority"] = "https://identity.surpluslink.test",
-                ["Authentication:JwtBearer:Audience"] = "surpluslink-api"
+                ["Jwt:Issuer"] = "SurplusLink.Api.Tests",
+                ["Jwt:Audience"] = "SurplusLink.Tests",
+                ["Jwt:Secret"] = "test-only-secret-with-at-least-thirty-two-characters",
+                ["Jwt:ExpirationMinutes"] = "60",
+                ["Cors:AllowedOrigins:0"] = AllowedOrigin
             });
         });
         builder.ConfigureServices(services =>

@@ -1,12 +1,18 @@
+using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using SurplusLink.Api.Auth;
 using SurplusLink.Api.Configuration;
 using SurplusLink.Api.Data;
 using SurplusLink.Api.ErrorHandling;
+using SurplusLink.Api.Models;
 using SurplusLink.Api.Observability;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -58,26 +64,52 @@ builder.Services.AddOptions<ApiCorsOptions>()
         options => options.AllowedOrigins.All(ApiCorsOptions.IsValidOrigin),
         $"{ApiCorsOptions.SectionName}:AllowedOrigins must contain only absolute HTTP or HTTPS origins without paths or wildcards.")
     .ValidateOnStart();
-
-var allowedOrigins = builder.Configuration
-    .GetSection($"{ApiCorsOptions.SectionName}:AllowedOrigins")
-    .Get<string[]>() ?? [];
-
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy(ApiCorsOptions.PolicyName, policy =>
-        policy.WithOrigins(allowedOrigins)
-            .AllowAnyHeader()
-            .AllowAnyMethod());
-});
-
-var jwtConfiguration = builder.Configuration.GetSection("Authentication:JwtBearer");
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
+builder.Services.AddCors();
+builder.Services.AddOptions<CorsOptions>()
+    .Configure<IOptions<ApiCorsOptions>>((options, configuredOrigins) =>
     {
-        options.Authority = jwtConfiguration["Authority"];
-        options.Audience = jwtConfiguration["Audience"];
-        options.RequireHttpsMetadata = jwtConfiguration.GetValue("RequireHttpsMetadata", true);
+        options.AddPolicy(ApiCorsOptions.PolicyName, policy =>
+            policy.WithOrigins(configuredOrigins.Value.AllowedOrigins)
+                .AllowAnyHeader()
+                .AllowAnyMethod());
+    });
+
+builder.Services.AddOptions<DatabaseOptions>()
+    .BindConfiguration(DatabaseOptions.SectionName)
+    .Validate(
+        options => !string.IsNullOrWhiteSpace(options.SurplusLink),
+        "ConnectionStrings:SurplusLink must be supplied through environment configuration or user secrets.")
+    .ValidateOnStart();
+builder.Services.AddDbContext<SurplusLinkDbContext>((services, options) =>
+    options.UseNpgsql(services.GetRequiredService<IOptions<DatabaseOptions>>().Value.SurplusLink));
+
+builder.Services.AddOptions<JwtOptions>()
+    .BindConfiguration(JwtOptions.SectionName)
+    .Validate(options => !string.IsNullOrWhiteSpace(options.Issuer), "Jwt:Issuer must be configured.")
+    .Validate(options => !string.IsNullOrWhiteSpace(options.Audience), "Jwt:Audience must be configured.")
+    .Validate(options => options.Secret.Length >= 32, "Jwt:Secret must contain at least thirty-two characters.")
+    .Validate(options => options.ExpirationMinutes > 0, "Jwt:ExpirationMinutes must be greater than zero.")
+    .ValidateOnStart();
+builder.Services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
+builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer();
+builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
+    .Configure<IOptions<JwtOptions>>((options, configuredJwt) =>
+    {
+        var jwt = configuredJwt.Value;
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = jwt.Issuer,
+            ValidateAudience = true,
+            ValidAudience = jwt.Audience,
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt.Secret)),
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.Zero,
+            RoleClaimType = System.Security.Claims.ClaimTypes.Role
+        };
     });
 builder.Services.AddAuthorization();
 
@@ -108,22 +140,21 @@ builder.Services.AddSwaggerGen(options =>
 
 builder.Services.AddHealthChecks();
 
-builder.Services.AddOptions<DatabaseOptions>()
-    .BindConfiguration(DatabaseOptions.SectionName)
-    .Validate(
-        options => !string.IsNullOrWhiteSpace(options.SurplusLink),
-        "ConnectionStrings:SurplusLink must be supplied through environment configuration or user secrets.")
-    .ValidateOnStart();
-builder.Services.AddDbContext<SurplusLinkDbContext>((services, options) =>
-    options.UseNpgsql(services.GetRequiredService<IOptions<DatabaseOptions>>().Value.SurplusLink));
-
 var app = builder.Build();
+
+if (!app.Environment.IsEnvironment("Testing"))
+{
+    using var scope = app.Services.CreateScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<SurplusLinkDbContext>();
+    await dbContext.Database.MigrateAsync();
+    await DevelopmentSeed.SeedAsync(scope.ServiceProvider, app.Environment);
+}
 
 app.UseMiddleware<RequestLoggingMiddleware>();
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 
-if (app.Environment.IsDevelopment())
+if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Testing"))
 {
     app.UseSwagger();
     app.UseSwaggerUI();
