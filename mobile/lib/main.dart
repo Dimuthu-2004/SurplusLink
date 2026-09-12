@@ -1,13 +1,24 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:mobile/app.dart';
+import 'package:mobile/auth/auth_controller.dart';
+import 'package:mobile/auth/auth_repository.dart';
+import 'package:mobile/config/app_config.dart';
+import 'package:mobile/core/api_client.dart';
+import 'package:mobile/core/token_storage.dart';
 
-void main() => runApp(const SurplusLinkApp());
+void main() {
+  WidgetsFlutterBinding.ensureInitialized();
 
-class SurplusLinkApp extends StatelessWidget {
-  const SurplusLinkApp({super.key});
+  final tokenStorage = SecureTokenStorage();
+  final apiClient = ApiClient(
+    baseUri: AppConfig.apiBaseUri,
+    httpClient: http.Client(),
+    tokenStorage: tokenStorage,
+  );
+  final authController = AuthController(
+    AuthRepository(apiClient: apiClient, tokenStorage: tokenStorage),
+  );
 
-  @override
-  Widget build(BuildContext context) => const MaterialApp(
-        title: 'SurplusLink',
-        home: Scaffold(body: Center(child: Text('SurplusLink mobile scaffold'))),
-      );
+  runApp(SurplusLinkApp(authController: authController));
 }
