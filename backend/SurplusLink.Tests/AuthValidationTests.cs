@@ -1,17 +1,10 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using SurplusLink.Api.Auth;
-using SurplusLink.Api.Data;
 
 namespace SurplusLink.Tests;
 
-public sealed class ArchitecturePlaceholderTests
+public sealed class AuthValidationTests
 {
-    [Fact]
-    public void Api_persistence_boundary_is_available()
-    {
-        Assert.NotNull(typeof(SurplusLinkDbContext));
-    }
-
     [Fact]
     public void Public_registration_rejects_manager_role()
     {
@@ -24,7 +17,11 @@ public sealed class ArchitecturePlaceholderTests
         var validationContext = new ValidationContext(request);
         var errors = new List<ValidationResult>();
 
-        var isValid = Validator.TryValidateObject(request, validationContext, errors, validateAllProperties: true);
+        var isValid = Validator.TryValidateObject(
+            request,
+            validationContext,
+            errors,
+            validateAllProperties: true);
 
         Assert.False(isValid);
         Assert.Contains(errors, error => error.ErrorMessage == "Role must be SELLER or BUYER.");

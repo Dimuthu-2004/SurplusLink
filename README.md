@@ -64,6 +64,8 @@ python -m uvicorn app.main:app --app-dir ai-service --reload
 
 ## Local configuration
 
-`.env.example` documents the API-owned development configuration. Supply those values as API environment variables (for example, `ConnectionStrings__SurplusLink`); never expose them in web or mobile builds or commit real credentials.
+`.env.example` documents the API-owned development configuration. Supply those values as API environment variables (for example, `ConnectionStrings__SurplusLink`); never expose them in web or mobile builds or commit real credentials. The API fails fast when database, JWT, or configured CORS settings are missing or invalid. The JWT signing secret must be supplied through secure environment configuration and is never stored in this repository.
+
+In development, Swagger UI is available at `/swagger` and describes JWT bearer authentication. The unauthenticated `/health` endpoint is a lightweight liveness check.
 
 
