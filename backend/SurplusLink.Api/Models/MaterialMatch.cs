@@ -10,6 +10,10 @@ public sealed class MaterialMatch : AuditableEntity
 
     public decimal Score { get; set; }
 
+    public decimal? DistanceKm { get; set; }
+
+    public string? RejectionReason { get; set; }
+
     public MaterialRequest MaterialRequest { get; set; } = null!;
 
     public Listing Listing { get; set; } = null!;

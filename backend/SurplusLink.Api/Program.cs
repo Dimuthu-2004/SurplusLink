@@ -12,6 +12,7 @@ using SurplusLink.Api.Auth;
 using SurplusLink.Api.Configuration;
 using SurplusLink.Api.Data;
 using SurplusLink.Api.ErrorHandling;
+using SurplusLink.Api.Features.Analytics;
 using SurplusLink.Api.Models;
 using SurplusLink.Api.Observability;
 using SurplusLink.Api.Reservations;
@@ -94,6 +95,7 @@ builder.Services.AddOptions<JwtOptions>()
 builder.Services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IReservationService, ReservationService>();
+builder.Services.AddScoped<IAnalyticsService, AnalyticsService>();
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer();
 builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)

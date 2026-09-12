@@ -16,6 +16,7 @@ public static class MarketplaceModelConfiguration
         ConfigureMatch(modelBuilder);
         ConfigureWorkflow(modelBuilder);
         ConfigureReservation(modelBuilder);
+        ConfigureTransaction(modelBuilder);
         ConfigureAuditLog(modelBuilder);
         ConfigureTimestamps(modelBuilder);
     }
@@ -126,6 +127,8 @@ public static class MarketplaceModelConfiguration
                 table.HasCheckConstraint("CK_Matches_Score_Range", "\"Score\" >= 0 AND \"Score\" <= 1"));
             entity.HasKey(match => match.Id).HasName("PK_Matches");
             entity.Property(match => match.Score).HasPrecision(5, 4);
+            entity.Property(match => match.DistanceKm).HasPrecision(10, 2);
+            entity.Property(match => match.RejectionReason).HasMaxLength(500);
             entity.HasIndex(match => new { match.MaterialRequestId, match.ListingId })
                 .IsUnique()
                 .HasDatabaseName("UX_Matches_MaterialRequestId_ListingId");
@@ -186,6 +189,29 @@ public static class MarketplaceModelConfiguration
                 .HasForeignKey(reservation => reservation.MaterialRequestId)
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("FK_Reservations_MaterialRequests_MaterialRequestId");
+        });
+    }
+
+    private static void ConfigureTransaction(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<MarketplaceTransaction>(entity =>
+        {
+            entity.ToTable("Transactions");
+            entity.HasKey(transaction => transaction.Id).HasName("PK_Transactions");
+            entity.Property(transaction => transaction.Status)
+                .HasConversion<string>()
+                .HasMaxLength(24)
+                .IsRequired();
+            entity.HasIndex(transaction => transaction.Status)
+                .HasDatabaseName("IX_Transactions_Status");
+            entity.HasIndex(transaction => transaction.ReservationId)
+                .IsUnique()
+                .HasDatabaseName("UX_Transactions_ReservationId");
+            entity.HasOne(transaction => transaction.Reservation)
+                .WithMany()
+                .HasForeignKey(transaction => transaction.ReservationId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("FK_Transactions_Reservations_ReservationId");
         });
     }
 
