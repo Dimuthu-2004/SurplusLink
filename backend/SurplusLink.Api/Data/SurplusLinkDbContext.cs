@@ -1,22 +1,65 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using SurplusLink.Api.Models;
 
 namespace SurplusLink.Api.Data;
 
-/// <summary>EF Core/PostgreSQL persistence boundary. Entity sets arrive with vertical slices.</summary>
 public sealed class SurplusLinkDbContext(DbContextOptions<SurplusLinkDbContext> options) : DbContext(options)
 {
     public DbSet<User> Users => Set<User>();
 
+    public DbSet<Category> Categories => Set<Category>();
+
+    public DbSet<Listing> Listings => Set<Listing>();
+
+    public DbSet<MaterialRequest> MaterialRequests => Set<MaterialRequest>();
+
+    public DbSet<MaterialMatch> Matches => Set<MaterialMatch>();
+
+    public DbSet<Workflow> Workflows => Set<Workflow>();
+
+    public DbSet<Reservation> Reservations => Set<Reservation>();
+
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        StampTimestamps();
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    public override Task<int> SaveChangesAsync(
+        bool acceptAllChangesOnSuccess,
+        CancellationToken cancellationToken = default)
+    {
+        StampTimestamps();
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.Entity<User>(entity =>
+        modelBuilder.ConfigureMarketplaceModel();
+    }
+
+    private void StampTimestamps()
+    {
+        var now = DateTime.UtcNow;
+
+        foreach (var entry in ChangeTracker.Entries<AuditableEntity>())
         {
-            entity.HasKey(user => user.Id);
-            entity.Property(user => user.Email).HasMaxLength(320).IsRequired();
-            entity.HasIndex(user => user.Email).IsUnique();
-            entity.Property(user => user.PasswordHash).IsRequired();
-            entity.Property(user => user.Role).HasConversion<string>().HasMaxLength(20).IsRequired();
-        });
+            if (entry.State == EntityState.Added)
+            {
+                if (entry.Entity.CreatedAtUtc == default)
+                {
+                    entry.Entity.CreatedAtUtc = now;
+                }
+
+                entry.Entity.UpdatedAtUtc = now;
+            }
+            else if (entry.State == EntityState.Modified)
+            {
+                entry.Property(entity => entity.CreatedAtUtc).IsModified = false;
+                entry.Entity.UpdatedAtUtc = now;
+            }
+        }
     }
 }
