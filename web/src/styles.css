@@ -1,2 +1,82 @@
-﻿:root { font-family: system-ui, sans-serif; color: #18312a; background: #f7faf7; }
-main { max-width: 48rem; margin: 6rem auto; padding: 0 1.5rem; }
+:root {
+  color: #17342b;
+  background: #f3f7f4;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; min-height: 100vh; }
+button, input { font: inherit; }
+a { color: inherit; }
+
+.auth-page,
+.status-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 2rem;
+  background:
+    radial-gradient(circle at 10% 10%, rgba(28, 132, 83, 0.14), transparent 32rem),
+    #f3f7f4;
+}
+
+.auth-card {
+  width: min(100%, 28rem);
+  padding: clamp(2rem, 5vw, 3rem);
+  border: 1px solid #d8e5dc;
+  border-radius: 1.25rem;
+  background: #fff;
+  box-shadow: 0 1.5rem 4rem rgba(23, 52, 43, 0.1);
+}
+
+.auth-brand,
+.brand-mark {
+  display: grid;
+  place-items: center;
+  background: #16794b;
+  color: #fff;
+  font-weight: 800;
+}
+
+.auth-brand { width: 3rem; height: 3rem; border-radius: 0.85rem; font-size: 1.4rem; }
+.brand-mark { width: 2rem; height: 2rem; border-radius: 0.55rem; }
+.eyebrow { margin: 1.25rem 0 0.35rem; color: #16794b; font-size: 0.78rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
+h1 { margin: 0; color: #102a21; }
+.muted { color: #60726b; }
+form { display: grid; gap: 0.65rem; margin-top: 1.75rem; }
+label { margin-top: 0.55rem; font-weight: 700; }
+input { width: 100%; padding: 0.8rem 0.9rem; border: 1px solid #b8c9bf; border-radius: 0.65rem; color: #17342b; background: #fff; }
+input:focus { outline: 3px solid rgba(22, 121, 75, 0.2); border-color: #16794b; }
+
+.button { border: 0; border-radius: 0.65rem; padding: 0.75rem 1rem; cursor: pointer; font-weight: 750; }
+.button:disabled { cursor: wait; opacity: 0.65; }
+.button-primary { margin-top: 1rem; background: #16794b; color: #fff; }
+.button-primary:hover:not(:disabled) { background: #0f633c; }
+.button-secondary { background: #e8f1eb; color: #145d3b; }
+.error-message { margin-top: 1.25rem; padding: 0.85rem; border-radius: 0.65rem; background: #fff0ef; color: #992a25; }
+
+.app-shell { min-height: 100vh; }
+.app-header { min-height: 4.5rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.8rem clamp(1rem, 4vw, 2.5rem); border-bottom: 1px solid #d8e5dc; background: #fff; }
+.brand { display: flex; align-items: center; gap: 0.7rem; text-decoration: none; font-size: 1.15rem; font-weight: 850; }
+.account-summary { display: flex; align-items: center; gap: 0.8rem; }
+.role-badge { padding: 0.3rem 0.55rem; border-radius: 999px; background: #dff1e5; color: #125f3b; font-size: 0.78rem; font-weight: 800; }
+.app-body { display: grid; grid-template-columns: 15rem 1fr; min-height: calc(100vh - 4.5rem); }
+.side-nav { padding: 1.5rem 1rem; border-right: 1px solid #d8e5dc; background: #fbfdfb; }
+.side-nav a { display: block; padding: 0.75rem 0.9rem; border-radius: 0.6rem; text-decoration: none; font-weight: 700; }
+.side-nav a.active { background: #dff1e5; color: #125f3b; }
+.page-content { padding: clamp(1.5rem, 5vw, 4rem); }
+.welcome-panel { max-width: 48rem; padding: clamp(1.5rem, 4vw, 3rem); border: 1px solid #d8e5dc; border-radius: 1rem; background: #fff; }
+.welcome-panel .eyebrow { margin-top: 0; }
+.welcome-panel p:last-child { color: #60726b; font-size: 1.05rem; }
+.status-page { align-content: center; text-align: center; }
+.spinner { width: 2rem; height: 2rem; border: 3px solid #c6d9cd; border-top-color: #16794b; border-radius: 50%; animation: spin 0.8s linear infinite; }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 700px) {
+  .account-summary > span:first-child { display: none; }
+  .app-body { grid-template-columns: 1fr; }
+  .side-nav { border-right: 0; border-bottom: 1px solid #d8e5dc; }
+}
