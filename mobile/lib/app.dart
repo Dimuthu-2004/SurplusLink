@@ -3,16 +3,19 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile/auth/auth_controller.dart';
+import 'package:mobile/materials/material_inventory_gateway.dart';
 import 'package:mobile/routing/app_router.dart';
 
 class SurplusLinkApp extends StatefulWidget {
   const SurplusLinkApp({
     required this.authController,
+    this.materialGateway,
     this.initialLocation = AppRoutes.splash,
     super.key,
   });
 
   final AuthController authController;
+  final MaterialInventoryGateway? materialGateway;
   final String initialLocation;
 
   @override
@@ -27,6 +30,7 @@ class _SurplusLinkAppState extends State<SurplusLinkApp> {
     super.initState();
     _router = createAppRouter(
       authController: widget.authController,
+      materialGateway: widget.materialGateway,
       initialLocation: widget.initialLocation,
     );
     unawaited(widget.authController.initialize());

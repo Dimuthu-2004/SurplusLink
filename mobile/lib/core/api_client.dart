@@ -7,38 +7,78 @@ import 'package:mobile/core/token_storage.dart';
 
 final class ApiClient {
   ApiClient({
-    required this._baseUri,
-    required this._httpClient,
-    required this._tokenStorage,
+    required this.baseUri,
+    required this.httpClient,
+    required this.tokenStorage,
     this.timeout = const Duration(seconds: 15),
   });
 
-  final Uri _baseUri;
-  final http.Client _httpClient;
-  final TokenStorage _tokenStorage;
+  final Uri baseUri;
+  final http.Client httpClient;
+  final TokenStorage tokenStorage;
   final Duration timeout;
 
   Future<Map<String, dynamic>> getJson(
     String path, {
     bool authenticated = false,
+  }) => _expectMap(_send(method: 'GET', path: path, authenticated: authenticated));
+
+  Future<List<Map<String, dynamic>>> getListJson(
+    String path, {
+    bool authenticated = false,
   }) async {
-    return _send(method: 'GET', path: path, authenticated: authenticated);
+    final json = await _send(method: 'GET', path: path, authenticated: authenticated);
+    if (json is! List) {
+      throw const FormatException('Expected a JSON array.');
+    }
+    return json.map((item) {
+      if (item is! Map<String, dynamic>) {
+        throw const FormatException('Expected a JSON object in the array.');
+      }
+      return item;
+    }).toList();
   }
 
   Future<Map<String, dynamic>> postJson(
     String path,
     Map<String, dynamic> body, {
     bool authenticated = false,
+  }) => _expectMap(
+    _send(method: 'POST', path: path, body: body, authenticated: authenticated),
+  );
+
+  Future<Map<String, dynamic>> putJson(
+    String path,
+    Map<String, dynamic> body, {
+    bool authenticated = false,
+  }) => _expectMap(
+    _send(method: 'PUT', path: path, body: body, authenticated: authenticated),
+  );
+
+  Future<Map<String, dynamic>> patchJson(
+    String path,
+    Map<String, dynamic>? body, {
+    bool authenticated = false,
+  }) => _expectMap(
+    _send(method: 'PATCH', path: path, body: body, authenticated: authenticated),
+  );
+
+  Future<void> delete(
+    String path, {
+    bool authenticated = false,
   }) async {
-    return _send(
-      method: 'POST',
-      path: path,
-      body: body,
-      authenticated: authenticated,
-    );
+    await _send(method: 'DELETE', path: path, authenticated: authenticated);
   }
 
-  Future<Map<String, dynamic>> _send({
+  Future<Map<String, dynamic>> _expectMap(Future<Object?> response) async {
+    final json = await response;
+    if (json is! Map<String, dynamic>) {
+      throw const FormatException('Expected a JSON object.');
+    }
+    return json;
+  }
+
+  Future<Object?> _send({
     required String method,
     required String path,
     required bool authenticated,
@@ -49,30 +89,36 @@ final class ApiClient {
       headers['Content-Type'] = 'application/json';
     }
     if (authenticated) {
-      final token = await _tokenStorage.readToken();
+      final token = await tokenStorage.readToken();
       if (token == null || token.isEmpty) {
-        throw const ApiException(
-          'Authentication is required.',
-          statusCode: 401,
-        );
+        throw const ApiException('Authentication is required.', statusCode: 401);
       }
       headers['Authorization'] = 'Bearer $token';
     }
 
     try {
-      final uri = _baseUri.resolve(path);
+      final uri = baseUri.resolve(path);
       final response = switch (method) {
-        'GET' => await _httpClient.get(uri, headers: headers).timeout(timeout),
-        'POST' =>
-          await _httpClient
-              .post(uri, headers: headers, body: jsonEncode(body))
-              .timeout(timeout),
+        'GET' => await httpClient.get(uri, headers: headers).timeout(timeout),
+        'POST' => await httpClient
+            .post(uri, headers: headers, body: jsonEncode(body))
+            .timeout(timeout),
+        'PUT' => await httpClient
+            .put(uri, headers: headers, body: jsonEncode(body))
+            .timeout(timeout),
+        'PATCH' => await httpClient
+            .patch(uri, headers: headers, body: body == null ? null : jsonEncode(body))
+            .timeout(timeout),
+        'DELETE' => await httpClient.delete(uri, headers: headers).timeout(timeout),
         _ => throw ArgumentError.value(method, 'method', 'Unsupported method'),
       };
 
       final json = _decodeBody(response.body);
       if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw _exceptionFrom(response.statusCode, json);
+        throw _exceptionFrom(
+          response.statusCode,
+          json is Map<String, dynamic> ? json : <String, dynamic>{},
+        );
       }
       return json;
     } on TimeoutException {
@@ -84,16 +130,8 @@ final class ApiClient {
     }
   }
 
-  static Map<String, dynamic> _decodeBody(String body) {
-    if (body.trim().isEmpty) {
-      return <String, dynamic>{};
-    }
-    final decoded = jsonDecode(body);
-    if (decoded is! Map<String, dynamic>) {
-      throw const FormatException('Expected a JSON object.');
-    }
-    return decoded;
-  }
+  static Object? _decodeBody(String body) =>
+      body.trim().isEmpty ? null : jsonDecode(body);
 
   static ApiException _exceptionFrom(
     int statusCode,
