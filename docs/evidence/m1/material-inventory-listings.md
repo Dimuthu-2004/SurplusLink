@@ -70,3 +70,23 @@ Final Release verification used `http://localhost:5171/swagger`.
 - PostgreSQL confirmed all six added Listings columns, both new Listing indexes, the ListingPhotos unique index, and the ListingPhotos FK.
 - `dotnet build` Release: 0 warnings, 0 errors.
 - `dotnet test` Release: 15 passed, 0 failed.
+
+## Query, History, and Analytics Extension — 2026-09-15
+
+### Query endpoint
+
+`GET /api/materials` is available to SELLER, BUYER, and MANAGER. Visibility remains role-safe: a seller receives only their listings, a buyer receives only unexpired ACTIVE listings, and a manager receives all listings.
+
+Supported query parameters are `search` (title, description, and category), `category` (category name fragment or ID), `status`, `condition`, `minPrice`, `maxPrice`, `sortBy` (`unitPrice`, `quantity`, `createdAt`, or `availableUntil`), `sortDir` (`asc` or `desc`), `page`, and `pageSize` (1–100). Responses contain `items`, `totalCount`, `totalPages`, `page`, and `pageSize`.
+
+### History and analytics
+
+- `GET /api/materials/{id}/history` is available to the owning SELLER or a MANAGER and returns shared AuditLog entries for the listing.
+- `GET /api/materials/analytics/summary` is MANAGER-only. It returns active count, all-listing category/status counts, active listings expiring in the next `expiringWithinDays` (default 7), and active listings with remaining quantity at or below `lowRemainingPercent` (default 10%).
+- Existing transactional action writes were retained and verified for `LISTING_CREATED`, `LISTING_UPDATED`, `LISTING_SUBMITTED_FOR_VERIFICATION`, `LISTING_VERIFIED`, and `LISTING_REJECTED`; no migration was needed because `AuditLogs` already has an entity/action/timestamp index.
+
+### Verification
+
+- Query-builder unit tests cover search/filtering, sorting, and pagination.
+- `dotnet test ./backend/SurplusLink.Tests/SurplusLink.Tests.csproj --configuration Release --no-restore`: 18 passed, 0 failed.
+- Live PostgreSQL/API verification on `http://localhost:5171`: query/filter/sort/page, history access and audit actions, manager analytics, and role guards passed. A first analytics test revealed a PostgreSQL LINQ translation issue in category aggregation; it was fixed by grouping on `CategoryId` and mapping category names after the translated aggregate query, then the endpoint returned HTTP 200.

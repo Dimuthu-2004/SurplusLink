@@ -84,3 +84,67 @@ public sealed class MaterialCategoryRequest
 
 public sealed record MaterialCategoryResponse(Guid Id, string Name, DateTime CreatedAtUtc, DateTime UpdatedAtUtc);
 
+public sealed class MaterialListingQuery
+{
+    [MaxLength(200)]
+    public string? Search { get; init; }
+
+    [MaxLength(120)]
+    public string? Category { get; init; }
+
+    [MaxLength(24)]
+    public string? Status { get; init; }
+
+    [MaxLength(24)]
+    public string? Condition { get; init; }
+
+    [Range(typeof(decimal), "0", "999999999999999.99")]
+    public decimal? MinPrice { get; init; }
+
+    [Range(typeof(decimal), "0", "999999999999999.99")]
+    public decimal? MaxPrice { get; init; }
+
+    [RegularExpression("^(unitPrice|quantity|createdAt|availableUntil)$", ErrorMessage = "SortBy must be unitPrice, quantity, createdAt, or availableUntil.")]
+    public string SortBy { get; init; } = "createdAt";
+
+    [RegularExpression("^(asc|desc)$", ErrorMessage = "SortDir must be asc or desc.")]
+    public string SortDir { get; init; } = "desc";
+
+    [Range(1, int.MaxValue)]
+    public int Page { get; init; } = 1;
+
+    [Range(1, 100)]
+    public int PageSize { get; init; } = 20;
+}
+
+public sealed record PagedMaterialListingsResponse(
+    IReadOnlyList<MaterialListingResponse> Items,
+    int TotalCount,
+    int TotalPages,
+    int Page,
+    int PageSize);
+
+public sealed record MaterialListingHistoryResponse(
+    Guid Id,
+    Guid? ActorUserId,
+    string Action,
+    DateTime CreatedAtUtc);
+
+public sealed class MaterialAnalyticsQuery
+{
+    [Range(1, 90)]
+    public int ExpiringWithinDays { get; init; } = 7;
+
+    [Range(typeof(decimal), "0.001", "100")]
+    public decimal LowRemainingPercent { get; init; } = 10m;
+}
+
+public sealed record MaterialAnalyticsCountResponse(string Key, int Count);
+
+public sealed record MaterialAnalyticsSummaryResponse(
+    int ActiveCount,
+    IReadOnlyList<MaterialAnalyticsCountResponse> ListingsByCategory,
+    IReadOnlyList<MaterialAnalyticsCountResponse> ListingsByStatus,
+    IReadOnlyList<MaterialListingResponse> ExpiringListings,
+    IReadOnlyList<MaterialListingResponse> LowRemainingQuantityListings);
+
