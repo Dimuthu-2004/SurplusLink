@@ -12,6 +12,7 @@ public static class MarketplaceModelConfiguration
         ConfigureUser(modelBuilder);
         ConfigureCategory(modelBuilder);
         ConfigureListing(modelBuilder);
+        ConfigureListingPhoto(modelBuilder);
         ConfigureMaterialRequest(modelBuilder);
         ConfigureMatch(modelBuilder);
         ConfigureWorkflow(modelBuilder);
@@ -64,17 +65,30 @@ public static class MarketplaceModelConfiguration
                 table.HasCheckConstraint(
                     "CK_Listings_ReservedQuantity_Range",
                     "\"ReservedQuantity\" >= 0 AND \"ReservedQuantity\" <= \"Quantity\"");
+                table.HasCheckConstraint(
+                    "CK_Listings_Coordinates_Valid",
+                    "(\"Latitude\" IS NULL AND \"Longitude\" IS NULL) OR (\"Latitude\" BETWEEN -90 AND 90 AND \"Longitude\" BETWEEN -180 AND 180)");
             });
             entity.HasKey(listing => listing.Id).HasName("PK_Listings");
             entity.Property(listing => listing.Title).HasMaxLength(200).IsRequired();
+            entity.Property(listing => listing.Description).HasMaxLength(2_000).IsRequired();
             entity.Property(listing => listing.Quantity).HasPrecision(18, 3);
             entity.Property(listing => listing.ReservedQuantity).HasPrecision(18, 3);
+            entity.Property(listing => listing.Unit).HasMaxLength(32).IsRequired();
+            entity.Property(listing => listing.Condition).HasConversion<string>().HasMaxLength(24).IsRequired();
             entity.Property(listing => listing.UnitPrice).HasPrecision(18, 2);
+            entity.Property(listing => listing.Latitude).HasPrecision(9, 6);
+            entity.Property(listing => listing.Longitude).HasPrecision(9, 6);
+            entity.Property(listing => listing.AvailableUntil).HasColumnType("timestamp with time zone");
             entity.Property(listing => listing.Status).HasConversion<string>().HasMaxLength(24).IsRequired();
             entity.Property(listing => listing.Version).IsRowVersion();
             entity.HasIndex(listing => listing.Status).HasDatabaseName("IX_Listings_Status");
+            entity.HasIndex(listing => new { listing.Status, listing.AvailableUntil })
+                .HasDatabaseName("IX_Listings_Status_AvailableUntil");
             entity.HasIndex(listing => listing.CategoryId).HasDatabaseName("IX_Listings_CategoryId");
             entity.HasIndex(listing => listing.SellerId).HasDatabaseName("IX_Listings_SellerId");
+            entity.HasIndex(listing => new { listing.Latitude, listing.Longitude })
+                .HasDatabaseName("IX_Listings_Latitude_Longitude");
             entity.HasOne(listing => listing.Category)
                 .WithMany()
                 .HasForeignKey(listing => listing.CategoryId)
@@ -85,6 +99,25 @@ public static class MarketplaceModelConfiguration
                 .HasForeignKey(listing => listing.SellerId)
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("FK_Listings_Users_SellerId");
+        });
+    }
+
+    private static void ConfigureListingPhoto(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<ListingPhoto>(entity =>
+        {
+            entity.ToTable("ListingPhotos", table =>
+                table.HasCheckConstraint("CK_ListingPhotos_SortOrder_NonNegative", "\"SortOrder\" >= 0"));
+            entity.HasKey(photo => photo.Id).HasName("PK_ListingPhotos");
+            entity.Property(photo => photo.PhotoUrl).HasMaxLength(2_048).IsRequired();
+            entity.HasIndex(photo => new { photo.ListingId, photo.SortOrder })
+                .IsUnique()
+                .HasDatabaseName("UX_ListingPhotos_ListingId_SortOrder");
+            entity.HasOne(photo => photo.Listing)
+                .WithMany(listing => listing.Photos)
+                .HasForeignKey(photo => photo.ListingId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_ListingPhotos_Listings_ListingId");
         });
     }
 

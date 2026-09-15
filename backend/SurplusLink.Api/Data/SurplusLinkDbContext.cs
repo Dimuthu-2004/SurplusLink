@@ -11,6 +11,8 @@ public sealed class SurplusLinkDbContext(DbContextOptions<SurplusLinkDbContext> 
 
     public DbSet<Listing> Listings => Set<Listing>();
 
+    public DbSet<ListingPhoto> ListingPhotos => Set<ListingPhoto>();
+
     public DbSet<MaterialRequest> MaterialRequests => Set<MaterialRequest>();
 
     public DbSet<MaterialMatch> Matches => Set<MaterialMatch>();

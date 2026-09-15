@@ -26,7 +26,7 @@ public sealed class ReservationService(SurplusLinkDbContext dbContext) : IReserv
             .SingleOrDefaultAsync(item => item.Id == materialRequestId, cancellationToken)
             ?? throw new ReservationRejectedException("Material request was not found.");
 
-        if (listing.Status is not ListingStatus.AVAILABLE and not ListingStatus.RESERVED)
+        if (listing.Status is not ListingStatus.ACTIVE and not ListingStatus.AVAILABLE and not ListingStatus.RESERVED)
         {
             throw new ReservationRejectedException("Listing is not available for reservation.");
         }
