@@ -30,6 +30,31 @@ public sealed class MaterialInventoryService(SurplusLinkDbContext dbContext) : I
         return await GetResponseAsync(listing.Id, cancellationToken);
     }
 
+    public async Task<PagedMaterialListingsResponse> SearchListingsAsync(
+        MaterialActor actor,
+        MaterialListingQuery query,
+        CancellationToken cancellationToken)
+    {
+        IQueryable<Listing> listings = dbContext.Listings.AsNoTracking();
+        listings = RestrictToReadableListings(listings, actor);
+        listings = MaterialListingQueryBuilder.ApplyFilters(listings, query);
+
+        var totalCount = await listings.CountAsync(cancellationToken);
+        var items = await MaterialListingQueryBuilder.ApplySort(listings, query)
+            .Include(listing => listing.Category)
+            .Include(listing => listing.Photos)
+            .Skip((query.Page - 1) * query.PageSize)
+            .Take(query.PageSize)
+            .ToListAsync(cancellationToken);
+
+        return new PagedMaterialListingsResponse(
+            items.Select(ToResponse).ToList(),
+            totalCount,
+            (int)Math.Ceiling(totalCount / (double)query.PageSize),
+            query.Page,
+            query.PageSize);
+    }
+
     public async Task<MaterialListingResponse> GetListingAsync(
         Guid listingId,
         MaterialActor actor,
@@ -49,6 +74,33 @@ public sealed class MaterialInventoryService(SurplusLinkDbContext dbContext) : I
         }
 
         return ToResponse(listing);
+    }
+
+    public async Task<IReadOnlyList<MaterialListingHistoryResponse>> GetListingHistoryAsync(
+        Guid listingId,
+        MaterialActor actor,
+        CancellationToken cancellationToken)
+    {
+        var listing = await dbContext.Listings.AsNoTracking()
+            .Where(item => item.Id == listingId)
+            .Select(item => new { item.Id, item.SellerId })
+            .SingleOrDefaultAsync(cancellationToken)
+            ?? throw new MaterialOperationException(MaterialOperationError.NotFound, "Material listing was not found.");
+
+        if (actor.Role != UserRole.MANAGER && (actor.Role != UserRole.SELLER || listing.SellerId != actor.Id))
+        {
+            throw new MaterialOperationException(MaterialOperationError.NotFound, "Material listing was not found.");
+        }
+
+        return await dbContext.AuditLogs.AsNoTracking()
+            .Where(audit => audit.EntityType == nameof(Listing) && audit.EntityId == listing.Id)
+            .OrderByDescending(audit => audit.CreatedAtUtc)
+            .Select(audit => new MaterialListingHistoryResponse(
+                audit.Id,
+                audit.ActorUserId,
+                audit.Action,
+                audit.CreatedAtUtc))
+            .ToListAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<MaterialListingResponse>> GetMyListingsAsync(
@@ -171,6 +223,57 @@ public sealed class MaterialInventoryService(SurplusLinkDbContext dbContext) : I
         return await GetResponseAsync(listing.Id, cancellationToken);
     }
 
+    public async Task<MaterialAnalyticsSummaryResponse> GetAnalyticsSummaryAsync(
+        MaterialAnalyticsQuery query,
+        CancellationToken cancellationToken)
+    {
+        var now = DateTime.UtcNow;
+        var expiringBefore = now.AddDays(query.ExpiringWithinDays);
+        var lowRemainingFraction = query.LowRemainingPercent / 100m;
+        var listings = dbContext.Listings.AsNoTracking();
+        var activeListings = listings.Where(listing =>
+            listing.Status == ListingStatus.ACTIVE && listing.AvailableUntil > now);
+
+        var activeCount = await activeListings.CountAsync(cancellationToken);
+        var categoryNames = await dbContext.Categories.AsNoTracking()
+            .ToDictionaryAsync(category => category.Id, category => category.Name, cancellationToken);
+        var categoryCounts = await listings
+            .GroupBy(listing => listing.CategoryId)
+            .Select(group => new { CategoryId = group.Key, Count = group.Count() })
+            .ToListAsync(cancellationToken);
+        var listingsByCategory = categoryCounts
+            .Select(group => new MaterialAnalyticsCountResponse(categoryNames[group.CategoryId], group.Count))
+            .OrderBy(item => item.Key)
+            .ToList();
+        var statusCounts = await listings
+            .GroupBy(listing => listing.Status)
+            .Select(group => new { Status = group.Key, Count = group.Count() })
+            .ToListAsync(cancellationToken);
+        var listingsByStatus = statusCounts
+            .Select(group => new MaterialAnalyticsCountResponse(group.Status.ToString(), group.Count))
+            .OrderBy(item => item.Key)
+            .ToList();
+        var expiringListings = await activeListings
+            .Where(listing => listing.AvailableUntil <= expiringBefore)
+            .Include(listing => listing.Category)
+            .Include(listing => listing.Photos)
+            .OrderBy(listing => listing.AvailableUntil)
+            .ToListAsync(cancellationToken);
+        var lowRemainingQuantityListings = await activeListings
+            .Where(listing => listing.Quantity - listing.ReservedQuantity <= listing.Quantity * lowRemainingFraction)
+            .Include(listing => listing.Category)
+            .Include(listing => listing.Photos)
+            .OrderBy(listing => listing.AvailableUntil)
+            .ToListAsync(cancellationToken);
+
+        return new MaterialAnalyticsSummaryResponse(
+            activeCount,
+            listingsByCategory,
+            listingsByStatus,
+            expiringListings.Select(ToResponse).ToList(),
+            lowRemainingQuantityListings.Select(ToResponse).ToList());
+    }
+
     public async Task<IReadOnlyList<MaterialCategoryResponse>> GetCategoriesAsync(CancellationToken cancellationToken) =>
         await dbContext.Categories.AsNoTracking()
             .OrderBy(category => category.Name)
@@ -223,6 +326,15 @@ public sealed class MaterialInventoryService(SurplusLinkDbContext dbContext) : I
         dbContext.Categories.Remove(category);
         await dbContext.SaveChangesAsync(cancellationToken);
     }
+
+    private static IQueryable<Listing> RestrictToReadableListings(IQueryable<Listing> listings, MaterialActor actor) => actor.Role switch
+    {
+        UserRole.MANAGER => listings,
+        UserRole.SELLER => listings.Where(listing => listing.SellerId == actor.Id),
+        UserRole.BUYER => listings.Where(listing =>
+            listing.Status == ListingStatus.ACTIVE && listing.AvailableUntil > DateTime.UtcNow),
+        _ => throw new MaterialOperationException(MaterialOperationError.Forbidden, "This role cannot read material listings.")
+    };
 
     private async Task<Listing> GetOwnedListingAsync(Guid sellerId, Guid listingId, CancellationToken cancellationToken) =>
         await dbContext.Listings.Include(listing => listing.Photos)
