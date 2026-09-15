@@ -6,6 +6,7 @@ import 'package:mobile/auth/auth_repository.dart';
 import 'package:mobile/config/app_config.dart';
 import 'package:mobile/core/api_client.dart';
 import 'package:mobile/core/token_storage.dart';
+import 'package:mobile/materials/material_inventory_repository.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -20,5 +21,10 @@ void main() {
     AuthRepository(apiClient: apiClient, tokenStorage: tokenStorage),
   );
 
-  runApp(SurplusLinkApp(authController: authController));
+  runApp(
+    SurplusLinkApp(
+      authController: authController,
+      materialGateway: MaterialInventoryRepository(apiClient),
+    ),
+  );
 }
