@@ -8,6 +8,8 @@ export function AppLayout() {
     return null;
   }
 
+  const manager = user.role === 'MANAGER';
+
   return (
     <div className="app-shell">
       <header className="app-header">
@@ -25,10 +27,16 @@ export function AppLayout() {
       </header>
       <div className="app-body">
         <aside className="side-nav">
-          <nav aria-label={`${roleLabels[user.role]} navigation`}>
-            <NavLink to={roleHomePath(user.role)}>
+          <nav aria-label={roleLabels[user.role] + ' navigation'}>
+            <NavLink to={roleHomePath(user.role)} end>
               {roleLabels[user.role]} home
             </NavLink>
+            {manager && (
+              <>
+                <NavLink to="/app/manager">Material listings</NavLink>
+                <NavLink to="/app/manager/categories">Material categories</NavLink>
+              </>
+            )}
           </nav>
         </aside>
         <main className="page-content">
