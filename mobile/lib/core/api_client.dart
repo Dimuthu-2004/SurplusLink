@@ -21,13 +21,19 @@ final class ApiClient {
   Future<Map<String, dynamic>> getJson(
     String path, {
     bool authenticated = false,
-  }) => _expectMap(_send(method: 'GET', path: path, authenticated: authenticated));
+  }) => _expectMap(
+    _send(method: 'GET', path: path, authenticated: authenticated),
+  );
 
   Future<List<Map<String, dynamic>>> getListJson(
     String path, {
     bool authenticated = false,
   }) async {
-    final json = await _send(method: 'GET', path: path, authenticated: authenticated);
+    final json = await _send(
+      method: 'GET',
+      path: path,
+      authenticated: authenticated,
+    );
     if (json is! List) {
       throw const FormatException('Expected a JSON array.');
     }
@@ -60,13 +66,15 @@ final class ApiClient {
     Map<String, dynamic>? body, {
     bool authenticated = false,
   }) => _expectMap(
-    _send(method: 'PATCH', path: path, body: body, authenticated: authenticated),
+    _send(
+      method: 'PATCH',
+      path: path,
+      body: body,
+      authenticated: authenticated,
+    ),
   );
 
-  Future<void> delete(
-    String path, {
-    bool authenticated = false,
-  }) async {
+  Future<void> delete(String path, {bool authenticated = false}) async {
     await _send(method: 'DELETE', path: path, authenticated: authenticated);
   }
 
@@ -91,7 +99,10 @@ final class ApiClient {
     if (authenticated) {
       final token = await tokenStorage.readToken();
       if (token == null || token.isEmpty) {
-        throw const ApiException('Authentication is required.', statusCode: 401);
+        throw const ApiException(
+          'Authentication is required.',
+          statusCode: 401,
+        );
       }
       headers['Authorization'] = 'Bearer $token';
     }
@@ -100,16 +111,24 @@ final class ApiClient {
       final uri = baseUri.resolve(path);
       final response = switch (method) {
         'GET' => await httpClient.get(uri, headers: headers).timeout(timeout),
-        'POST' => await httpClient
-            .post(uri, headers: headers, body: jsonEncode(body))
-            .timeout(timeout),
-        'PUT' => await httpClient
-            .put(uri, headers: headers, body: jsonEncode(body))
-            .timeout(timeout),
-        'PATCH' => await httpClient
-            .patch(uri, headers: headers, body: body == null ? null : jsonEncode(body))
-            .timeout(timeout),
-        'DELETE' => await httpClient.delete(uri, headers: headers).timeout(timeout),
+        'POST' =>
+          await httpClient
+              .post(uri, headers: headers, body: jsonEncode(body))
+              .timeout(timeout),
+        'PUT' =>
+          await httpClient
+              .put(uri, headers: headers, body: jsonEncode(body))
+              .timeout(timeout),
+        'PATCH' =>
+          await httpClient
+              .patch(
+                uri,
+                headers: headers,
+                body: body == null ? null : jsonEncode(body),
+              )
+              .timeout(timeout),
+        'DELETE' =>
+          await httpClient.delete(uri, headers: headers).timeout(timeout),
         _ => throw ArgumentError.value(method, 'method', 'Unsupported method'),
       };
 
@@ -150,6 +169,7 @@ final class ApiClient {
 
     final message =
         json['message'] as String? ??
+        json['detail'] as String? ??
         json['title'] as String? ??
         (validationErrors.isNotEmpty
             ? validationErrors.values.expand((items) => items).join(' ')

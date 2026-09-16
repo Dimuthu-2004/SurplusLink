@@ -6,11 +6,13 @@ class HomeScreen extends StatelessWidget {
   const HomeScreen({
     required this.authController,
     this.onOpenMaterials,
+    this.onOpenRequirements,
     super.key,
   });
 
   final AuthController authController;
   final VoidCallback? onOpenMaterials;
+  final VoidCallback? onOpenRequirements;
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
@@ -19,9 +21,21 @@ class HomeScreen extends StatelessWidget {
       final user = authController.user;
       if (user == null) return const Scaffold(body: SizedBox.shrink());
       final (title, description, icon) = switch (user.role) {
-        AppRole.seller => ('Seller home', 'Manage your material inventory and listings.', Icons.inventory_2_outlined),
-        AppRole.buyer => ('Buyer home', 'Your buyer workspace is ready for future request features.', Icons.search),
-        AppRole.manager => ('Manager home', 'Your manager workspace is ready for future administration features.', Icons.admin_panel_settings_outlined),
+        AppRole.seller => (
+          'Seller home',
+          'Manage your material inventory and listings.',
+          Icons.inventory_2_outlined,
+        ),
+        AppRole.buyer => (
+          'Buyer home',
+          'Create requirements and follow matching progress.',
+          Icons.search,
+        ),
+        AppRole.manager => (
+          'Manager home',
+          'Your manager workspace is ready for future administration features.',
+          Icons.admin_panel_settings_outlined,
+        ),
       };
 
       return Scaffold(
@@ -44,11 +58,25 @@ class HomeScreen extends StatelessWidget {
               children: [
                 Icon(icon, size: 72),
                 const SizedBox(height: 24),
-                Text(title, key: const Key('role-home-title'), style: Theme.of(context).textTheme.headlineMedium),
+                Text(
+                  title,
+                  key: const Key('role-home-title'),
+                  style: Theme.of(context).textTheme.headlineMedium,
+                ),
                 const SizedBox(height: 12),
                 Text(user.email),
                 const SizedBox(height: 12),
                 Text(description, textAlign: TextAlign.center),
+                if (user.role == AppRole.buyer &&
+                    onOpenRequirements != null) ...[
+                  const SizedBox(height: 24),
+                  FilledButton.icon(
+                    key: const Key('open-my-requirements'),
+                    onPressed: onOpenRequirements,
+                    icon: const Icon(Icons.assignment_outlined),
+                    label: const Text('My Requirements'),
+                  ),
+                ],
                 if (user.role == AppRole.seller && onOpenMaterials != null) ...[
                   const SizedBox(height: 24),
                   FilledButton.icon(

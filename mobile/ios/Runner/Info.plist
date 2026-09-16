@@ -11,7 +11,7 @@
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Choose material photos to preview before adding their hosted URLs.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Capture the location of a material listing when you choose to do so.</string>
+	<string>Capture a delivery or material location when you choose to use GPS.</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>

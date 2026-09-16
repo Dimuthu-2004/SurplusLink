@@ -7,6 +7,7 @@ import 'package:mobile/config/app_config.dart';
 import 'package:mobile/core/api_client.dart';
 import 'package:mobile/core/token_storage.dart';
 import 'package:mobile/materials/material_inventory_repository.dart';
+import 'package:mobile/requirements/requirement_repository.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -25,6 +26,10 @@ void main() {
     SurplusLinkApp(
       authController: authController,
       materialGateway: MaterialInventoryRepository(apiClient),
+      requirementGateway: RequirementRepository(
+        apiClient,
+        onSessionExpired: authController.logout,
+      ),
     ),
   );
 }
