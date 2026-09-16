@@ -142,6 +142,7 @@ public static class MarketplaceModelConfiguration
             entity.HasIndex(request => new { request.Status, request.Deadline }).HasDatabaseName("IX_MaterialRequests_Status_DeadlineUtc");
             entity.HasKey(request => request.Id).HasName("PK_MaterialRequests");
             entity.Property(request => request.Title).HasMaxLength(200).IsRequired();
+            entity.Property(request => request.Notes).HasMaxLength(2000).IsRequired();
             entity.Property(request => request.RequiredQuantity).HasColumnName("Quantity").HasPrecision(18, 3);
             entity.Property(request => request.MaximumBudget).HasColumnName("Budget").HasPrecision(18, 2);
             entity.Property(request => request.Status).HasConversion<string>().HasMaxLength(24).IsRequired();

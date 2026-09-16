@@ -25,6 +25,7 @@ public sealed class SurplusLinkDbContext(DbContextOptions<SurplusLinkDbContext> 
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
+        AuditRequirementStatusChanges();
         StampTimestamps();
         return base.SaveChanges(acceptAllChangesOnSuccess);
     }
@@ -33,6 +34,7 @@ public sealed class SurplusLinkDbContext(DbContextOptions<SurplusLinkDbContext> 
         bool acceptAllChangesOnSuccess,
         CancellationToken cancellationToken = default)
     {
+        AuditRequirementStatusChanges();
         StampTimestamps();
         return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
     }
@@ -40,6 +42,31 @@ public sealed class SurplusLinkDbContext(DbContextOptions<SurplusLinkDbContext> 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ConfigureMarketplaceModel();
+    }
+
+    private void AuditRequirementStatusChanges()
+    {
+        // Covers future workflow-driven transitions using tracked entities as well as buyer actions.
+        // Bulk SQL/ExecuteUpdate bypasses SaveChanges and must supply its own audit records.
+        foreach (var entry in ChangeTracker.Entries<BuyerRequest>()
+                     .Where(x => x.State == EntityState.Modified).ToArray())
+        {
+            var status = entry.Property(x => x.Status);
+            if (!status.IsModified || status.OriginalValue == status.CurrentValue) continue;
+            var action = $"STATUS_CHANGED:{status.OriginalValue}:{status.CurrentValue}";
+            var pendingLogs = ChangeTracker.Entries<AuditLog>()
+                .Where(x => x.State == EntityState.Added && x.Entity.EntityType == nameof(BuyerRequest) &&
+                            x.Entity.EntityId == entry.Entity.Id).Select(x => x.Entity).ToArray();
+            // A failed SaveChanges can be retried within the same context.
+            if (pendingLogs.Any(x => x.Action == action)) continue;
+            AuditLogs.Add(new AuditLog
+            {
+                Id = Guid.NewGuid(), EntityType = nameof(BuyerRequest), EntityId = entry.Entity.Id,
+                Action = action,
+                // Reuse the explicit operation's actor; background changes have no inferred user.
+                ActorUserId = pendingLogs.LastOrDefault(x => x.ActorUserId.HasValue)?.ActorUserId
+            });
+        }
     }
 
     private void StampTimestamps()
