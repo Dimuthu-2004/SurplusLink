@@ -50,3 +50,7 @@ lib/widgets/                  shared authentication presentation widgets
 flutter analyze
 flutter test
 ```
+
+## Buyer Requirements (M2-3)
+
+See [Buyer Requirements Flutter](../docs/buyer-requirements-flutter.md) for screen behavior, exact files, setup, widget tests, and manual tests.

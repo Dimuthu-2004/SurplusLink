@@ -5,17 +5,23 @@ import 'package:go_router/go_router.dart';
 import 'package:mobile/auth/auth_controller.dart';
 import 'package:mobile/materials/material_inventory_gateway.dart';
 import 'package:mobile/routing/app_router.dart';
+import 'package:mobile/requirements/requirement_gateway.dart';
+import 'package:mobile/requirements/requirement_location.dart';
 
 class SurplusLinkApp extends StatefulWidget {
   const SurplusLinkApp({
     required this.authController,
     this.materialGateway,
+    this.requirementGateway,
+    this.requirementLocation = const DeviceRequirementLocation(),
     this.initialLocation = AppRoutes.splash,
     super.key,
   });
 
   final AuthController authController;
   final MaterialInventoryGateway? materialGateway;
+  final RequirementGateway? requirementGateway;
+  final RequirementLocationSource requirementLocation;
   final String initialLocation;
 
   @override
@@ -31,6 +37,8 @@ class _SurplusLinkAppState extends State<SurplusLinkApp> {
     _router = createAppRouter(
       authController: widget.authController,
       materialGateway: widget.materialGateway,
+      requirementGateway: widget.requirementGateway,
+      requirementLocation: widget.requirementLocation,
       initialLocation: widget.initialLocation,
     );
     unawaited(widget.authController.initialize());

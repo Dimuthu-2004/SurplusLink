@@ -1,3 +1,10 @@
+import 'package:mobile/requirements/requirement_gateway.dart';
+import 'package:mobile/requirements/requirement_location.dart';
+import 'package:mobile/screens/my_requirements_screen.dart';
+import 'package:mobile/screens/requirement_form_screen.dart';
+import 'package:mobile/screens/requirement_details_screen.dart';
+import 'package:mobile/screens/requirement_status_screen.dart';
+import 'package:mobile/screens/requirement_history_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile/auth/auth_controller.dart';
@@ -17,6 +24,7 @@ abstract final class AppRoutes {
   static const login = '/login';
   static const register = '/register';
   static const home = '/home';
+  static const requirements = '/requirements';
   static const materials = '/materials';
   static const addMaterial = '/materials/new';
 }
@@ -24,8 +32,12 @@ abstract final class AppRoutes {
 GoRouter createAppRouter({
   required AuthController authController,
   MaterialInventoryGateway? materialGateway,
+  RequirementGateway? requirementGateway,
+  RequirementLocationSource requirementLocation =
+      const DeviceRequirementLocation(),
   String initialLocation = AppRoutes.splash,
 }) {
+  String? pendingLocation;
   return GoRouter(
     initialLocation: initialLocation,
     refreshListenable: authController,
@@ -35,12 +47,22 @@ GoRouter createAppRouter({
           location == AppRoutes.login || location == AppRoutes.register;
 
       if (authController.status == AuthStatus.initializing) {
+        if (!isAuthRoute && location != AppRoutes.splash) {
+          pendingLocation = state.uri.toString();
+        }
         return location == AppRoutes.splash ? null : AppRoutes.splash;
       }
       if (!authController.isAuthenticated) {
         return isAuthRoute ? null : AppRoutes.login;
       }
       if (isAuthRoute || location == AppRoutes.splash) {
+        final destination = pendingLocation ?? AppRoutes.home;
+        pendingLocation = null;
+        return destination;
+      }
+      if ((location == AppRoutes.requirements ||
+              location.startsWith('/requirements/')) &&
+          authController.user?.role != AppRole.buyer) {
         return AppRoutes.home;
       }
       return null;
@@ -64,15 +86,63 @@ GoRouter createAppRouter({
         path: AppRoutes.home,
         builder: (context, state) => HomeScreen(
           authController: authController,
+          onOpenRequirements: requirementGateway == null
+              ? null
+              : () => context.go(AppRoutes.requirements),
           onOpenMaterials: materialGateway == null
               ? null
               : () => context.go(AppRoutes.materials),
         ),
       ),
+      if (requirementGateway != null) ...[
+        GoRoute(
+          path: AppRoutes.requirements,
+          builder: (context, state) =>
+              MyRequirementsScreen(gateway: requirementGateway),
+        ),
+        GoRoute(
+          path: '/requirements/new',
+          builder: (context, state) => RequirementFormScreen(
+            gateway: requirementGateway,
+            locationSource: requirementLocation,
+          ),
+        ),
+        GoRoute(
+          path: '/requirements/:id/edit',
+          builder: (context, state) => RequirementFormScreen(
+            gateway: requirementGateway,
+            requirementId: state.pathParameters['id']!,
+            locationSource: requirementLocation,
+          ),
+        ),
+        GoRoute(
+          path: '/requirements/:id/history',
+          builder: (context, state) => RequirementHistoryScreen(
+            gateway: requirementGateway,
+            requirementId: state.pathParameters['id']!,
+          ),
+        ),
+        GoRoute(
+          path: '/requirements/:id/status',
+          builder: (context, state) => RequirementStatusScreen(
+            gateway: requirementGateway,
+            requirementId: state.pathParameters['id']!,
+            workflowId: state.extra as String?,
+          ),
+        ),
+        GoRoute(
+          path: '/requirements/:id',
+          builder: (context, state) => RequirementDetailsScreen(
+            gateway: requirementGateway,
+            requirementId: state.pathParameters['id']!,
+          ),
+        ),
+      ],
       if (materialGateway != null) ...[
         GoRoute(
           path: AppRoutes.materials,
-          builder: (context, state) => _materialsScreen(authController, materialGateway),
+          builder: (context, state) =>
+              _materialsScreen(authController, materialGateway),
         ),
         GoRoute(
           path: AppRoutes.addMaterial,
@@ -125,12 +195,19 @@ Widget _detailsScreen(
   final user = authController.user;
   return user == null
       ? const SizedBox.shrink()
-      : MaterialDetailsScreen(gateway: gateway, user: user, listingId: listingId);
+      : MaterialDetailsScreen(
+          gateway: gateway,
+          user: user,
+          listingId: listingId,
+        );
 }
+
 Widget _sellerOnly(AuthController authController, Widget child) {
   final user = authController.user;
   if (user?.role == AppRole.seller) return child;
   return const Scaffold(
-    body: Center(child: Text('Only seller accounts can manage material listings.')),
+    body: Center(
+      child: Text('Only seller accounts can manage material listings.'),
+    ),
   );
 }
