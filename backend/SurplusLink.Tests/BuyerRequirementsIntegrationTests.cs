@@ -200,6 +200,7 @@ public sealed class BuyerRequirementsIntegrationTests : IClassFixture<Requiremen
         var legacy = await db.BuyerRequests.SingleAsync(x => x.Id == fixture.LegacyRequest);
         Assert.Equal(BuyerRequestStatus.MATCH_FOUND, legacy.Status);
         Assert.Equal("unit", legacy.Unit);
+        Assert.Equal("", legacy.Notes);
         Assert.Null(legacy.Latitude);
         Assert.Equal(5, legacy.RequiredQuantity);
         Assert.True(await db.Matches.AnyAsync(x => x.MaterialRequestId == legacy.Id));

@@ -28,14 +28,57 @@ public sealed class RequirementService(SurplusLinkDbContext db, IRequirementWork
         return RequirementResponse.From(request);
     }
 
-    public async Task<RequirementPage> ListAsync(Guid? buyerId, int page, int pageSize, CancellationToken ct)
+    public async Task<RequirementPage> ListAsync(Guid? buyerId, RequirementQuery input, CancellationToken ct)
     {
         var query = db.BuyerRequests.AsNoTracking();
         if (buyerId.HasValue) query = query.Where(x => x.BuyerId == buyerId.Value);
+        query = RequirementQueryBuilder.Filter(query, input);
         var total = await query.CountAsync(ct);
-        var items = await query.OrderByDescending(x => x.CreatedAtUtc).ThenBy(x => x.Id)
-            .Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
-        return new(items.Select(RequirementResponse.From).ToArray(), total, page, pageSize);
+        var items = await RequirementQueryBuilder.Sort(query, input)
+            .Skip((input.Page - 1) * input.PageSize).Take(input.PageSize).ToListAsync(ct);
+        return new(items.Select(RequirementResponse.From).ToArray(), total, input.Page, input.PageSize);
+    }
+
+    public async Task<RequirementHistoryPage> HistoryAsync(Guid id, Guid actorId, bool manager, RequirementPageQuery input, CancellationToken ct)
+    {
+        // Authorize before reading audits, including when the audit collection is empty.
+        await GetAsync(id, actorId, manager, ct);
+        var query = db.AuditLogs.AsNoTracking().Where(x => x.EntityId == id &&
+            (x.EntityType == nameof(BuyerRequest) || x.EntityType == "MaterialRequest"));
+        var total = await query.CountAsync(ct);
+        var items = await query.OrderBy(x => x.CreatedAtUtc).ThenBy(x => x.Id)
+            .Skip((input.Page - 1) * input.PageSize).Take(input.PageSize).ToListAsync(ct);
+        return new(items.Select(RequirementHistoryEntry.From).ToArray(), total, input.Page, input.PageSize);
+    }
+
+    public async Task<RequirementAnalyticsSummary> SummaryAsync(int upcomingDays, CancellationToken ct)
+    {
+        // All aggregates and the preview describe one consistent database snapshot.
+        await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead, ct);
+        var now = DateTime.UtcNow;
+        var until = now.AddDays(upcomingDays);
+        var query = db.BuyerRequests.AsNoTracking();
+        var statusCounts = await query.GroupBy(x => x.Status)
+            .Select(g => new { Status = g.Key, Count = g.Count() }).ToDictionaryAsync(x => x.Status, x => x.Count, ct);
+        var statuses = Enum.GetValues<BuyerRequestStatus>()
+            .Select(status => new RequirementStatusCount(status.ToString(), statusCounts.GetValueOrDefault(status))).ToArray();
+        var categories = await db.Categories.AsNoTracking().OrderBy(x => x.Name).ThenBy(x => x.Id)
+            .Select(category => new RequirementCategoryCount(category.Id, category.Name,
+                db.BuyerRequests.Count(x => x.CategoryId == category.Id))).ToListAsync(ct);
+        var upcoming = query.Where(x => x.Deadline >= now && x.Deadline <= until &&
+            (x.Status == BuyerRequestStatus.OPEN || x.Status == BuyerRequestStatus.MATCHING ||
+             x.Status == BuyerRequestStatus.MATCH_FOUND || x.Status == BuyerRequestStatus.PENDING_APPROVAL ||
+             x.Status == BuyerRequestStatus.APPROVED));
+        var upcomingCount = await upcoming.CountAsync(ct);
+        var deadlines = await upcoming.OrderBy(x => x.Deadline).ThenBy(x => x.Id).Take(10).ToListAsync(ct);
+        var averageBudget = await query.AverageAsync(x => (decimal?)x.MaximumBudget, ct);
+        // Quantities in different units must not be averaged together.
+        var quantityAverages = await query.GroupBy(x => x.Unit).OrderBy(g => g.Key)
+            .Select(g => new RequirementQuantityAverage(g.Key, g.Average(x => x.RequiredQuantity), g.Count())).ToListAsync(ct);
+        await tx.CommitAsync(ct);
+        return new(statuses.Sum(x => x.Count), statuses, categories,
+            statusCounts.GetValueOrDefault(BuyerRequestStatus.OPEN), now, until, upcomingCount,
+            deadlines.Select(RequirementResponse.From).ToArray(), averageBudget, quantityAverages);
     }
 
     public async Task<RequirementResponse> UpdateAsync(Guid id, Guid buyerId, SaveRequirementRequest input, CancellationToken ct)
@@ -152,6 +195,7 @@ public sealed class RequirementService(SurplusLinkDbContext db, IRequirementWork
     private static void Apply(BuyerRequest request, SaveRequirementRequest input)
     {
         request.CategoryId = input.CategoryId;
+        request.Notes = input.Notes?.Trim() ?? string.Empty;
         request.RequiredQuantity = input.RequiredQuantity;
         request.Unit = input.Unit.Trim();
         request.MaximumBudget = input.MaximumBudget;

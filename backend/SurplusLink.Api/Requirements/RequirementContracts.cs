@@ -8,6 +8,8 @@ namespace SurplusLink.Api.Requirements;
 public sealed class SaveRequirementRequest : IValidatableObject
 {
     public Guid CategoryId { get; init; }
+    [StringLength(2000)]
+    public string? Notes { get; init; }
     [Range(typeof(decimal), "0.001", "999999999999999.999")]
     public decimal RequiredQuantity { get; init; }
     [Required, StringLength(32)]
@@ -39,12 +41,12 @@ public sealed record RequirementResponse(
     Guid Id, Guid BuyerId, Guid CategoryId, decimal RequiredQuantity, string Unit,
     decimal MaximumBudget, DateTime Deadline, decimal? Latitude, decimal? Longitude,
     [property: JsonConverter(typeof(JsonStringEnumConverter))] BuyerRequestStatus Status,
-    DateTime CreatedAt, DateTime UpdatedAt)
+    DateTime CreatedAt, DateTime UpdatedAt, string Notes)
 {
     public static RequirementResponse From(BuyerRequest request) => new(
         request.Id, request.BuyerId, request.CategoryId, request.RequiredQuantity, request.Unit,
         request.MaximumBudget, request.Deadline, request.Latitude, request.Longitude,
-        request.Status, request.CreatedAtUtc, request.UpdatedAtUtc);
+        request.Status, request.CreatedAtUtc, request.UpdatedAtUtc, request.Notes);
 }
 
 public sealed record RequirementPage(IReadOnlyList<RequirementResponse> Items, int Total, int Page, int PageSize);

@@ -28,14 +28,25 @@ public sealed class RequirementsController(RequirementService service) : Control
     [HttpGet("my")]
     [Authorize(Roles = "BUYER")]
     [ProducesResponseType(typeof(RequirementPage), 200)]
-    public Task<IActionResult> My(CancellationToken ct, [Range(1, 1000000)] int page = 1, [Range(1, 100)] int pageSize = 20) =>
-        Handle(async actor => Ok(await service.ListAsync(actor, page, pageSize, ct)));
+    public Task<IActionResult> My([FromQuery] RequirementQuery query, CancellationToken ct) =>
+        Handle(async actor => Ok(await service.ListAsync(actor, query, ct)));
 
     [HttpGet]
     [Authorize(Roles = "MANAGER")]
     [ProducesResponseType(typeof(RequirementPage), 200)]
-    public Task<IActionResult> Monitor(CancellationToken ct, [Range(1, 1000000)] int page = 1, [Range(1, 100)] int pageSize = 20) =>
-        Handle(async _ => Ok(await service.ListAsync(null, page, pageSize, ct)));
+    public Task<IActionResult> Monitor([FromQuery] RequirementQuery query, CancellationToken ct) =>
+        Handle(async _ => Ok(await service.ListAsync(null, query, ct)));
+
+    [HttpGet("{id:guid}/history")]
+    [ProducesResponseType(typeof(RequirementHistoryPage), 200)]
+    public Task<IActionResult> History(Guid id, [FromQuery] RequirementPageQuery query, CancellationToken ct) =>
+        Handle(async actor => Ok(await service.HistoryAsync(id, actor, User.IsInRole("MANAGER"), query, ct)));
+
+    [HttpGet("analytics/summary")]
+    [Authorize(Roles = "MANAGER")]
+    [ProducesResponseType(typeof(RequirementAnalyticsSummary), 200)]
+    public Task<IActionResult> Summary(CancellationToken ct, [Range(1, 365)] int upcomingDays = 7) =>
+        Handle(async _ => Ok(await service.SummaryAsync(upcomingDays, ct)));
 
     [HttpPut("{id:guid}")]
     [Authorize(Roles = "BUYER")]

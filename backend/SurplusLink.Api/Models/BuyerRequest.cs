@@ -12,6 +12,8 @@ public sealed class BuyerRequest : AuditableEntity
     // Retained for legacy rows. New requests receive a category-based title internally.
     public string Title { get; set; } = string.Empty;
 
+    public string Notes { get; set; } = string.Empty;
+
     public decimal RequiredQuantity { get; set; }
 
     public decimal MaximumBudget { get; set; }
