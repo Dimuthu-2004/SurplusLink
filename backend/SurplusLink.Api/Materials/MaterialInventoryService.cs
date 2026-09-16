@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using SurplusLink.Api.Data;
 using SurplusLink.Api.Models;
 
@@ -317,7 +317,7 @@ public sealed class MaterialInventoryService(SurplusLinkDbContext dbContext) : I
         var category = await dbContext.Categories.SingleOrDefaultAsync(item => item.Id == categoryId, cancellationToken)
             ?? throw new MaterialOperationException(MaterialOperationError.NotFound, "Material category was not found.");
         var inUse = await dbContext.Listings.AnyAsync(item => item.CategoryId == categoryId, cancellationToken)
-            || await dbContext.MaterialRequests.AnyAsync(item => item.CategoryId == categoryId, cancellationToken);
+            || await dbContext.BuyerRequests.AnyAsync(item => item.CategoryId == categoryId, cancellationToken);
         if (inUse)
         {
             throw new MaterialOperationException(MaterialOperationError.Conflict, "A category used by a listing or material request cannot be deleted.");

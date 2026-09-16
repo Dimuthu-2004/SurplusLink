@@ -1,4 +1,4 @@
-﻿namespace SurplusLink.Api.Models;
+namespace SurplusLink.Api.Models;
 
 public enum ListingStatus
 {
@@ -23,13 +23,9 @@ public enum MaterialCondition
     POOR
 }
 
-public enum MaterialRequestStatus
+public enum BuyerRequestStatus
 {
-    OPEN,
-    MATCHED,
-    FULFILLED,
-    CANCELLED,
-    EXPIRED
+    DRAFT, OPEN, MATCHING, MATCH_FOUND, PENDING_APPROVAL, APPROVED, REJECTED, COMPLETED, CANCELLED
 }
 
 public enum WorkflowStatus

@@ -10,7 +10,7 @@ public sealed class MaterialMatch : AuditableEntity
 
     public decimal Score { get; set; }
 
-    public MaterialRequest MaterialRequest { get; set; } = null!;
+    public BuyerRequest MaterialRequest { get; set; } = null!;
 
     public Listing Listing { get; set; } = null!;
 }

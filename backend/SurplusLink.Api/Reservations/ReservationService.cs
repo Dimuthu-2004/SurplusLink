@@ -22,7 +22,7 @@ public sealed class ReservationService(SurplusLinkDbContext dbContext) : IReserv
         var listing = await dbContext.Listings
             .SingleOrDefaultAsync(item => item.Id == listingId, cancellationToken)
             ?? throw new ReservationRejectedException("Listing was not found.");
-        var request = await dbContext.MaterialRequests
+        var request = await dbContext.BuyerRequests
             .SingleOrDefaultAsync(item => item.Id == materialRequestId, cancellationToken)
             ?? throw new ReservationRejectedException("Material request was not found.");
 
@@ -31,7 +31,7 @@ public sealed class ReservationService(SurplusLinkDbContext dbContext) : IReserv
             throw new ReservationRejectedException("Listing is not available for reservation.");
         }
 
-        if (request.Status is not MaterialRequestStatus.OPEN and not MaterialRequestStatus.MATCHED)
+        if (request.Status is not BuyerRequestStatus.OPEN and not BuyerRequestStatus.MATCH_FOUND)
         {
             throw new ReservationRejectedException("Material request is not open for reservation.");
         }
