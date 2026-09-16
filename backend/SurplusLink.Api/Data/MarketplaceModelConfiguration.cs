@@ -13,7 +13,7 @@ public static class MarketplaceModelConfiguration
         ConfigureCategory(modelBuilder);
         ConfigureListing(modelBuilder);
         ConfigureListingPhoto(modelBuilder);
-        ConfigureMaterialRequest(modelBuilder);
+        ConfigureBuyerRequest(modelBuilder);
         ConfigureMatch(modelBuilder);
         ConfigureWorkflow(modelBuilder);
         ConfigureReservation(modelBuilder);
@@ -121,23 +121,33 @@ public static class MarketplaceModelConfiguration
         });
     }
 
-    private static void ConfigureMaterialRequest(ModelBuilder modelBuilder)
+    private static void ConfigureBuyerRequest(ModelBuilder modelBuilder)
     {
-        modelBuilder.Entity<MaterialRequest>(entity =>
+        modelBuilder.Entity<BuyerRequest>(entity =>
         {
             entity.ToTable("MaterialRequests", table =>
             {
                 table.HasCheckConstraint("CK_MaterialRequests_Quantity_Positive", "\"Quantity\" > 0");
                 table.HasCheckConstraint("CK_MaterialRequests_Budget_Positive", "\"Budget\" > 0");
+                table.HasCheckConstraint("CK_MaterialRequests_Unit_NotBlank", "length(btrim(\"Unit\")) > 0");
+                table.HasCheckConstraint("CK_MaterialRequests_Coordinates_Valid", "(\"Latitude\" IS NULL AND \"Longitude\" IS NULL) OR (\"Latitude\" IS NOT NULL AND \"Longitude\" IS NOT NULL AND \"Latitude\" BETWEEN -90 AND 90 AND \"Longitude\" BETWEEN -180 AND 180)");
+                table.HasCheckConstraint("CK_MaterialRequests_Status_Valid", "\"Status\" IN ('DRAFT', 'OPEN', 'MATCHING', 'MATCH_FOUND', 'PENDING_APPROVAL', 'APPROVED', 'REJECTED', 'COMPLETED', 'CANCELLED')");
             });
+            entity.Property(request => request.Deadline).HasColumnName("DeadlineUtc");
+            entity.Property(request => request.Unit).HasMaxLength(32).IsRequired();
+            entity.Property(request => request.Latitude).HasPrecision(9, 6);
+            entity.Property(request => request.Longitude).HasPrecision(9, 6);
+            entity.Property(request => request.Version).IsRowVersion();
+            entity.HasIndex(request => new { request.BuyerId, request.CreatedAtUtc }).HasDatabaseName("IX_MaterialRequests_BuyerId_CreatedAtUtc");
+            entity.HasIndex(request => new { request.Status, request.Deadline }).HasDatabaseName("IX_MaterialRequests_Status_DeadlineUtc");
             entity.HasKey(request => request.Id).HasName("PK_MaterialRequests");
             entity.Property(request => request.Title).HasMaxLength(200).IsRequired();
-            entity.Property(request => request.Quantity).HasPrecision(18, 3);
-            entity.Property(request => request.Budget).HasPrecision(18, 2);
+            entity.Property(request => request.RequiredQuantity).HasColumnName("Quantity").HasPrecision(18, 3);
+            entity.Property(request => request.MaximumBudget).HasColumnName("Budget").HasPrecision(18, 2);
             entity.Property(request => request.Status).HasConversion<string>().HasMaxLength(24).IsRequired();
             entity.HasIndex(request => request.Status).HasDatabaseName("IX_MaterialRequests_Status");
             entity.HasIndex(request => request.CategoryId).HasDatabaseName("IX_MaterialRequests_CategoryId");
-            entity.HasIndex(request => request.DeadlineUtc).HasDatabaseName("IX_MaterialRequests_DeadlineUtc");
+            entity.HasIndex(request => request.Deadline).HasDatabaseName("IX_MaterialRequests_DeadlineUtc");
             entity.HasOne(request => request.Category)
                 .WithMany()
                 .HasForeignKey(request => request.CategoryId)

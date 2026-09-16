@@ -13,7 +13,7 @@ public sealed class SurplusLinkDbContext(DbContextOptions<SurplusLinkDbContext> 
 
     public DbSet<ListingPhoto> ListingPhotos => Set<ListingPhoto>();
 
-    public DbSet<MaterialRequest> MaterialRequests => Set<MaterialRequest>();
+    public DbSet<BuyerRequest> BuyerRequests => Set<BuyerRequest>();
 
     public DbSet<MaterialMatch> Matches => Set<MaterialMatch>();
 

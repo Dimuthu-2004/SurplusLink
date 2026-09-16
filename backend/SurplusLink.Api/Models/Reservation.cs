@@ -14,5 +14,5 @@ public sealed class Reservation : AuditableEntity
 
     public Listing Listing { get; set; } = null!;
 
-    public MaterialRequest MaterialRequest { get; set; } = null!;
+    public BuyerRequest MaterialRequest { get; set; } = null!;
 }

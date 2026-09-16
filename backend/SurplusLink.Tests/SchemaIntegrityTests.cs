@@ -17,13 +17,13 @@ public sealed class SchemaIntegrityTests
         Assert.All(model.GetEntityTypes(), entity => Assert.NotNull(entity.FindPrimaryKey()));
         AssertForeignKey<Listing>(model, nameof(Listing.SellerId), typeof(User));
         AssertForeignKey<Listing>(model, nameof(Listing.CategoryId), typeof(Category));
-        AssertForeignKey<MaterialRequest>(model, nameof(MaterialRequest.BuyerId), typeof(User));
-        AssertForeignKey<MaterialRequest>(model, nameof(MaterialRequest.CategoryId), typeof(Category));
+        AssertForeignKey<BuyerRequest>(model, nameof(BuyerRequest.BuyerId), typeof(User));
+        AssertForeignKey<BuyerRequest>(model, nameof(BuyerRequest.CategoryId), typeof(Category));
         AssertForeignKey<MaterialMatch>(model, nameof(MaterialMatch.ListingId), typeof(Listing));
-        AssertForeignKey<MaterialMatch>(model, nameof(MaterialMatch.MaterialRequestId), typeof(MaterialRequest));
+        AssertForeignKey<MaterialMatch>(model, nameof(MaterialMatch.MaterialRequestId), typeof(BuyerRequest));
         AssertForeignKey<Workflow>(model, nameof(Workflow.MaterialMatchId), typeof(MaterialMatch));
         AssertForeignKey<Reservation>(model, nameof(Reservation.ListingId), typeof(Listing));
-        AssertForeignKey<Reservation>(model, nameof(Reservation.MaterialRequestId), typeof(MaterialRequest));
+        AssertForeignKey<Reservation>(model, nameof(Reservation.MaterialRequestId), typeof(BuyerRequest));
         AssertForeignKey<AuditLog>(model, nameof(AuditLog.ActorUserId), typeof(User));
     }
 
