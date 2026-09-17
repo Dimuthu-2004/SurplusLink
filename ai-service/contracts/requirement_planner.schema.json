@@ -1,0 +1,442 @@
+{
+  "$defs": {
+    "ApprovalPlanStep": {
+      "additionalProperties": false,
+      "properties": {
+        "stepOrder": {
+          "const": 4,
+          "default": 4,
+          "title": "Steporder",
+          "type": "integer"
+        },
+        "agent": {
+          "const": "ManagerApproval",
+          "default": "ManagerApproval",
+          "title": "Agent",
+          "type": "string"
+        },
+        "action": {
+          "const": "request_manager_approval",
+          "default": "request_manager_approval",
+          "title": "Action",
+          "type": "string"
+        },
+        "requiredInputs": {
+          "default": [
+            "buyerRequestId",
+            "step3.validationResult"
+          ],
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "const": "buyerRequestId",
+              "type": "string"
+            },
+            {
+              "const": "step3.validationResult",
+              "type": "string"
+            }
+          ],
+          "title": "Requiredinputs",
+          "type": "array"
+        }
+      },
+      "title": "ApprovalPlanStep",
+      "type": "object"
+    },
+    "LogisticsPlanStep": {
+      "additionalProperties": false,
+      "properties": {
+        "stepOrder": {
+          "const": 2,
+          "default": 2,
+          "title": "Steporder",
+          "type": "integer"
+        },
+        "agent": {
+          "const": "LogisticsAgent",
+          "default": "LogisticsAgent",
+          "title": "Agent",
+          "type": "string"
+        },
+        "action": {
+          "const": "estimate_logistics",
+          "default": "estimate_logistics",
+          "title": "Action",
+          "type": "string"
+        },
+        "requiredInputs": {
+          "default": [
+            "step1.candidates",
+            "normalizedCriteria.requiredQuantity",
+            "normalizedCriteria.unit",
+            "normalizedCriteria.targetLatitude",
+            "normalizedCriteria.targetLongitude",
+            "normalizedCriteria.deadline"
+          ],
+          "maxItems": 6,
+          "minItems": 6,
+          "prefixItems": [
+            {
+              "const": "step1.candidates",
+              "type": "string"
+            },
+            {
+              "const": "normalizedCriteria.requiredQuantity",
+              "type": "string"
+            },
+            {
+              "const": "normalizedCriteria.unit",
+              "type": "string"
+            },
+            {
+              "const": "normalizedCriteria.targetLatitude",
+              "type": "string"
+            },
+            {
+              "const": "normalizedCriteria.targetLongitude",
+              "type": "string"
+            },
+            {
+              "const": "normalizedCriteria.deadline",
+              "type": "string"
+            }
+          ],
+          "title": "Requiredinputs",
+          "type": "array"
+        }
+      },
+      "title": "LogisticsPlanStep",
+      "type": "object"
+    },
+    "MatchingPlanStep": {
+      "additionalProperties": false,
+      "properties": {
+        "stepOrder": {
+          "const": 1,
+          "default": 1,
+          "title": "Steporder",
+          "type": "integer"
+        },
+        "agent": {
+          "const": "MaterialMatchingAgent",
+          "default": "MaterialMatchingAgent",
+          "title": "Agent",
+          "type": "string"
+        },
+        "action": {
+          "const": "match_materials",
+          "default": "match_materials",
+          "title": "Action",
+          "type": "string"
+        },
+        "requiredInputs": {
+          "default": [
+            "normalizedCriteria.categoryId",
+            "normalizedCriteria.category",
+            "normalizedCriteria.requiredQuantity",
+            "normalizedCriteria.unit",
+            "normalizedCriteria.maximumBudget",
+            "normalizedCriteria.deadline"
+          ],
+          "maxItems": 6,
+          "minItems": 6,
+          "prefixItems": [
+            {
+              "const": "normalizedCriteria.categoryId",
+              "type": "string"
+            },
+            {
+              "const": "normalizedCriteria.category",
+              "type": "string"
+            },
+            {
+              "const": "normalizedCriteria.requiredQuantity",
+              "type": "string"
+            },
+            {
+              "const": "normalizedCriteria.unit",
+              "type": "string"
+            },
+            {
+              "const": "normalizedCriteria.maximumBudget",
+              "type": "string"
+            },
+            {
+              "const": "normalizedCriteria.deadline",
+              "type": "string"
+            }
+          ],
+          "title": "Requiredinputs",
+          "type": "array"
+        }
+      },
+      "title": "MatchingPlanStep",
+      "type": "object"
+    },
+    "NormalizedCriteria": {
+      "additionalProperties": false,
+      "properties": {
+        "categoryId": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Categoryid"
+        },
+        "category": {
+          "anyOf": [
+            {
+              "maxLength": 120,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Category"
+        },
+        "requiredQuantity": {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,15}|(?=[\\d.]{1,19}0*$)\\d{0,15}\\.\\d{0,3}0*$)",
+          "title": "Requiredquantity",
+          "type": "string"
+        },
+        "unit": {
+          "maxLength": 32,
+          "minLength": 1,
+          "title": "Unit",
+          "type": "string"
+        },
+        "maximumBudget": {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,16}|(?=[\\d.]{1,19}0*$)\\d{0,16}\\.\\d{0,2}0*$)",
+          "title": "Maximumbudget",
+          "type": "string"
+        },
+        "deadline": {
+          "format": "date-time",
+          "title": "Deadline",
+          "type": "string"
+        },
+        "notes": {
+          "default": "",
+          "maxLength": 2000,
+          "title": "Notes",
+          "type": "string"
+        },
+        "targetLatitude": {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,3}|(?=[\\d.]{1,10}0*$)\\d{0,3}\\.\\d{0,6}0*$)",
+          "title": "Targetlatitude",
+          "type": "string"
+        },
+        "targetLongitude": {
+          "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,3}|(?=[\\d.]{1,10}0*$)\\d{0,3}\\.\\d{0,6}0*$)",
+          "title": "Targetlongitude",
+          "type": "string"
+        }
+      },
+      "required": [
+        "requiredQuantity",
+        "unit",
+        "maximumBudget",
+        "deadline",
+        "targetLatitude",
+        "targetLongitude"
+      ],
+      "title": "NormalizedCriteria",
+      "type": "object"
+    },
+    "PlannerFailure": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "const": "invalid_input",
+          "default": "invalid_input",
+          "title": "Status",
+          "type": "string"
+        },
+        "normalizedCriteria": {
+          "default": null,
+          "title": "Normalizedcriteria",
+          "type": "null"
+        },
+        "planSteps": {
+          "default": [],
+          "maxItems": 0,
+          "minItems": 0,
+          "title": "Plansteps",
+          "type": "array"
+        },
+        "issues": {
+          "items": {
+            "$ref": "#/$defs/PlannerIssue"
+          },
+          "minItems": 1,
+          "title": "Issues",
+          "type": "array"
+        }
+      },
+      "required": [
+        "issues"
+      ],
+      "title": "PlannerFailure",
+      "type": "object"
+    },
+    "PlannerIssue": {
+      "additionalProperties": false,
+      "properties": {
+        "field": {
+          "title": "Field",
+          "type": "string"
+        },
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        }
+      },
+      "required": [
+        "field",
+        "code",
+        "message"
+      ],
+      "title": "PlannerIssue",
+      "type": "object"
+    },
+    "PlannerSuccess": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "const": "ok",
+          "default": "ok",
+          "title": "Status",
+          "type": "string"
+        },
+        "buyerRequestId": {
+          "format": "uuid",
+          "title": "Buyerrequestid",
+          "type": "string"
+        },
+        "normalizedCriteria": {
+          "$ref": "#/$defs/NormalizedCriteria"
+        },
+        "planSteps": {
+          "maxItems": 4,
+          "minItems": 4,
+          "prefixItems": [
+            {
+              "$ref": "#/$defs/MatchingPlanStep"
+            },
+            {
+              "$ref": "#/$defs/LogisticsPlanStep"
+            },
+            {
+              "$ref": "#/$defs/ValidationPlanStep"
+            },
+            {
+              "$ref": "#/$defs/ApprovalPlanStep"
+            }
+          ],
+          "title": "Plansteps",
+          "type": "array"
+        },
+        "warnings": {
+          "default": [],
+          "items": {
+            "enum": [
+              "OBJECTIVE_NOT_APPLIED",
+              "NOTES_ARE_UNTRUSTED_DATA"
+            ],
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        }
+      },
+      "required": [
+        "buyerRequestId",
+        "normalizedCriteria",
+        "planSteps"
+      ],
+      "title": "PlannerSuccess",
+      "type": "object"
+    },
+    "ValidationPlanStep": {
+      "additionalProperties": false,
+      "properties": {
+        "stepOrder": {
+          "const": 3,
+          "default": 3,
+          "title": "Steporder",
+          "type": "integer"
+        },
+        "agent": {
+          "const": "ValidationAgent",
+          "default": "ValidationAgent",
+          "title": "Agent",
+          "type": "string"
+        },
+        "action": {
+          "const": "validate_recommendation",
+          "default": "validate_recommendation",
+          "title": "Action",
+          "type": "string"
+        },
+        "requiredInputs": {
+          "default": [
+            "normalizedCriteria",
+            "step1.candidates",
+            "step2.logistics"
+          ],
+          "maxItems": 3,
+          "minItems": 3,
+          "prefixItems": [
+            {
+              "const": "normalizedCriteria",
+              "type": "string"
+            },
+            {
+              "const": "step1.candidates",
+              "type": "string"
+            },
+            {
+              "const": "step2.logistics",
+              "type": "string"
+            }
+          ],
+          "title": "Requiredinputs",
+          "type": "array"
+        }
+      },
+      "title": "ValidationPlanStep",
+      "type": "object"
+    }
+  },
+  "discriminator": {
+    "mapping": {
+      "invalid_input": "#/$defs/PlannerFailure",
+      "ok": "#/$defs/PlannerSuccess"
+    },
+    "propertyName": "status"
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/PlannerSuccess"
+    },
+    {
+      "$ref": "#/$defs/PlannerFailure"
+    }
+  ],
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}
