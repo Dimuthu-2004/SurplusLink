@@ -4,6 +4,9 @@ import { LoginPage } from '../pages/LoginPage';
 import { ManagerCategoriesPage } from '../pages/manager/ManagerCategoriesPage';
 import { ManagerListingsPage } from '../pages/manager/ManagerListingsPage';
 import { ManagerMaterialDetailsPage } from '../pages/manager/ManagerMaterialDetailsPage';
+import { ManagerRequirementsPage } from '../pages/manager/ManagerRequirementsPage';
+import { ManagerRequirementDetailsPage } from '../pages/manager/ManagerRequirementDetailsPage';
+import { ManagerRequirementHistoryPage } from '../pages/manager/ManagerRequirementHistoryPage';
 import { NotFoundPage } from '../pages/NotFoundPage';
 import { RoleHomePage } from '../pages/RoleHomePage';
 import {
@@ -33,6 +36,10 @@ export function App() {
             <Route path="manager" element={<ManagerListingsPage />} />
             <Route path="manager/materials/:listingId" element={<ManagerMaterialDetailsPage />} />
             <Route path="manager/categories" element={<ManagerCategoriesPage />} />
+            <Route path="manager/requirements" element={<ManagerRequirementsPage />} />
+            <Route path="manager/requirements/:requirementId" element={<ManagerRequirementDetailsPage />} />
+            <Route path="manager/requirements/:requirementId/history" element={<ManagerRequirementHistoryPage />} />
+            <Route path="manager/requirements/:requirementId/workflow" element={<ManagerRequirementDetailsPage workflowOnly />} />
           </Route>
         </Route>
       </Route>

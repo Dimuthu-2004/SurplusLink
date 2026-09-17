@@ -67,6 +67,18 @@ input:focus { outline: 3px solid rgba(22, 121, 75, 0.2); border-color: #16794b; 
 .side-nav a { display: block; padding: 0.75rem 0.9rem; border-radius: 0.6rem; text-decoration: none; font-weight: 700; }
 .side-nav a.active { background: #dff1e5; color: #125f3b; }
 .page-content { padding: clamp(1.5rem, 5vw, 4rem); }
+.page-content { min-width: 0; }
+.requirement-page { min-width: 0; width: 100%; }
+.requirement-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: 1rem; margin: 1.25rem 0; }
+.requirement-metrics > div { padding: 1rem; border-radius: .75rem; background: #f3f7f4; }
+.requirement-metrics strong { display: block; margin-top: .5rem; font-size: 1.65rem; color: #125f3b; overflow-wrap: anywhere; }
+.requirement-window { display: grid; gap: .4rem; }
+.requirement-id { display: block; margin-top: .3rem; color: #60726b; }
+.requirement-notes { white-space: pre-wrap; overflow-wrap: anywhere; }
+.requirement-breakdown summary { cursor: pointer; color: #145d3b; font-weight: 700; margin-bottom: 1rem; }
+.requirement-refresh { margin-top: 1rem; }
+.requirement-page .table-scroll:focus-visible { outline: 3px solid #16794b; outline-offset: 3px; }
+.requirement-page .button { text-decoration: none; text-align: center; }
 .welcome-panel { max-width: 48rem; padding: clamp(1.5rem, 4vw, 3rem); border: 1px solid #d8e5dc; border-radius: 1rem; background: #fff; }
 .welcome-panel .eyebrow { margin-top: 0; }
 .welcome-panel p:last-child { color: #60726b; font-size: 1.05rem; }
