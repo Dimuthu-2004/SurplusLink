@@ -4,6 +4,7 @@ import { environment } from '../config/environment';
 
 interface ErrorPayload {
   message?: unknown;
+  detail?: unknown;
   title?: unknown;
   errors?: unknown;
 }
@@ -78,6 +79,7 @@ export function normalizeApiError(error: unknown): ApiError {
   const validationMessage = Object.values(validationErrors).flat().join(' ');
   const message =
     stringValue(payload?.message) ??
+    stringValue(payload?.detail) ??
     stringValue(payload?.title) ??
     (validationMessage || `Request failed with status ${axiosError.response.status}.`);
 

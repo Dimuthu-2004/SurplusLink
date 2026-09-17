@@ -25,3 +25,7 @@ Vite variables are shipped to the browser. Never put JWTs, passwords, connection
 npm test
 npm run build
 ```
+
+## Manager Buyer Requirements (M2-4)
+
+See [Manager Buyer Requirements](../docs/buyer-requirements-react.md) for routes, exact files, shared API integration, and tests.
