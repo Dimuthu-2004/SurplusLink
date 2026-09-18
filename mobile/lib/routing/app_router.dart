@@ -65,7 +65,14 @@ GoRouter createAppRouter({
       }
       if ((location == AppRoutes.requirements ||
               location.startsWith('/requirements/')) &&
-          authController.user?.role != AppRole.buyer) {
+          authController.user?.hasRole(AppRole.buyer) != true) {
+        return AppRoutes.home;
+      }
+      if ((location == AppRoutes.materials ||
+              location == AppRoutes.addMaterial ||
+              (location.startsWith('/materials/') &&
+                  location.endsWith('/edit'))) &&
+          authController.user?.hasRole(AppRole.seller) != true) {
         return AppRoutes.home;
       }
       return null;
@@ -221,7 +228,7 @@ Widget _detailsScreen(
 
 Widget _sellerOnly(AuthController authController, Widget child) {
   final user = authController.user;
-  if (user?.role == AppRole.seller) return child;
+  if (user?.hasRole(AppRole.seller) == true) return child;
   return const Scaffold(
     body: Center(
       child: Text('Only seller accounts can manage material listings.'),

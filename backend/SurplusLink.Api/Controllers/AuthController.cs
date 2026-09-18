@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SurplusLink.Api.Auth;
@@ -40,7 +41,7 @@ public sealed class AuthController(IAuthService authService, SurplusLinkDbContex
             return Unauthorized();
         }
 
-        var user = await dbContext.Users.FindAsync([userId], cancellationToken);
+        var user = await dbContext.Users.Include(x => x.RoleAssignments).SingleOrDefaultAsync(x => x.Id == userId, cancellationToken);
         return user is null ? NotFound() : Ok(UserResponse.From(user));
     }
 
@@ -49,7 +50,7 @@ public sealed class AuthController(IAuthService authService, SurplusLinkDbContex
     public async Task<ActionResult<UserResponse>> UpdateProfile(ProfileRequest request, CancellationToken cancellationToken)
     {
         if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var id)) return Unauthorized();
-        var user = await dbContext.Users.FindAsync([id], cancellationToken);
+        var user = await dbContext.Users.Include(x => x.RoleAssignments).SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
         if (user is null) return NotFound();
         user.FullName = request.FullName.Trim();
         user.PhoneNumber = request.PhoneNumber.Trim();

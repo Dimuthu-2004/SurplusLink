@@ -9,18 +9,18 @@ export function AppLayout() {
     return null;
   }
 
-  const manager = user.role === 'MANAGER';
+  const manager = user.roles.includes('MANAGER');
 
   return (
     <div className="app-shell">
       <header className="app-header">
-        <Link className="brand" to={roleHomePath(user.role)}>
+        <Link className="brand" to={roleHomePath(user.roles)}>
           <span className="brand-mark" aria-hidden="true">S</span>
           SurplusLink
         </Link>
         <div className="account-summary">
           <span>{user.email}</span>
-          <span className="role-badge">{roleLabels[user.role]}</span>
+          <span className="role-badge">{user.roles.map(role => roleLabels[role]).join(' + ')}</span>
           <button className="button button-secondary" type="button" onClick={logout}>
             Log out
           </button>
@@ -28,9 +28,9 @@ export function AppLayout() {
       </header>
       <div className="app-body">
         <aside className="side-nav">
-          <nav aria-label={roleLabels[user.role] + ' navigation'}>
-            <NavLink to={roleHomePath(user.role)} end>
-              {roleLabels[user.role]} home
+          <nav aria-label={user.roles.map(role => roleLabels[role]).join(' + ') + ' navigation'}>
+            <NavLink to={roleHomePath(user.roles)} end>
+              {user.roles.map(role => roleLabels[role]).join(' + ')} home
             </NavLink>
             {manager && (
               <>
@@ -42,7 +42,7 @@ export function AppLayout() {
           </nav>
         </aside>
         <main className="page-content">
-          {location.pathname !== roleHomePath(user.role) && <Link className="back-link dashboard-back" to={roleHomePath(user.role)}>? Back to dashboard</Link>}
+          {location.pathname !== roleHomePath(user.roles) && <Link className="back-link dashboard-back" to={roleHomePath(user.roles)}>? Back to dashboard</Link>}
           <Outlet />
         </main>
       </div>

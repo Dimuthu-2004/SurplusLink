@@ -150,6 +150,7 @@ final class MaterialListingHistoryEntry {
 
 final class MaterialListingQuery {
   const MaterialListingQuery({
+    this.mineOnly = false,
     this.search,
     this.category,
     this.status,
@@ -162,6 +163,7 @@ final class MaterialListingQuery {
     this.pageSize = 20,
   });
 
+  final bool mineOnly;
   final String? search;
   final String? category;
   final String? status;
@@ -175,6 +177,7 @@ final class MaterialListingQuery {
 
   Map<String, String> toQueryParameters() {
     final values = <String, String>{
+      if (mineOnly) 'mineOnly': 'true',
       'sortBy': sortBy,
       'sortDir': sortDir,
       'page': '$page',

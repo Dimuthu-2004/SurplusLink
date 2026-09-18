@@ -61,7 +61,7 @@ void main() {
         final user = {
           'id': 's1',
           'email': 'seller@test.com',
-          'role': 'SELLER',
+          'roles': ['SELLER'],
           ...body,
         };
         if (request.method == 'PUT') {
@@ -83,7 +83,7 @@ void main() {
       (await repository.register(
         email: 'seller@test.com',
         password: 'Password123!',
-        role: AppRole.seller,
+        roles: [AppRole.seller],
         profile: profile,
       )).user.fullName,
       'Test Seller',

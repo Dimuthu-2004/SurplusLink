@@ -4,12 +4,14 @@ from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 from typing import Protocol, Sequence
+from uuid import UUID
 
 
 @dataclass(frozen=True)
 class ActiveMaterialCriteria:
     """Criteria passed across the approved backend/repository read boundary."""
 
+    buyer_user_id: UUID
     category_id: str | None
     category: str | None
     required_quantity: Decimal
@@ -23,6 +25,7 @@ class ActiveMaterialCriteria:
 class MaterialListingRecord:
     """Read model supplied by the approved boundary, never an EF/database entity."""
 
+    seller_id: UUID
     listing_id: str
     category_id: str | None
     category: str | None

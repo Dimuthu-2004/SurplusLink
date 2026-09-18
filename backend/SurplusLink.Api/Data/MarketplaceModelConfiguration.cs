@@ -34,7 +34,15 @@ public static class MarketplaceModelConfiguration
             entity.Property(user => user.PhoneNumber).HasMaxLength(26);
             entity.Property(user => user.BusinessName).HasMaxLength(160);
             entity.Property(user => user.Address).HasMaxLength(400);
-            entity.Property(user => user.Role).HasConversion<string>().HasMaxLength(20).IsRequired();
+        });
+        modelBuilder.Entity<UserRoleAssignment>(entity =>
+        {
+            entity.ToTable("UserRoleAssignments", table => table.HasCheckConstraint(
+                "CK_UserRoleAssignments_Role", "\"Role\" IN ('SELLER', 'BUYER', 'MANAGER')"));
+            entity.HasKey(assignment => new { assignment.UserId, assignment.Role });
+            entity.Property(assignment => assignment.Role).HasConversion<string>().HasMaxLength(20);
+            entity.HasOne(assignment => assignment.User).WithMany(user => user.RoleAssignments)
+                .HasForeignKey(assignment => assignment.UserId).OnDelete(DeleteBehavior.Cascade);
         });
     }
 

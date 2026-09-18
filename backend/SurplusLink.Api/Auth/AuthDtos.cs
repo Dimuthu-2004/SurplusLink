@@ -22,9 +22,18 @@ public sealed class RegisterRequest : ProfileRequest
     [Required, MinLength(8), MaxLength(128)]
     public string Password { get; init; } = string.Empty;
 
-    [Required]
-    [RegularExpression("^(SELLER|BUYER)$", ErrorMessage = "Role must be SELLER or BUYER.")]
-    public string Role { get; init; } = string.Empty;
+    [MarketplaceRoles]
+    public string[] Roles { get; init; } = [];
+}
+
+public sealed class MarketplaceRolesAttribute : ValidationAttribute
+{
+    public MarketplaceRolesAttribute() : base("Select SELLER, BUYER, or both, without duplicates.") { }
+
+    public override bool IsValid(object? value) => value is string[] roles
+        && roles.Length is >= 1 and <= 2
+        && roles.All(role => role is "SELLER" or "BUYER")
+        && roles.Distinct(StringComparer.Ordinal).Count() == roles.Length;
 }
 
 public sealed class LoginRequest
@@ -36,10 +45,10 @@ public sealed class LoginRequest
     public string Password { get; init; } = string.Empty;
 }
 
-public sealed record UserResponse(Guid Id, string Email, string Role,
+public sealed record UserResponse(Guid Id, string Email, string[] Roles,
     string? FullName = null, string? PhoneNumber = null, string? BusinessName = null, string? Address = null)
 {
-    public static UserResponse From(Models.User user) => new(user.Id, user.Email, user.Role.ToString(),
+    public static UserResponse From(Models.User user) => new(user.Id, user.Email, user.RoleAssignments.OrderBy(x => x.Role).Select(x => x.Role.ToString()).ToArray(),
         user.FullName, user.PhoneNumber, user.BusinessName, user.Address);
 }
 

@@ -185,7 +185,7 @@ describe('protected manager requirement routes', () => {
     const history = vi.spyOn(managerRequirementsApi, 'history');
     for (const suffix of ['', '/r1', '/r1/history', '/r1/workflow']) {
       const rendered = render(<MemoryRouter initialEntries={['/app/manager/requirements' + suffix]}>
-        <AuthProvider client={{ get: vi.fn().mockResolvedValue({ data: { id: 'user-1', email: 'user@test', role } }), post: vi.fn() }}
+        <AuthProvider client={{ get: vi.fn().mockResolvedValue({ data: { id: 'user-1', email: 'user@test', roles: [role] } }), post: vi.fn() }}
           storage={{ read: () => role ? 'token' : null, write: vi.fn(), clear: vi.fn() }}>
           <App />
         </AuthProvider></MemoryRouter>);

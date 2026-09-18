@@ -100,6 +100,7 @@ class PlannerRequest(PlannerModel):
 
 
 class NormalizedCriteria(RequirementFields):
+    buyerUserId: UUID
     targetLatitude: Decimal = Field(ge=-90, le=90, max_digits=9, decimal_places=6, allow_inf_nan=False)
     targetLongitude: Decimal = Field(ge=-180, le=180, max_digits=9, decimal_places=6, allow_inf_nan=False)
 
@@ -111,10 +112,12 @@ class MatchingPlanStep(PlannerModel):
     agent: Literal["MaterialMatchingAgent"] = "MaterialMatchingAgent"
     action: Literal["match_materials"] = "match_materials"
     requiredInputs: tuple[
+        Literal["normalizedCriteria.buyerUserId"],
         Literal["normalizedCriteria.categoryId"], Literal["normalizedCriteria.category"],
         Literal["normalizedCriteria.requiredQuantity"], Literal["normalizedCriteria.unit"],
         Literal["normalizedCriteria.maximumBudget"], Literal["normalizedCriteria.deadline"],
     ] = (
+        "normalizedCriteria.buyerUserId",
         "normalizedCriteria.categoryId", "normalizedCriteria.category",
         "normalizedCriteria.requiredQuantity", "normalizedCriteria.unit",
         "normalizedCriteria.maximumBudget", "normalizedCriteria.deadline",

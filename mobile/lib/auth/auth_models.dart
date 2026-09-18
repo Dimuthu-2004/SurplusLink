@@ -23,7 +23,7 @@ final class AppUser {
   const AppUser({
     required this.id,
     required this.email,
-    required this.role,
+    required this.roles,
     this.fullName,
     this.phoneNumber,
     this.businessName,
@@ -33,7 +33,7 @@ final class AppUser {
   factory AppUser.fromJson(Map<String, dynamic> json) => AppUser(
     id: _requiredString(json, 'id'),
     email: _requiredString(json, 'email'),
-    role: AppRole.fromApi(_requiredString(json, 'role')),
+    roles: _parseRoles(json['roles']),
     fullName: json['fullName'] as String?,
     phoneNumber: json['phoneNumber'] as String?,
     businessName: json['businessName'] as String?,
@@ -42,7 +42,8 @@ final class AppUser {
 
   final String id;
   final String email;
-  final AppRole role;
+  final List<AppRole> roles;
+  bool hasRole(AppRole role) => roles.contains(role);
   final String? fullName, phoneNumber, businessName, address;
 }
 
@@ -86,4 +87,15 @@ class UserProfile {
     'businessName': businessName.trim(),
     'address': address.trim(),
   };
+}
+
+List<AppRole> _parseRoles(dynamic value) {
+  if (value is! List || value.isEmpty || value.any((role) => role is! String)) {
+    throw const FormatException('Missing or invalid roles.');
+  }
+  final roles = value.cast<String>().map(AppRole.fromApi).toList();
+  if (roles.toSet().length != roles.length) {
+    throw const FormatException('Duplicate roles.');
+  }
+  return List.unmodifiable(roles);
 }

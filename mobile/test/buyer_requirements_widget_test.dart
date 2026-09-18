@@ -26,7 +26,11 @@ void main() {
       for (final user in <AppUser?>[
         null,
         sellerUser,
-        const AppUser(id: 'm1', email: 'manager@test', role: AppRole.manager),
+        const AppUser(
+          id: 'm1',
+          email: 'manager@test',
+          roles: [AppRole.manager],
+        ),
       ]) {
         for (final path in [
           '/requirements',

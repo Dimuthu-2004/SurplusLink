@@ -51,8 +51,9 @@ class _MaterialDetailsScreenState extends State<MaterialDetailsScreen> {
       final listing = await widget.gateway.getById(widget.listingId);
       List<MaterialListingHistoryEntry> history = const [];
       String? historyError;
-      if (widget.user.role == AppRole.seller ||
-          widget.user.role == AppRole.manager) {
+      if ((widget.user.hasRole(AppRole.seller) &&
+              listing.sellerId == widget.user.id) ||
+          widget.user.hasRole(AppRole.manager)) {
         try {
           history = await widget.gateway.history(widget.listingId);
         } on ApiException catch (error) {
@@ -236,7 +237,8 @@ class _MaterialDetailsScreenState extends State<MaterialDetailsScreen> {
                     ),
                   ),
                 ],
-                if (widget.user.role == AppRole.seller) ...[
+                if ((widget.user.hasRole(AppRole.seller) &&
+                    listing.sellerId == widget.user.id)) ...[
                   const SizedBox(height: 20),
                   if (listing.canEdit)
                     FilledButton.icon(

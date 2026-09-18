@@ -1,5 +1,19 @@
 # ADR 0002: React authentication state
 
+## Multi-role marketplace identity amendment (2026-09-18)
+
+A marketplace user can sell surplus and buy materials with one account. Separate accounts would duplicate identity and split ownership/history; a `BOTH` role would break the existing independent SELLER/BUYER authorization rules. Both alternatives are rejected.
+
+One `User` now has normalized `UserRoleAssignment` rows keyed by `(UserId, Role)`. The existing SELLER, BUYER, and MANAGER enum values remain. Public registration accepts exactly SELLER, BUYER, or both, and rejects empty, duplicate, unknown, or manager-containing selections. MANAGER remains development-seeded/admin-created; marketplace registration never grants it. ASP.NET role attributes and resource ownership checks remain authoritative. Tokens contain one standard role claim per assignment; auth responses expose a `roles` array.
+
+Flutter onboarding asks for account details, then "How will you use SurplusLink?" with Sell / Buy / Both choices. A dual-role account sees one Marketplace Home with both sets of actions. React retains its context/reducer and manager focus; its guards check role membership. Existing single-role accounts retain their capabilities after migration. No role-management endpoint is added.
+
+The migration copies existing roles before dropping `Users.Role`, preserving user IDs and ownership FKs. Downgrade is refused if any user cannot be represented by exactly one old role, preventing silent capability loss. Deploy clients and API together because the contract changes from `role` to `roles`. Existing signed single-role tokens remain valid until expiry; sign in again after an administrator changes assignments to obtain updated claims.
+
+Self-match is a deterministic exclusion: `Listing.SellerId == BuyerRequest.BuyerId` produces `SELF_MATCH_NOT_ALLOWED`. The planner derives `buyerUserId` from the stored request, and matching checks both search records and refreshed details before ranking. Identity stays in the trusted deterministic boundary and is absent from candidate output; no LLM/provider receives it. Reservations independently block self-trade with the same reason. Future M3 candidate generation must filter `SellerId != BuyerId` and reuse this policy; no M3 implementation is included.
+
+This amendment leaves the ADR count at two. The original React state decision follows.
+
 - **Status:** Accepted
 - **Context:** The React shell needs one small cross-cutting state domain: the current user, startup restoration, login progress, and authentication errors. It also needs navigation updates when that state changes.
 - **Decision:** Use a React context backed by `useReducer`. Keep HTTP behavior in an Axios client, JWT access in a token-storage adapter, and access control in React Router guards.

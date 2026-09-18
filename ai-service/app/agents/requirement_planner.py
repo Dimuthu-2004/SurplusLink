@@ -79,6 +79,7 @@ class RequirementPlannerAgent:
         request = state["request"]
         stored = request.buyerRequest
         criteria = NormalizedCriteria(
+            buyerUserId=stored.buyerId,
             categoryId=stored.categoryId, category=stored.category,
             requiredQuantity=stored.requiredQuantity, unit=stored.unit,
             maximumBudget=stored.maximumBudget, deadline=stored.deadline,

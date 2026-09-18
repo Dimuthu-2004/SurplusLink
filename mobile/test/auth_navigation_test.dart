@@ -48,52 +48,82 @@ void main() {
     expect(find.text('Seller home'), findsOneWidget);
   });
 
-  testWidgets('registration offers only seller and buyer roles', (
-    tester,
-  ) async {
-    final gateway = FakeAuthGateway();
-    await _pumpApp(tester, gateway);
-    await tester.tap(find.byKey(const Key('go-register')));
-    await tester.pumpAndSettle();
+  for (final choice in [
+    'Sell surplus materials',
+    'Buy / request materials',
+    'Both',
+  ]) {
+    testWidgets('registration maps $choice after account details', (
+      tester,
+    ) async {
+      final gateway = FakeAuthGateway();
+      await _pumpApp(tester, gateway);
+      await tester.tap(find.byKey(const Key('go-register')));
+      await tester.pumpAndSettle();
 
-    await tester.ensureVisible(find.byKey(const Key('register-role')));
-    await tester.tap(find.byKey(const Key('register-role')));
-    await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('register-email')),
+        'seller@example.com',
+      );
+      await tester.enterText(
+        find.byKey(const Key('register-password')),
+        'Password123!',
+      );
+      await tester.enterText(
+        find.byKey(const Key('profile-name')),
+        'Test Seller',
+      );
+      await tester.enterText(
+        find.byKey(const Key('profile-phone')),
+        '0771234567',
+      );
+      await tester.enterText(
+        find.byKey(const Key('profile-address')),
+        'Colombo',
+      );
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const Key('register-submit')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('register-submit')));
+      await tester.pumpAndSettle();
 
-    expect(find.text('Seller'), findsWidgets);
-    expect(find.text('Buyer'), findsWidgets);
-    expect(find.text('Manager'), findsNothing);
-
-    await tester.tap(find.text('Seller').last);
-    await tester.pumpAndSettle();
-    await tester.enterText(
-      find.byKey(const Key('register-email')),
-      'seller@example.com',
-    );
-    await tester.enterText(
-      find.byKey(const Key('register-password')),
-      'Password123!',
-    );
-    await tester.enterText(
-      find.byKey(const Key('profile-name')),
-      'Test Seller',
-    );
-    await tester.enterText(
-      find.byKey(const Key('profile-phone')),
-      '0771234567',
-    );
-    await tester.enterText(find.byKey(const Key('profile-address')), 'Colombo');
-    FocusManager.instance.primaryFocus?.unfocus();
-    await tester.pumpAndSettle();
-    await tester.ensureVisible(find.byKey(const Key('register-submit')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('register-submit')));
-    await tester.pumpAndSettle();
-
-    expect(gateway.registeredRole, AppRole.seller);
-    expect(gateway.registeredProfile!.fullName, 'Test Seller');
-    expect(find.text('Seller home'), findsOneWidget);
-  });
+      expect(find.text('How will you use SurplusLink?'), findsWidgets);
+      await tester.tap(find.byKey(const Key('register-submit')));
+      await tester.pumpAndSettle();
+      expect(find.text('Choose how you will use SurplusLink.'), findsOneWidget);
+      expect(gateway.registeredRoles, isNull);
+      await tester.tap(find.byKey(const Key('register-usage')));
+      await tester.pumpAndSettle();
+      expect(find.text('Sell surplus materials'), findsWidgets);
+      expect(find.text('Buy / request materials'), findsWidgets);
+      expect(find.text('Both'), findsWidgets);
+      expect(find.text('Manager'), findsNothing);
+      await tester.tap(find.text(choice).last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('register-submit')));
+      await tester.pumpAndSettle();
+      expect(
+        gateway.registeredRoles,
+        choice == 'Both'
+            ? [AppRole.seller, AppRole.buyer]
+            : choice == 'Sell surplus materials'
+            ? [AppRole.seller]
+            : [AppRole.buyer],
+      );
+      expect(gateway.registeredProfile!.fullName, 'Test Seller');
+      expect(
+        find.text(
+          choice == 'Both'
+              ? 'Marketplace Home'
+              : choice == 'Sell surplus materials'
+              ? 'Seller home'
+              : 'Buyer home',
+        ),
+        findsOneWidget,
+      );
+    });
+  }
 
   testWidgets('login displays progress and API errors', (tester) async {
     final gateway = FakeAuthGateway()

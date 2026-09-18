@@ -48,20 +48,22 @@ final class AuthRepository implements AuthGateway {
   Future<AuthSession> register({
     required String email,
     required String password,
-    required AppRole role,
+    required List<AppRole> roles,
     UserProfile? profile,
   }) async {
-    if (role != AppRole.seller && role != AppRole.buyer) {
+    if (roles.isEmpty ||
+        roles.toSet().length != roles.length ||
+        roles.any((role) => role != AppRole.seller && role != AppRole.buyer)) {
       throw ArgumentError.value(
-        role,
-        'role',
-        'Registration supports SELLER or BUYER only.',
+        roles,
+        'roles',
+        'Select selling, buying, or both.',
       );
     }
     final json = await _apiClient.postJson('/api/auth/register', {
       'email': email.trim(),
       'password': password,
-      'role': role.apiValue,
+      'roles': roles.map((role) => role.apiValue).toList(),
       ...?profile?.toJson(),
     });
     return _persistSession(json);

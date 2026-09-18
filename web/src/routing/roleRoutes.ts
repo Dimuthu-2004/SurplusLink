@@ -12,6 +12,6 @@ export const roleLabels: Record<UserRole, string> = {
   MANAGER: 'Manager',
 };
 
-export function roleHomePath(role: UserRole): string {
-  return roleHomePaths[role];
+export function roleHomePath(roles: readonly UserRole[]): string {
+  return roleHomePaths[roles.includes('MANAGER') ? 'MANAGER' : roles.includes('SELLER') ? 'SELLER' : 'BUYER'];
 }

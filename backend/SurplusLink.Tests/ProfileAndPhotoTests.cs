@@ -29,7 +29,7 @@ public sealed class ProfileAndPhotoTests
     public void Profile_fields_validate(string name, string phone, string address, bool valid)
     {
         var request = new RegisterRequest { FullName = name, PhoneNumber = phone, Address = address,
-            Email = "seller@example.test", Password = "Password123!", Role = "SELLER" };
+            Email = "seller@example.test", Password = "Password123!", Roles = ["SELLER"] };
         Assert.Equal(valid, Validator.TryValidateObject(request, new ValidationContext(request), [], true));
     }
 

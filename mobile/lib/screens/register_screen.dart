@@ -21,7 +21,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _profile = ProfileFieldsController();
-  AppRole _role = AppRole.buyer;
+  int _step = 0;
+  String? _usage;
 
   @override
   void dispose() {
@@ -36,10 +37,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (!_formKey.currentState!.validate()) {
       return;
     }
+    if (_step == 0) {
+      setState(() => _step = 1);
+      return;
+    }
     await widget.authController.register(
       email: _emailController.text,
       password: _passwordController.text,
-      role: _role,
+      roles: switch (_usage) {
+        'sell' => [AppRole.seller],
+        'buy' => [AppRole.buyer],
+        _ => [AppRole.seller, AppRole.buyer],
+      },
       profile: _profile.profile,
     );
   }
@@ -47,7 +56,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   Widget build(BuildContext context) => AuthScaffold(
     title: 'Create your account',
-    subtitle: 'Join as a material seller or buyer.',
+    subtitle: _step == 0
+        ? 'Start with your account details.'
+        : 'How will you use SurplusLink?',
     child: AnimatedBuilder(
       animation: widget.authController,
       builder: (context, child) => Form(
@@ -56,42 +67,62 @@ class _RegisterScreenState extends State<RegisterScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             AuthErrorMessage(widget.authController.errorMessage),
-            ProfileFields(
-              controller: _profile,
-              enabled: !widget.authController.isBusy,
-            ),
-            TextFormField(
-              key: const Key('register-email'),
-              controller: _emailController,
-              keyboardType: TextInputType.emailAddress,
-              autofillHints: const [AutofillHints.newUsername],
-              decoration: const InputDecoration(labelText: 'Email'),
-              validator: _validateEmail,
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              key: const Key('register-password'),
-              controller: _passwordController,
-              obscureText: true,
-              autofillHints: const [AutofillHints.newPassword],
-              decoration: const InputDecoration(labelText: 'Password'),
-              validator: _validatePassword,
-            ),
-            const SizedBox(height: 16),
-            DropdownButtonFormField<AppRole>(
-              key: const Key('register-role'),
-              initialValue: _role,
-              decoration: const InputDecoration(labelText: 'Account type'),
-              items: const [AppRole.seller, AppRole.buyer]
-                  .map(
-                    (role) =>
-                        DropdownMenuItem(value: role, child: Text(role.label)),
-                  )
-                  .toList(),
-              onChanged: widget.authController.isBusy
-                  ? null
-                  : (role) => setState(() => _role = role ?? AppRole.buyer),
-            ),
+            if (_step == 0) ...[
+              ProfileFields(
+                controller: _profile,
+                enabled: !widget.authController.isBusy,
+              ),
+              TextFormField(
+                key: const Key('register-email'),
+                controller: _emailController,
+                keyboardType: TextInputType.emailAddress,
+                autofillHints: const [AutofillHints.newUsername],
+                decoration: const InputDecoration(labelText: 'Email'),
+                validator: _validateEmail,
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                key: const Key('register-password'),
+                controller: _passwordController,
+                obscureText: true,
+                autofillHints: const [AutofillHints.newPassword],
+                decoration: const InputDecoration(labelText: 'Password'),
+                validator: _validatePassword,
+              ),
+              const SizedBox(height: 16),
+            ],
+            if (_step == 1) ...[
+              DropdownButtonFormField<String>(
+                key: const Key('register-usage'),
+                initialValue: _usage,
+                decoration: const InputDecoration(
+                  labelText: 'How will you use SurplusLink?',
+                ),
+                items: const [
+                  DropdownMenuItem(
+                    value: 'sell',
+                    child: Text('Sell surplus materials'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'buy',
+                    child: Text('Buy / request materials'),
+                  ),
+                  DropdownMenuItem(value: 'both', child: Text('Both')),
+                ],
+                validator: (value) => value == null
+                    ? 'Choose how you will use SurplusLink.'
+                    : null,
+                onChanged: widget.authController.isBusy
+                    ? null
+                    : (value) => setState(() => _usage = value),
+              ),
+              TextButton(
+                onPressed: widget.authController.isBusy
+                    ? null
+                    : () => setState(() => _step = 0),
+                child: const Text('Back to account details'),
+              ),
+            ],
             const SizedBox(height: 24),
             FilledButton(
               key: const Key('register-submit'),
@@ -101,7 +132,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       dimension: 20,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Text('Register'),
+                  : Text(_step == 0 ? 'Continue' : 'Register'),
             ),
             const SizedBox(height: 12),
             TextButton(

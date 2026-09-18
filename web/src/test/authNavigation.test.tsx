@@ -31,6 +31,22 @@ describe('authentication navigation', () => {
     expect(screen.queryByText('Buyer home')).not.toBeInTheDocument();
   });
 
+  it.each(['/app/manager', '/app/manager/categories', '/app/manager/requirements'])('blocks dual-role manager navigation at %s', async path => {
+    const client = fakeClient();
+    client.get.mockResolvedValue({ data: { ...seller, roles: ['SELLER', 'BUYER'] } });
+    renderApp(path, client, memoryStorage('dual-token'));
+    expect(await screen.findByRole('heading', { name: 'Seller home' })).toBeInTheDocument();
+    expect(screen.queryByText('Material categories')).not.toBeInTheDocument();
+    expect(screen.queryByText('Buyer Requirements')).not.toBeInTheDocument();
+  });
+
+  it('allows both marketplace routes for one dual-role session', async () => {
+    const client = fakeClient();
+    client.get.mockResolvedValue({ data: { ...seller, roles: ['SELLER', 'BUYER'] } });
+    renderApp('/app/buyer', client, memoryStorage('dual-token'));
+    expect(await screen.findByRole('heading', { name: 'Buyer home' })).toBeInTheDocument();
+  });
+
   it('logs in through the API and opens the matching role home', async () => {
     const client = fakeClient();
     client.post.mockResolvedValue({ data: { token: 'signed-jwt', user: buyer } });
@@ -119,6 +135,6 @@ function user(role: UserRole): AuthUser {
   return {
     id: '00000000-0000-0000-0000-000000000001',
     email: `${role.toLowerCase()}@example.com`,
-    role,
+    roles: [role],
   };
 }
