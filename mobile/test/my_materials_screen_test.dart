@@ -1,3 +1,4 @@
+import 'package:mobile/categories/material_category.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/materials/material_inventory_gateway.dart';
@@ -7,9 +8,16 @@ import 'package:mobile/screens/my_materials_screen.dart';
 import 'support/fakes.dart';
 
 void main() {
-  testWidgets('My Materials shows an empty state and add action', (tester) async {
+  testWidgets('My Materials shows an empty state and add action', (
+    tester,
+  ) async {
     await tester.pumpWidget(
-      MaterialApp(home: MyMaterialsScreen(gateway: _FakeMaterialsGateway(), user: sellerUser)),
+      MaterialApp(
+        home: MyMaterialsScreen(
+          gateway: _FakeMaterialsGateway(),
+          user: sellerUser,
+        ),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -20,24 +28,42 @@ void main() {
 
 final class _FakeMaterialsGateway implements MaterialInventoryGateway {
   @override
-  Future<MaterialListing> create(MaterialListingDraft draft) => throw UnimplementedError();
+  Future<List<MaterialCategory>> categories() async => [
+    const MaterialCategory('c1', 'Cement'),
+  ];
+
+  @override
+  Future<MaterialListing> create(MaterialListingDraft draft) =>
+      throw UnimplementedError();
 
   @override
   Future<void> delete(String listingId) => throw UnimplementedError();
 
   @override
-  Future<MaterialListing> getById(String listingId) => throw UnimplementedError();
+  Future<MaterialListing> getById(String listingId) =>
+      throw UnimplementedError();
 
   @override
-  Future<List<MaterialListingHistoryEntry>> history(String listingId) => throw UnimplementedError();
+  Future<List<MaterialListingHistoryEntry>> history(String listingId) =>
+      throw UnimplementedError();
 
   @override
-  Future<MaterialListing> publish(String listingId) => throw UnimplementedError();
+  Future<MaterialListing> publish(String listingId) =>
+      throw UnimplementedError();
 
   @override
   Future<MaterialListingPage> search(MaterialListingQuery query) async =>
-      MaterialListingPage(items: const [], totalCount: 0, totalPages: 0, page: 1, pageSize: query.pageSize);
+      MaterialListingPage(
+        items: const [],
+        totalCount: 0,
+        totalPages: 0,
+        page: 1,
+        pageSize: query.pageSize,
+      );
 
   @override
-  Future<MaterialListing> update(String listingId, MaterialListingDraft draft) => throw UnimplementedError();
+  Future<MaterialListing> update(
+    String listingId,
+    MaterialListingDraft draft,
+  ) => throw UnimplementedError();
 }

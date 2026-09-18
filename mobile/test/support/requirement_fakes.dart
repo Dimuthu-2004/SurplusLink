@@ -39,6 +39,7 @@ class FakeRequirements implements RequirementGateway {
   int reads = 0, saves = 0, submits = 0, starts = 0, cancels = 0, deletes = 0;
   Completer<RequirementPage<BuyerRequirement>>? pendingList;
   Completer<BuyerRequirement>? pendingSave;
+  Completer<List<RequirementCategory>>? pendingCategories;
   RequirementPage<RequirementHistoryEntry> historyData = const RequirementPage(
     items: [],
     total: 0,
@@ -47,6 +48,7 @@ class FakeRequirements implements RequirementGateway {
   );
   @override
   Future<List<RequirementCategory>> categories() async {
+    if (pendingCategories != null) return pendingCategories!.future;
     if (error != null) throw error!;
     return categoryItems;
   }

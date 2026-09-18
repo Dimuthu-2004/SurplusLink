@@ -1,3 +1,5 @@
+import 'package:mobile/categories/category_filter.dart';
+import 'package:mobile/categories/material_category.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile/auth/auth_models.dart';
@@ -7,7 +9,11 @@ import 'package:mobile/materials/material_models.dart';
 import 'package:mobile/routing/app_router.dart';
 
 class MyMaterialsScreen extends StatefulWidget {
-  const MyMaterialsScreen({required this.gateway, required this.user, super.key});
+  const MyMaterialsScreen({
+    required this.gateway,
+    required this.user,
+    super.key,
+  });
 
   final MaterialInventoryGateway gateway;
   final AppUser user;
@@ -18,7 +24,7 @@ class MyMaterialsScreen extends StatefulWidget {
 
 class _MyMaterialsScreenState extends State<MyMaterialsScreen> {
   final _searchController = TextEditingController();
-  final _categoryController = TextEditingController();
+  String? _category;
   final _minPriceController = TextEditingController();
   final _maxPriceController = TextEditingController();
   final List<MaterialListing> _listings = [];
@@ -40,7 +46,6 @@ class _MyMaterialsScreenState extends State<MyMaterialsScreen> {
   @override
   void dispose() {
     _searchController.dispose();
-    _categoryController.dispose();
     _minPriceController.dispose();
     _maxPriceController.dispose();
     super.dispose();
@@ -48,7 +53,7 @@ class _MyMaterialsScreenState extends State<MyMaterialsScreen> {
 
   MaterialListingQuery _query(int page) => MaterialListingQuery(
     search: _searchController.text,
-    category: _categoryController.text,
+    category: _category,
     status: _status,
     minPrice: double.tryParse(_minPriceController.text.trim()),
     maxPrice: double.tryParse(_maxPriceController.text.trim()),
@@ -76,7 +81,9 @@ class _MyMaterialsScreenState extends State<MyMaterialsScreen> {
     } on ApiException catch (error) {
       if (mounted) setState(() => _error = error.message);
     } on FormatException {
-      if (mounted) setState(() => _error = 'The API returned invalid material data.');
+      if (mounted) {
+        setState(() => _error = 'The API returned invalid material data.');
+      }
     } on Object {
       if (mounted) setState(() => _error = 'Unable to load your materials.');
     } finally {
@@ -89,7 +96,9 @@ class _MyMaterialsScreenState extends State<MyMaterialsScreen> {
     if (widget.user.role != AppRole.seller) {
       return Scaffold(
         appBar: AppBar(title: const Text('My Materials')),
-        body: const Center(child: Text('Material inventory is available to seller accounts.')),
+        body: const Center(
+          child: Text('Material inventory is available to seller accounts.'),
+        ),
       );
     }
 
@@ -111,7 +120,8 @@ class _MyMaterialsScreenState extends State<MyMaterialsScreen> {
           children: [
             _FilterPanel(
               searchController: _searchController,
-              categoryController: _categoryController,
+              loadCategories: widget.gateway.categories,
+              onCategoryChanged: (value) => setState(() => _category = value),
               minPriceController: _minPriceController,
               maxPriceController: _maxPriceController,
               status: _status,
@@ -185,7 +195,8 @@ class _MyMaterialsScreenState extends State<MyMaterialsScreen> {
 class _FilterPanel extends StatelessWidget {
   const _FilterPanel({
     required this.searchController,
-    required this.categoryController,
+    required this.loadCategories,
+    required this.onCategoryChanged,
     required this.minPriceController,
     required this.maxPriceController,
     required this.status,
@@ -198,7 +209,8 @@ class _FilterPanel extends StatelessWidget {
   });
 
   final TextEditingController searchController;
-  final TextEditingController categoryController;
+  final Future<List<MaterialCategory>> Function() loadCategories;
+  final ValueChanged<String?> onCategoryChanged;
   final TextEditingController minPriceController;
   final TextEditingController maxPriceController;
   final String? status;
@@ -226,10 +238,10 @@ class _FilterPanel extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          TextField(
+          CategoryFilter(
             key: const Key('materials-category-filter'),
-            controller: categoryController,
-            decoration: const InputDecoration(labelText: 'Category name or ID'),
+            loadCategories: loadCategories,
+            onChanged: onCategoryChanged,
           ),
           const SizedBox(height: 8),
           DropdownButtonFormField<String>(
@@ -239,7 +251,10 @@ class _FilterPanel extends StatelessWidget {
             items: const [
               DropdownMenuItem(value: null, child: Text('Any status')),
               DropdownMenuItem(value: 'DRAFT', child: Text('DRAFT')),
-              DropdownMenuItem(value: 'PENDING_VERIFICATION', child: Text('PENDING VERIFICATION')),
+              DropdownMenuItem(
+                value: 'PENDING_VERIFICATION',
+                child: Text('PENDING VERIFICATION'),
+              ),
               DropdownMenuItem(value: 'ACTIVE', child: Text('ACTIVE')),
               DropdownMenuItem(value: 'REJECTED', child: Text('REJECTED')),
               DropdownMenuItem(value: 'AVAILABLE', child: Text('AVAILABLE')),
@@ -255,7 +270,9 @@ class _FilterPanel extends StatelessWidget {
               Expanded(
                 child: TextField(
                   controller: minPriceController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   decoration: const InputDecoration(labelText: 'Minimum price'),
                 ),
               ),
@@ -263,7 +280,9 @@ class _FilterPanel extends StatelessWidget {
               Expanded(
                 child: TextField(
                   controller: maxPriceController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   decoration: const InputDecoration(labelText: 'Maximum price'),
                 ),
               ),
@@ -277,11 +296,22 @@ class _FilterPanel extends StatelessWidget {
                   initialValue: sortBy,
                   decoration: const InputDecoration(labelText: 'Sort by'),
                   items: const [
-                    DropdownMenuItem(value: 'unitPrice', child: Text('Unit price')),
-                    DropdownMenuItem(value: 'createdAt', child: Text('Created date')),
-                    DropdownMenuItem(value: 'availableUntil', child: Text('Available until')),
+                    DropdownMenuItem(
+                      value: 'unitPrice',
+                      child: Text('Unit price'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'createdAt',
+                      child: Text('Created date'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'availableUntil',
+                      child: Text('Available until'),
+                    ),
                   ],
-                  onChanged: (value) { if (value != null) onSortByChanged(value); },
+                  onChanged: (value) {
+                    if (value != null) onSortByChanged(value);
+                  },
                 ),
               ),
               const SizedBox(width: 8),
@@ -293,7 +323,9 @@ class _FilterPanel extends StatelessWidget {
                     DropdownMenuItem(value: 'asc', child: Text('Ascending')),
                     DropdownMenuItem(value: 'desc', child: Text('Descending')),
                   ],
-                  onChanged: (value) { if (value != null) onSortDirChanged(value); },
+                  onChanged: (value) {
+                    if (value != null) onSortDirChanged(value);
+                  },
                 ),
               ),
             ],
@@ -301,7 +333,10 @@ class _FilterPanel extends StatelessWidget {
           const SizedBox(height: 12),
           Align(
             alignment: Alignment.centerRight,
-            child: FilledButton(onPressed: onApply, child: const Text('Apply filters')),
+            child: FilledButton(
+              onPressed: onApply,
+              child: const Text('Apply filters'),
+            ),
           ),
         ],
       ),

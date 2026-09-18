@@ -1,5 +1,8 @@
 import 'dart:typed_data';
 
+import 'package:mobile/categories/category_dropdown.dart';
+import 'package:mobile/categories/material_category.dart';
+
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
@@ -21,12 +24,15 @@ class MaterialListingFormScreen extends StatefulWidget {
   bool get isEditing => listingId != null;
 
   @override
-  State<MaterialListingFormScreen> createState() => _MaterialListingFormScreenState();
+  State<MaterialListingFormScreen> createState() =>
+      _MaterialListingFormScreenState();
 }
 
 class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _categoryController = TextEditingController();
+  List<MaterialCategory> _categories = [];
+  String? _category;
+  bool _loadFailed = false;
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _quantityController = TextEditingController();
@@ -46,12 +52,11 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
   @override
   void initState() {
     super.initState();
-    if (widget.isEditing) _loadExisting();
+    _loadExisting();
   }
 
   @override
   void dispose() {
-    _categoryController.dispose();
     _titleController.dispose();
     _descriptionController.dispose();
     _quantityController.dispose();
@@ -62,16 +67,27 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
   }
 
   Future<void> _loadExisting() async {
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _loadFailed = false;
+      _error = null;
+    });
     try {
+      final categories = await widget.gateway.categories();
+      if (!mounted) return;
+      setState(() => _categories = categories);
+      if (!widget.isEditing) return;
       final listing = await widget.gateway.getById(widget.listingId!);
       if (!mounted) return;
       if (!listing.canEdit) {
-        setState(() => _error = 'Only DRAFT or REJECTED listings can be edited.');
+        setState(() {
+          _loadFailed = true;
+          _error = 'Only DRAFT or REJECTED listings can be edited.';
+        });
         return;
       }
       setState(() {
-        _categoryController.text = listing.categoryId;
+        _category = listing.categoryId;
         _titleController.text = listing.title;
         _descriptionController.text = listing.description;
         _quantityController.text = listing.quantity.toString();
@@ -81,12 +97,25 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
         _availableUntil = listing.availableUntil;
         _latitude = listing.latitude;
         _longitude = listing.longitude;
-        _photoUrls.addAll(listing.photos.map((photo) => photo.photoUrl));
+        _photoUrls
+          ..clear()
+          ..addAll(listing.photos.map((photo) => photo.photoUrl));
       });
     } on ApiException catch (error) {
-      if (mounted) setState(() => _error = error.message);
+      if (mounted) {
+        setState(() {
+          _loadFailed = true;
+          _error = error.message;
+        });
+      }
     } on Object {
-      if (mounted) setState(() => _error = 'Unable to load this material.');
+      if (mounted) {
+        setState(() {
+          _loadFailed = true;
+          _error =
+              'Unable to load categories or material details. Please retry.';
+        });
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -95,13 +124,22 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
   Future<void> _chooseDate() async {
     final chosen = await showDatePicker(
       context: context,
-      initialDate: _availableUntil.isAfter(DateTime.now()) ? _availableUntil : DateTime.now(),
+      initialDate: _availableUntil.isAfter(DateTime.now())
+          ? _availableUntil
+          : DateTime.now(),
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 3650)),
     );
     if (chosen == null || !mounted) return;
     setState(() {
-      _availableUntil = DateTime(chosen.year, chosen.month, chosen.day, 23, 59, 59);
+      _availableUntil = DateTime(
+        chosen.year,
+        chosen.month,
+        chosen.day,
+        23,
+        59,
+        59,
+      );
     });
   }
 
@@ -113,7 +151,11 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
       if (!mounted) return;
       setState(() => _pickedImageBytes.addAll(bytes));
     } on Object {
-      if (mounted) _showMessage('Unable to select images. Check photo permission and try again.');
+      if (mounted) {
+        _showMessage(
+          'Unable to select images. Check photo permission and try again.',
+        );
+      }
     }
   }
 
@@ -126,7 +168,8 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
       }
-      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
         throw StateError('Location permission was not granted.');
       }
       final position = await Geolocator.getCurrentPosition();
@@ -160,13 +203,13 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
   }
 
   Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (_isSaving || !_formKey.currentState!.validate()) return;
     if (!_availableUntil.isAfter(DateTime.now())) {
       _showMessage('Available until must be in the future.');
       return;
     }
     final draft = MaterialListingDraft(
-      categoryId: _categoryController.text.trim(),
+      categoryId: _category!,
       title: _titleController.text,
       description: _descriptionController.text,
       quantity: double.parse(_quantityController.text.trim()),
@@ -199,13 +242,36 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
   }
 
   void _showMessage(String message) =>
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: Text(widget.isEditing ? 'Edit Material' : 'Add Material')),
+    appBar: AppBar(
+      title: Text(widget.isEditing ? 'Edit Material' : 'Add Material'),
+    ),
     body: _isLoading
         ? const Center(child: CircularProgressIndicator())
+        : _loadFailed || _categories.isEmpty
+        ? Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    _error ??
+                        'No categories are available yet. Try again later.',
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton(
+                    onPressed: _loadExisting,
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
+            ),
+          )
         : SafeArea(
             child: Form(
               key: _formKey,
@@ -217,14 +283,13 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                     _InlineError(message: _error!),
                     const SizedBox(height: 12),
                   ],
-                  TextFormField(
-                    key: const Key('material-category-id'),
-                    controller: _categoryController,
-                    decoration: const InputDecoration(
-                      labelText: 'Category ID',
-                      helperText: 'Use a category ID created by a manager.',
-                    ),
-                    validator: (value) => _guidValidator(value, 'Category ID'),
+                  CategoryDropdown(
+                    key: const Key('material-category'),
+                    categories: _categories,
+                    value: _category,
+                    onChanged: _isSaving
+                        ? null
+                        : (value) => setState(() => _category = value),
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
@@ -242,7 +307,8 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                     maxLines: 6,
                     maxLength: 2000,
                     decoration: const InputDecoration(labelText: 'Description'),
-                    validator: (value) => _requiredLength(value, 'Description', 2000),
+                    validator: (value) =>
+                        _requiredLength(value, 'Description', 2000),
                   ),
                   const SizedBox(height: 12),
                   Row(
@@ -251,9 +317,14 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                         child: TextFormField(
                           key: const Key('material-quantity'),
                           controller: _quantityController,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          decoration: const InputDecoration(labelText: 'Quantity'),
-                          validator: (value) => _positiveNumber(value, 'Quantity'),
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          decoration: const InputDecoration(
+                            labelText: 'Quantity',
+                          ),
+                          validator: (value) =>
+                              _positiveNumber(value, 'Quantity'),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -263,7 +334,8 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                           controller: _unitController,
                           maxLength: 32,
                           decoration: const InputDecoration(labelText: 'Unit'),
-                          validator: (value) => _requiredLength(value, 'Unit', 32),
+                          validator: (value) =>
+                              _requiredLength(value, 'Unit', 32),
                         ),
                       ),
                     ],
@@ -275,18 +347,25 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                     decoration: const InputDecoration(labelText: 'Condition'),
                     items: const [
                       DropdownMenuItem(value: 'NEW', child: Text('NEW')),
-                      DropdownMenuItem(value: 'EXCELLENT', child: Text('EXCELLENT')),
+                      DropdownMenuItem(
+                        value: 'EXCELLENT',
+                        child: Text('EXCELLENT'),
+                      ),
                       DropdownMenuItem(value: 'GOOD', child: Text('GOOD')),
                       DropdownMenuItem(value: 'FAIR', child: Text('FAIR')),
                       DropdownMenuItem(value: 'POOR', child: Text('POOR')),
                     ],
-                    onChanged: (value) { if (value != null) setState(() => _condition = value); },
+                    onChanged: (value) {
+                      if (value != null) setState(() => _condition = value);
+                    },
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
                     key: const Key('material-unit-price'),
                     controller: _priceController,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
                     decoration: const InputDecoration(labelText: 'Unit price'),
                     validator: (value) => _positiveNumber(value, 'Unit price'),
                   ),
@@ -317,9 +396,14 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                     ],
                   ),
                   const Divider(),
-                  Text('Photos', style: Theme.of(context).textTheme.titleMedium),
+                  Text(
+                    'Photos',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                   const SizedBox(height: 4),
-                  const Text('The API accepts hosted image URLs. Picked local images are preview-only until an upload API is provided.'),
+                  const Text(
+                    'The API accepts hosted image URLs. Picked local images are preview-only until an upload API is provided.',
+                  ),
                   const SizedBox(height: 8),
                   OutlinedButton.icon(
                     key: const Key('pick-material-images'),
@@ -336,7 +420,12 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                         separatorBuilder: (_, _) => const SizedBox(width: 8),
                         itemBuilder: (_, index) => ClipRRect(
                           borderRadius: BorderRadius.circular(8),
-                          child: Image.memory(_pickedImageBytes[index], width: 100, height: 100, fit: BoxFit.cover),
+                          child: Image.memory(
+                            _pickedImageBytes[index],
+                            width: 100,
+                            height: 100,
+                            fit: BoxFit.cover,
+                          ),
                         ),
                       ),
                     ),
@@ -348,7 +437,9 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                           key: const Key('material-photo-url'),
                           controller: _photoUrlController,
                           keyboardType: TextInputType.url,
-                          decoration: const InputDecoration(labelText: 'Hosted image URL'),
+                          decoration: const InputDecoration(
+                            labelText: 'Hosted image URL',
+                          ),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -363,10 +454,15 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                     ListTile(
                       contentPadding: EdgeInsets.zero,
                       leading: const Icon(Icons.image_outlined),
-                      title: Text(_photoUrls[index], maxLines: 1, overflow: TextOverflow.ellipsis),
+                      title: Text(
+                        _photoUrls[index],
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                       trailing: IconButton(
                         tooltip: 'Remove image URL',
-                        onPressed: () => setState(() => _photoUrls.removeAt(index)),
+                        onPressed: () =>
+                            setState(() => _photoUrls.removeAt(index)),
                         icon: const Icon(Icons.delete_outline),
                       ),
                     ),
@@ -375,9 +471,15 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                     key: const Key('save-material'),
                     onPressed: _isSaving ? null : _save,
                     icon: _isSaving
-                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
                         : const Icon(Icons.save),
-                    label: Text(widget.isEditing ? 'Save changes' : 'Create material'),
+                    label: Text(
+                      widget.isEditing ? 'Save changes' : 'Create material',
+                    ),
                   ),
                 ],
               ),
@@ -398,20 +500,18 @@ class _InlineError extends StatelessWidget {
   );
 }
 
-String? _guidValidator(String? value, String label) {
-  final input = value?.trim() ?? '';
-  final guid = RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
-  return guid.hasMatch(input) ? null : '$label must be a valid ID.';
-}
-
 String? _requiredLength(String? value, String label, int maximum) {
   final input = value?.trim() ?? '';
   if (input.isEmpty) return '$label is required.';
-  if (input.length > maximum) return '$label must be at most $maximum characters.';
+  if (input.length > maximum) {
+    return '$label must be at most $maximum characters.';
+  }
   return null;
 }
 
 String? _positiveNumber(String? value, String label) {
   final number = double.tryParse(value?.trim() ?? '');
-  return number != null && number > 0 ? null : '$label must be greater than zero.';
+  return number != null && number > 0
+      ? null
+      : '$label must be greater than zero.';
 }

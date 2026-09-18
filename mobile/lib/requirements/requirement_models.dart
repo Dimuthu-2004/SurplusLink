@@ -1,3 +1,5 @@
+import 'package:mobile/categories/material_category.dart';
+
 const requirementStatuses = [
   'DRAFT',
   'OPEN',
@@ -18,13 +20,7 @@ String statusLabel(String status) => status
     )
     .join(' ');
 
-class RequirementCategory {
-  const RequirementCategory(this.id, this.name);
-  final String id;
-  final String name;
-  factory RequirementCategory.fromJson(Map<String, dynamic> json) =>
-      RequirementCategory(json['id'] as String, json['name'] as String);
-}
+typedef RequirementCategory = MaterialCategory;
 
 class BuyerRequirement {
   const BuyerRequirement({

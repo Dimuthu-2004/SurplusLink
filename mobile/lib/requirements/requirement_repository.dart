@@ -1,5 +1,6 @@
 import 'package:mobile/core/api_client.dart';
 import 'package:mobile/core/api_exception.dart';
+import 'package:mobile/categories/category_repository.dart';
 
 import 'requirement_gateway.dart';
 import 'requirement_models.dart';
@@ -19,12 +20,8 @@ class RequirementRepository implements RequirementGateway {
   }
 
   @override
-  Future<List<RequirementCategory>> categories() => _guard(
-    () async => (await _api.getListJson(
-      '/api/material-categories',
-      authenticated: true,
-    )).map(RequirementCategory.fromJson).toList(),
-  );
+  Future<List<RequirementCategory>> categories() =>
+      _guard(() => CategoryRepository(_api).categories());
   @override
   Future<RequirementPage<BuyerRequirement>> my(RequirementQuery query) =>
       _guard(() async {

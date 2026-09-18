@@ -1,4 +1,6 @@
 import 'package:mobile/core/api_client.dart';
+import 'package:mobile/categories/category_repository.dart';
+import 'package:mobile/categories/material_category.dart';
 import 'package:mobile/materials/material_inventory_gateway.dart';
 import 'package:mobile/materials/material_models.dart';
 
@@ -6,6 +8,10 @@ final class MaterialInventoryRepository implements MaterialInventoryGateway {
   MaterialInventoryRepository(this._apiClient);
 
   final ApiClient _apiClient;
+
+  @override
+  Future<List<MaterialCategory>> categories() =>
+      CategoryRepository(_apiClient).categories();
 
   @override
   Future<MaterialListingPage> search(MaterialListingQuery query) async {
@@ -37,7 +43,10 @@ final class MaterialInventoryRepository implements MaterialInventoryGateway {
   }
 
   @override
-  Future<MaterialListing> update(String listingId, MaterialListingDraft draft) async {
+  Future<MaterialListing> update(
+    String listingId,
+    MaterialListingDraft draft,
+  ) async {
     final json = await _apiClient.putJson(
       '/api/materials/$listingId',
       draft.toJson(),

@@ -6,15 +6,17 @@ namespace SurplusLink.Api.Materials;
 
 [ApiController]
 [Route("api/material-categories")]
-[Authorize(Roles = nameof(UserRole.MANAGER))]
+[Authorize]
 public sealed class MaterialCategoriesController(IMaterialInventoryService service) : MaterialsControllerBase
 {
     [HttpGet]
+    [Authorize(Roles = "SELLER,BUYER,MANAGER")]
     [ProducesResponseType<IReadOnlyList<MaterialCategoryResponse>>(StatusCodes.Status200OK)]
     public async Task<ActionResult<IReadOnlyList<MaterialCategoryResponse>>> GetAll(CancellationToken cancellationToken) =>
         Ok(await service.GetCategoriesAsync(cancellationToken));
 
     [HttpPost]
+    [Authorize(Roles = nameof(UserRole.MANAGER))]
     [ProducesResponseType<MaterialCategoryResponse>(StatusCodes.Status201Created)]
     public async Task<ActionResult<MaterialCategoryResponse>> Create(
         MaterialCategoryRequest request,
@@ -32,6 +34,7 @@ public sealed class MaterialCategoriesController(IMaterialInventoryService servi
     }
 
     [HttpPut("{id:guid}")]
+    [Authorize(Roles = nameof(UserRole.MANAGER))]
     [ProducesResponseType<MaterialCategoryResponse>(StatusCodes.Status200OK)]
     public async Task<ActionResult<MaterialCategoryResponse>> Update(
         Guid id,
@@ -49,6 +52,7 @@ public sealed class MaterialCategoriesController(IMaterialInventoryService servi
     }
 
     [HttpDelete("{id:guid}")]
+    [Authorize(Roles = nameof(UserRole.MANAGER))]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
     {

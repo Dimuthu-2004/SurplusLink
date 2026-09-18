@@ -1,3 +1,4 @@
+import 'package:mobile/categories/category_dropdown.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile/requirements/requirement_gateway.dart';
@@ -30,6 +31,7 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
   List<RequirementCategory> _categories = [];
   String? _category, _error, _locationError;
   DateTime _deadline = DateTime.now().add(const Duration(days: 7));
+  bool _loadFailed = false;
   bool _loading = true, _saving = false, _locating = false, _editable = true;
   bool get _editing => widget.requirementId != null;
 
@@ -57,6 +59,7 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
   Future<void> _load() async {
     setState(() {
       _loading = true;
+      _loadFailed = false;
       _error = null;
     });
     try {
@@ -80,7 +83,12 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
         }
       });
     } on Object catch (error) {
-      if (mounted) setState(() => _error = requirementError(error));
+      if (mounted) {
+        setState(() {
+          _loadFailed = true;
+          _error = requirementError(error);
+        });
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -215,7 +223,7 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
               ),
             ),
           )
-        : _categories.isEmpty
+        : _loadFailed || _categories.isEmpty
         ? Center(
             child: Padding(
               padding: const EdgeInsets.all(24),
@@ -238,26 +246,13 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
                       'Save your requirement as a draft, then review and submit it.',
                     ),
                     const SizedBox(height: 16),
-                    DropdownButtonFormField<String>(
+                    CategoryDropdown(
                       key: const Key('requirement-category'),
-                      initialValue: _categories.any((x) => x.id == _category)
-                          ? _category
-                          : null,
-                      isExpanded: true,
-                      decoration: const InputDecoration(labelText: 'Category'),
-                      items: _categories
-                          .map(
-                            (x) => DropdownMenuItem(
-                              value: x.id,
-                              child: Text(x.name),
-                            ),
-                          )
-                          .toList(),
+                      categories: _categories,
+                      value: _category,
                       onChanged: _saving
                           ? null
                           : (value) => setState(() => _category = value),
-                      validator: (value) =>
-                          value == null ? 'Choose a category.' : null,
                     ),
                     const SizedBox(height: 16),
                     _field(
