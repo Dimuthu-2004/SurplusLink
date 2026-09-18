@@ -17,4 +17,9 @@ public sealed class User : AuditableEntity
 
     public UserRole Role { get; set; }
 
+    public string? FullName { get; set; }
+    public string? PhoneNumber { get; set; }
+    public string? BusinessName { get; set; }
+    public string? Address { get; set; }
+
 }

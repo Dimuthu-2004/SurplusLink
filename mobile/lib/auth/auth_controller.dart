@@ -52,9 +52,33 @@ final class AuthController extends ChangeNotifier {
     required String email,
     required String password,
     required AppRole role,
+    UserProfile? profile,
   }) => _authenticate(
-    () => _gateway.register(email: email, password: password, role: role),
+    () => _gateway.register(
+      email: email,
+      password: password,
+      role: role,
+      profile: profile,
+    ),
   );
+
+  Future<bool> updateProfile(UserProfile profile) async {
+    if (_isBusy) return false;
+    _errorMessage = null;
+    _setBusy(true);
+    try {
+      _user = await _gateway.updateProfile(profile);
+      return true;
+    } on ApiException catch (error) {
+      _errorMessage = error.message;
+      return false;
+    } on Object {
+      _errorMessage = 'Unable to save your profile. Please retry.';
+      return false;
+    } finally {
+      _setBusy(false);
+    }
+  }
 
   Future<void> logout() async {
     if (_isBusy) {

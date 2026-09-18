@@ -70,5 +70,9 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Save your material camera photos to your photo library.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Take photos of materials to include in your listings.</string>
 </dict>
 </plist>

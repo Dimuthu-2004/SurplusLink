@@ -1,12 +1,16 @@
+import 'package:mobile/widgets/dashboard_back_button.dart';
+
 import 'dart:typed_data';
 
 import 'package:mobile/categories/category_dropdown.dart';
 import 'package:mobile/categories/material_category.dart';
 
 import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
-import 'package:image_picker/image_picker.dart';
+import 'package:mobile/location/location_lookup.dart';
+import 'package:mobile/materials/material_media.dart';
+import 'package:mobile/requirements/requirement_location.dart';
+import 'package:mobile/widgets/location_card.dart';
 import 'package:mobile/core/api_exception.dart';
 import 'package:mobile/materials/material_inventory_gateway.dart';
 import 'package:mobile/materials/material_models.dart';
@@ -15,11 +19,17 @@ class MaterialListingFormScreen extends StatefulWidget {
   const MaterialListingFormScreen({
     required this.gateway,
     this.listingId,
+    this.media,
+    this.locationSource = const DeviceRequirementLocation(),
+    this.locationLookup,
     super.key,
   });
 
   final MaterialInventoryGateway gateway;
   final String? listingId;
+  final MaterialMedia? media;
+  final RequirementLocationSource locationSource;
+  final AddressLookup? locationLookup;
 
   bool get isEditing => listingId != null;
 
@@ -38,9 +48,11 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
   final _quantityController = TextEditingController();
   final _unitController = TextEditingController(text: 'kg');
   final _priceController = TextEditingController();
-  final _photoUrlController = TextEditingController();
   final List<String> _photoUrls = [];
-  final List<Uint8List> _pickedImageBytes = [];
+  final List<_SelectedPhoto> _selectedPhotos = [];
+  late final _media = widget.media ?? MaterialMedia();
+  bool _mediaBusy = false, _locating = false;
+  double? _accuracy;
   String _condition = 'GOOD';
   DateTime _availableUntil = DateTime.now().add(const Duration(days: 7));
   double? _latitude;
@@ -62,7 +74,6 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
     _quantityController.dispose();
     _unitController.dispose();
     _priceController.dispose();
-    _photoUrlController.dispose();
     super.dispose();
   }
 
@@ -143,95 +154,123 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
     });
   }
 
-  Future<void> _pickImages() async {
+  Future<void> _pickImages({bool camera = false}) async {
+    if (_mediaBusy || _isSaving) return;
+    final remaining = 10 - _photoUrls.length - _selectedPhotos.length;
+    if (remaining <= 0) {
+      _showMessage('A listing can contain at most 10 photos.');
+      return;
+    }
+    setState(() => _mediaBusy = true);
     try {
-      final files = await ImagePicker().pickMultiImage(imageQuality: 80);
-      if (!mounted || files.isEmpty) return;
-      final bytes = await Future.wait(files.map((file) => file.readAsBytes()));
-      if (!mounted) return;
-      setState(() => _pickedImageBytes.addAll(bytes));
+      final captured = camera ? await _media.takePhoto() : null;
+      final files = camera
+          ? [?captured]
+          : await _media.pickGallery();
+      if (files.length > remaining && mounted) {
+        _showMessage('Only the first $remaining photos can be added.');
+      }
+      for (final file in files.take(remaining)) {
+        if (await file.length() > 8 * 1024 * 1024) {
+          if (mounted) _showMessage('Each photo must be 8 MB or smaller.');
+          continue;
+        }
+        final photo = _SelectedPhoto(await file.readAsBytes(), camera);
+        if (!mounted) return;
+        setState(() => _selectedPhotos.add(photo));
+        if (camera) await _saveCameraPhoto(photo);
+      }
     } on Object {
       if (mounted) {
         _showMessage(
-          'Unable to select images. Check photo permission and try again.',
+          'Unable to select photos. Check camera or photo permission and retry.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _mediaBusy = false);
+    }
+  }
+
+  Future<void> _saveCameraPhoto(_SelectedPhoto photo) async {
+    try {
+      await _media.saveToGallery(photo.bytes);
+      if (mounted) setState(() => photo.gallerySaved = true);
+    } on Object {
+      if (mounted) {
+        _showMessage(
+          'Photo kept for upload, but gallery saving failed. Allow Photos access and use Save to gallery to retry.',
         );
       }
     }
   }
 
   Future<void> _captureGps() async {
+    if (_locating || _isSaving) return;
+    setState(() => _locating = true);
     try {
-      if (!await Geolocator.isLocationServiceEnabled()) {
-        throw StateError('Location services are disabled.');
-      }
-      var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
-        throw StateError('Location permission was not granted.');
-      }
-      final position = await Geolocator.getCurrentPosition();
+      final position = await widget.locationSource.capture();
       if (!mounted) return;
       setState(() {
+        _accuracy = position.accuracy;
         _latitude = position.latitude;
         _longitude = position.longitude;
       });
-    } on StateError catch (error) {
+    } on LocationCaptureException catch (error) {
       if (mounted) _showMessage(error.message);
     } on Object {
       if (mounted) _showMessage('Unable to capture GPS location.');
+    } finally {
+      if (mounted) setState(() => _locating = false);
     }
-  }
-
-  void _addPhotoUrl() {
-    final value = _photoUrlController.text.trim();
-    final uri = Uri.tryParse(value);
-    if (uri == null || !(uri.isScheme('https') || uri.isScheme('http'))) {
-      _showMessage('Enter a valid http or https image URL.');
-      return;
-    }
-    if (_photoUrls.length >= 10) {
-      _showMessage('A listing can contain at most 10 photo URLs.');
-      return;
-    }
-    setState(() {
-      _photoUrls.add(value);
-      _photoUrlController.clear();
-    });
   }
 
   Future<void> _save() async {
-    if (_isSaving || !_formKey.currentState!.validate()) return;
+    if (_isSaving ||
+        _mediaBusy ||
+        _locating ||
+        !_formKey.currentState!.validate()) {
+      return;
+    }
     if (!_availableUntil.isAfter(DateTime.now())) {
       _showMessage('Available until must be in the future.');
       return;
     }
-    final draft = MaterialListingDraft(
-      categoryId: _category!,
-      title: _titleController.text,
-      description: _descriptionController.text,
-      quantity: double.parse(_quantityController.text.trim()),
-      unit: _unitController.text,
-      condition: _condition,
-      unitPrice: double.parse(_priceController.text.trim()),
-      latitude: _latitude,
-      longitude: _longitude,
-      availableUntil: _availableUntil,
-      photoUrls: List.unmodifiable(_photoUrls),
-    );
     setState(() {
       _isSaving = true;
       _error = null;
     });
     try {
+      for (final photo in _selectedPhotos) {
+        photo.uploadedUrl ??= await widget.gateway.uploadPhoto(photo.bytes);
+      }
+      final draft = MaterialListingDraft(
+        categoryId: _category!,
+        title: _titleController.text,
+        description: _descriptionController.text,
+        quantity: double.parse(_quantityController.text.trim()),
+        unit: _unitController.text,
+        condition: _condition,
+        unitPrice: double.parse(_priceController.text.trim()),
+        latitude: _latitude,
+        longitude: _longitude,
+        availableUntil: _availableUntil,
+        photoUrls: [
+          ..._photoUrls,
+          ..._selectedPhotos.map((photo) => photo.uploadedUrl!),
+        ],
+      );
       if (widget.isEditing) {
         await widget.gateway.update(widget.listingId!, draft);
       } else {
         await widget.gateway.create(draft);
       }
-      if (mounted) context.pop(true);
+      if (mounted) {
+        if (context.canPop()) {
+          context.pop(true);
+        } else {
+          context.go('/materials');
+        }
+      }
     } on ApiException catch (error) {
       if (mounted) setState(() => _error = error.message);
     } on Object {
@@ -248,6 +287,7 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
+      leading: const DashboardBackButton(fallback: '/materials'),
       title: Text(widget.isEditing ? 'Edit Material' : 'Add Material'),
     ),
     body: _isLoading
@@ -378,22 +418,22 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                     onTap: _chooseDate,
                   ),
                   const Divider(),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          _latitude == null
-                              ? 'No GPS location captured'
-                              : 'GPS: ${_latitude!.toStringAsFixed(6)}, ${_longitude!.toStringAsFixed(6)}',
-                        ),
-                      ),
-                      OutlinedButton.icon(
-                        key: const Key('capture-gps'),
-                        onPressed: _captureGps,
-                        icon: const Icon(Icons.my_location),
-                        label: const Text('Capture GPS'),
-                      ),
-                    ],
+                  if (_latitude != null && _longitude != null)
+                    LocationCard(
+                      latitude: _latitude!,
+                      longitude: _longitude!,
+                      accuracy: _accuracy,
+                      lookup: widget.locationLookup ?? unavailableAddress,
+                    )
+                  else
+                    const Text('No location captured yet.'),
+                  OutlinedButton.icon(
+                    key: const Key('capture-gps'),
+                    onPressed: _locating || _isSaving ? null : _captureGps,
+                    icon: const Icon(Icons.my_location),
+                    label: Text(
+                      _locating ? 'Finding location...' : 'Capture GPS',
+                    ),
                   ),
                   const Divider(),
                   Text(
@@ -402,74 +442,92 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                   ),
                   const SizedBox(height: 4),
                   const Text(
-                    'The API accepts hosted image URLs. Picked local images are preview-only until an upload API is provided.',
+                    'Choose up to 10 photos (JPEG, PNG or WebP; 8 MB each). Camera photos are also saved to your gallery.',
                   ),
-                  const SizedBox(height: 8),
-                  OutlinedButton.icon(
-                    key: const Key('pick-material-images'),
-                    onPressed: _pickImages,
-                    icon: const Icon(Icons.photo_library_outlined),
-                    label: const Text('Pick images for preview'),
-                  ),
-                  if (_pickedImageBytes.isNotEmpty)
-                    SizedBox(
-                      height: 100,
-                      child: ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: _pickedImageBytes.length,
-                        separatorBuilder: (_, _) => const SizedBox(width: 8),
-                        itemBuilder: (_, index) => ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Image.memory(
-                            _pickedImageBytes[index],
-                            width: 100,
-                            height: 100,
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                      ),
-                    ),
-                  const SizedBox(height: 8),
-                  Row(
+                  Wrap(
+                    spacing: 8,
                     children: [
-                      Expanded(
-                        child: TextField(
-                          key: const Key('material-photo-url'),
-                          controller: _photoUrlController,
-                          keyboardType: TextInputType.url,
-                          decoration: const InputDecoration(
-                            labelText: 'Hosted image URL',
-                          ),
-                        ),
+                      OutlinedButton.icon(
+                        key: const Key('pick-material-images'),
+                        onPressed: _mediaBusy || _isSaving
+                            ? null
+                            : () => _pickImages(),
+                        icon: const Icon(Icons.photo_library_outlined),
+                        label: const Text('Choose photos'),
                       ),
-                      const SizedBox(width: 8),
-                      IconButton(
-                        tooltip: 'Add image URL',
-                        onPressed: _addPhotoUrl,
-                        icon: const Icon(Icons.add_photo_alternate_outlined),
+                      OutlinedButton.icon(
+                        key: const Key('capture-material-photo'),
+                        onPressed: _mediaBusy || _isSaving
+                            ? null
+                            : () => _pickImages(camera: true),
+                        icon: const Icon(Icons.camera_alt_outlined),
+                        label: const Text('Take photo'),
                       ),
                     ],
                   ),
-                  for (var index = 0; index < _photoUrls.length; index++)
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.image_outlined),
-                      title: Text(
-                        _photoUrls[index],
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                  if (_mediaBusy) const LinearProgressIndicator(),
+                  for (final photo in _selectedPhotos)
+                    Card(
+                      child: Column(
+                        children: [
+                          Image.memory(
+                            photo.bytes,
+                            height: 140,
+                            errorBuilder: (_, _, _) =>
+                                const Icon(Icons.broken_image),
+                          ),
+                          Text(
+                            photo.uploadedUrl == null
+                                ? 'Ready to upload when saved'
+                                : 'Uploaded',
+                          ),
+                          if (photo.camera)
+                            Text(
+                              photo.gallerySaved
+                                  ? 'Saved to device gallery'
+                                  : 'Not yet saved to gallery',
+                            ),
+                          if (photo.camera && !photo.gallerySaved)
+                            TextButton(
+                              onPressed: _isSaving || _mediaBusy
+                                  ? null
+                                  : () => _saveCameraPhoto(photo),
+                              child: const Text('Save to gallery'),
+                            ),
+                          TextButton(
+                            onPressed: _isSaving
+                                ? null
+                                : () => setState(
+                                    () => _selectedPhotos.remove(photo),
+                                  ),
+                            child: const Text('Remove photo'),
+                          ),
+                        ],
                       ),
+                    ),
+                  for (final url in _photoUrls)
+                    ListTile(
+                      leading: Image.network(
+                        widget.gateway.photoUrl(url),
+                        width: 56,
+                        errorBuilder: (_, _, _) =>
+                            const Icon(Icons.image_outlined),
+                      ),
+                      title: const Text('Saved photo'),
                       trailing: IconButton(
-                        tooltip: 'Remove image URL',
-                        onPressed: () =>
-                            setState(() => _photoUrls.removeAt(index)),
+                        tooltip: 'Remove photo',
+                        onPressed: _isSaving
+                            ? null
+                            : () => setState(() => _photoUrls.remove(url)),
                         icon: const Icon(Icons.delete_outline),
                       ),
                     ),
                   const SizedBox(height: 20),
                   FilledButton.icon(
                     key: const Key('save-material'),
-                    onPressed: _isSaving ? null : _save,
+                    onPressed: _isSaving || _mediaBusy || _locating
+                        ? null
+                        : _save,
                     icon: _isSaving
                         ? const SizedBox(
                             width: 18,
@@ -514,4 +572,12 @@ String? _positiveNumber(String? value, String label) {
   return number != null && number > 0
       ? null
       : '$label must be greater than zero.';
+}
+
+class _SelectedPhoto {
+  _SelectedPhoto(this.bytes, this.camera);
+  final Uint8List bytes;
+  final bool camera;
+  bool gallerySaved = false;
+  String? uploadedUrl;
 }

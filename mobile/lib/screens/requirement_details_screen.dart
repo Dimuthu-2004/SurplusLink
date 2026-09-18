@@ -1,3 +1,5 @@
+import 'package:mobile/widgets/location_card.dart';
+import 'package:mobile/location/location_lookup.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile/core/api_exception.dart';
@@ -9,10 +11,12 @@ class RequirementDetailsScreen extends StatefulWidget {
   const RequirementDetailsScreen({
     required this.gateway,
     required this.requirementId,
+    this.locationLookup,
     super.key,
   });
   final RequirementGateway gateway;
   final String requirementId;
+  final AddressLookup? locationLookup;
   @override
   State<RequirementDetailsScreen> createState() =>
       _RequirementDetailsScreenState();
@@ -214,12 +218,14 @@ class _RequirementDetailsScreenState extends State<RequirementDetailsScreen> {
                       'Notes',
                       row.notes.isEmpty ? 'No notes added.' : row.notes,
                     ),
-                    _value(
-                      'Delivery location',
-                      row.latitude == null || row.longitude == null
-                          ? 'Location was not recorded.'
-                          : '${row.latitude}, ${row.longitude}',
-                    ),
+                    if (row.latitude != null && row.longitude != null)
+                      LocationCard(
+                        latitude: row.latitude!,
+                        longitude: row.longitude!,
+                        lookup: widget.locationLookup ?? unavailableAddress,
+                      )
+                    else
+                      const Text('Location was not recorded.'),
                     _value('Created', requirementDate(row.createdAt)),
                     _value('Updated', requirementDate(row.updatedAt)),
                     if (_sending) const LinearProgressIndicator(),

@@ -41,6 +41,7 @@ public sealed class MaterialInventoryService(SurplusLinkDbContext dbContext) : I
 
         var totalCount = await listings.CountAsync(cancellationToken);
         var items = await MaterialListingQueryBuilder.ApplySort(listings, query)
+            .Include(listing => listing.Seller)
             .Include(listing => listing.Category)
             .Include(listing => listing.Photos)
             .Skip((query.Page - 1) * query.PageSize)
@@ -110,6 +111,7 @@ public sealed class MaterialInventoryService(SurplusLinkDbContext dbContext) : I
         var listings = await dbContext.Listings
             .AsNoTracking()
             .Where(listing => listing.SellerId == sellerId)
+            .Include(listing => listing.Seller)
             .Include(listing => listing.Category)
             .Include(listing => listing.Photos)
             .OrderByDescending(listing => listing.CreatedAtUtc)
@@ -255,12 +257,14 @@ public sealed class MaterialInventoryService(SurplusLinkDbContext dbContext) : I
             .ToList();
         var expiringListings = await activeListings
             .Where(listing => listing.AvailableUntil <= expiringBefore)
+            .Include(listing => listing.Seller)
             .Include(listing => listing.Category)
             .Include(listing => listing.Photos)
             .OrderBy(listing => listing.AvailableUntil)
             .ToListAsync(cancellationToken);
         var lowRemainingQuantityListings = await activeListings
             .Where(listing => listing.Quantity - listing.ReservedQuantity <= listing.Quantity * lowRemainingFraction)
+            .Include(listing => listing.Seller)
             .Include(listing => listing.Category)
             .Include(listing => listing.Photos)
             .OrderBy(listing => listing.AvailableUntil)
@@ -351,6 +355,7 @@ public sealed class MaterialInventoryService(SurplusLinkDbContext dbContext) : I
 
     private async Task<Listing?> GetListingWithDetailsAsync(Guid listingId, CancellationToken cancellationToken) =>
         await dbContext.Listings.AsNoTracking()
+            .Include(listing => listing.Seller)
             .Include(listing => listing.Category)
             .Include(listing => listing.Photos)
             .SingleOrDefaultAsync(listing => listing.Id == listingId, cancellationToken);
@@ -449,7 +454,9 @@ public sealed class MaterialInventoryService(SurplusLinkDbContext dbContext) : I
         listing.UpdatedAtUtc,
         listing.Photos.OrderBy(photo => photo.SortOrder)
             .Select(photo => new ListingPhotoResponse(photo.Id, photo.PhotoUrl, photo.SortOrder))
-            .ToList());
+            .ToList(),
+        listing.Seller is null ? null : new SellerContactResponse(listing.Seller.FullName,
+            listing.Seller.BusinessName, listing.Seller.Email, listing.Seller.PhoneNumber));
 
     private static MaterialCategoryResponse ToResponse(Category category) =>
         new(category.Id, category.Name, category.CreatedAtUtc, category.UpdatedAtUtc);

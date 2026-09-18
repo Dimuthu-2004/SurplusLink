@@ -74,6 +74,41 @@ final class ApiClient {
     ),
   );
 
+  Future<Map<String, dynamic>> uploadPhoto(List<int> bytes) async {
+    final token = await tokenStorage.readToken();
+    if (token == null || token.isEmpty) {
+      throw const ApiException('Authentication is required.', statusCode: 401);
+    }
+    final request =
+        http.MultipartRequest('POST', baseUri.resolve('/api/material-photos'))
+          ..headers['Authorization'] = 'Bearer $token'
+          ..files.add(
+            http.MultipartFile.fromBytes('file', bytes, filename: 'photo'),
+          );
+    try {
+      final response = await http.Response.fromStream(
+        await httpClient.send(request).timeout(const Duration(seconds: 60)),
+      );
+      final body = _decodeBody(response.body);
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw _exceptionFrom(
+          response.statusCode,
+          body is Map<String, dynamic> ? body : {},
+        );
+      }
+      if (body is! Map<String, dynamic>) throw const FormatException();
+      return body;
+    } on TimeoutException {
+      throw const ApiException('Photo upload timed out. Please retry.');
+    } on http.ClientException {
+      throw const ApiException(
+        'Unable to upload photo. Check your connection.',
+      );
+    } on FormatException {
+      throw const ApiException('Invalid photo upload response.');
+    }
+  }
+
   Future<void> delete(String path, {bool authenticated = false}) async {
     await _send(method: 'DELETE', path: path, authenticated: authenticated);
   }

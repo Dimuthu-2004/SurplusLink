@@ -7,6 +7,7 @@ import 'package:mobile/config/app_config.dart';
 import 'package:mobile/core/api_client.dart';
 import 'package:mobile/core/token_storage.dart';
 import 'package:mobile/materials/material_inventory_repository.dart';
+import 'package:mobile/location/location_lookup.dart';
 import 'package:mobile/requirements/requirement_repository.dart';
 
 void main() {
@@ -30,6 +31,7 @@ void main() {
         apiClient,
         onSessionExpired: authController.logout,
       ),
+      locationLookup: ApiLocationLookup(apiClient).lookup,
     ),
   );
 }

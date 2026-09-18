@@ -1,3 +1,4 @@
+import { environment } from '../../config/environment';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
@@ -84,7 +85,10 @@ export function ManagerMaterialDetailsPage({
         </div>
         <p>{listing.description}</p>
         <dl className="detail-grid">
-          <Detail label="Seller ID" value={listing.sellerId} />
+          <Detail label="Seller" value={listing.seller?.fullName || 'Profile not completed'} />
+          <Detail label="Business" value={listing.seller?.businessName || 'Not provided'} />
+          <Detail label="Seller email" value={listing.seller?.email || 'Not provided'} />
+          <Detail label="Seller phone" value={listing.seller?.phoneNumber || 'Not provided'} />
           <Detail label="Condition" value={listing.condition} />
           <Detail label="Quantity" value={`${listing.quantity} ${listing.unit}`} />
           <Detail label="Reserved" value={`${listing.reservedQuantity} ${listing.unit}`} />
@@ -93,9 +97,10 @@ export function ManagerMaterialDetailsPage({
           <Detail label="Created" value={formatDate(listing.createdAtUtc)} />
           <Detail label="Updated" value={formatDate(listing.updatedAtUtc)} />
         </dl>
+        {listing.latitude != null && listing.longitude != null && <a className="back-link" href={`https://www.google.com/maps/search/?api=1&query=${listing.latitude},${listing.longitude}`} target="_blank" rel="noreferrer">View material location in Google Maps</a>}
         {listing.photos.length > 0 && (
           <div className="photo-grid" aria-label="Listing photos">
-            {listing.photos.map((photo) => <img key={photo.id} src={photo.photoUrl} alt={listing.title} />)}
+            {listing.photos.map((photo) => <img key={photo.id} src={new URL(photo.photoUrl, environment.apiBaseUrl).toString()} alt={listing.title} />)}
           </div>
         )}
         {canVerify && (

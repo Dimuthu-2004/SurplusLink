@@ -1,3 +1,5 @@
+import 'package:mobile/widgets/location_card.dart';
+import 'package:mobile/location/location_lookup.dart';
 import 'package:mobile/categories/category_dropdown.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -11,11 +13,13 @@ class RequirementFormScreen extends StatefulWidget {
     required this.gateway,
     this.requirementId,
     this.locationSource = const DeviceRequirementLocation(),
+    this.locationLookup,
     super.key,
   });
   final RequirementGateway gateway;
   final String? requirementId;
   final RequirementLocationSource locationSource;
+  final AddressLookup? locationLookup;
   @override
   State<RequirementFormScreen> createState() => _RequirementFormScreenState();
 }
@@ -30,6 +34,7 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
   final _longitude = TextEditingController();
   List<RequirementCategory> _categories = [];
   String? _category, _error, _locationError;
+  double? _capturedLatitude, _capturedLongitude, _accuracy;
   DateTime _deadline = DateTime.now().add(const Duration(days: 7));
   bool _loadFailed = false;
   bool _loading = true, _saving = false, _locating = false, _editable = true;
@@ -80,6 +85,8 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
           _latitude.text = row.latitude?.toString() ?? '';
           _longitude.text = row.longitude?.toString() ?? '';
           _deadline = row.deadline.toLocal();
+          _capturedLatitude = row.latitude;
+          _capturedLongitude = row.longitude;
         }
       });
     } on Object catch (error) {
@@ -120,6 +127,9 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
     try {
       final position = await widget.locationSource.capture();
       if (!mounted) return;
+      _capturedLatitude = position.latitude;
+      _capturedLongitude = position.longitude;
+      _accuracy = position.accuracy;
       _latitude.text = position.latitude.toStringAsFixed(6);
       _longitude.text = position.longitude.toStringAsFixed(6);
     } on LocationCaptureException catch (error) {
@@ -311,6 +321,13 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
                         _locating ? 'Getting location…' : 'Use my GPS location',
                       ),
                     ),
+                    if (_capturedLatitude != null && _capturedLongitude != null)
+                      LocationCard(
+                        latitude: _capturedLatitude!,
+                        longitude: _capturedLongitude!,
+                        accuracy: _accuracy,
+                        lookup: widget.locationLookup ?? unavailableAddress,
+                      ),
                     if (_locationError != null)
                       RequirementErrorBox(_locationError!),
                     const SizedBox(height: 8),
@@ -359,6 +376,14 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
     child: TextFormField(
       key: Key(key),
       controller: controller,
+      onChanged: (value) {
+        if (controller == _latitude || controller == _longitude) {
+          setState(() {
+            _capturedLatitude = null;
+            _capturedLongitude = null;
+          });
+        }
+      },
       enabled: !_saving,
       maxLines: lines,
       decoration: InputDecoration(labelText: label),

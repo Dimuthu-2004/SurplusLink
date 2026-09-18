@@ -14,6 +14,7 @@ using SurplusLink.Api.Data;
 using SurplusLink.Api.ErrorHandling;
 using SurplusLink.Api.Models;
 using SurplusLink.Api.Materials;
+using SurplusLink.Api.Locations;
 using SurplusLink.Api.Observability;
 using SurplusLink.Api.Reservations;
 
@@ -67,6 +68,14 @@ builder.Services.AddControllers()
             };
         };
     });
+builder.Services.AddMemoryCache();
+builder.Services.AddHttpClient<IReverseGeocodingService, NominatimReverseGeocodingService>(client =>
+{
+    client.BaseAddress = new Uri("https://nominatim.openstreetmap.org/reverse");
+    client.Timeout = TimeSpan.FromSeconds(10);
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("SurplusLink/1.0 (+https://github.com/SurplusLink)");
+    client.DefaultRequestHeaders.Accept.ParseAdd("application/json");
+});
 
 builder.Services.AddOptions<ApiCorsOptions>()
     .BindConfiguration(ApiCorsOptions.SectionName)

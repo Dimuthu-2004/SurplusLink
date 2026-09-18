@@ -1,9 +1,10 @@
-import { Link, NavLink, Outlet } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { roleHomePath, roleLabels } from '../routing/roleRoutes';
 
 export function AppLayout() {
   const { user, logout } = useAuth();
+  const location = useLocation();
   if (!user) {
     return null;
   }
@@ -41,6 +42,7 @@ export function AppLayout() {
           </nav>
         </aside>
         <main className="page-content">
+          {location.pathname !== roleHomePath(user.role) && <Link className="back-link dashboard-back" to={roleHomePath(user.role)}>? Back to dashboard</Link>}
           <Outlet />
         </main>
       </div>

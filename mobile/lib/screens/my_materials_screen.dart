@@ -1,3 +1,4 @@
+import 'package:mobile/widgets/dashboard_back_button.dart';
 import 'package:mobile/categories/category_filter.dart';
 import 'package:mobile/categories/material_category.dart';
 import 'package:flutter/material.dart';
@@ -95,7 +96,10 @@ class _MyMaterialsScreenState extends State<MyMaterialsScreen> {
   Widget build(BuildContext context) {
     if (widget.user.role != AppRole.seller) {
       return Scaffold(
-        appBar: AppBar(title: const Text('My Materials')),
+        appBar: AppBar(
+          leading: const DashboardBackButton(fallback: '/home'),
+          title: const Text('My Materials'),
+        ),
         body: const Center(
           child: Text('Material inventory is available to seller accounts.'),
         ),
@@ -103,7 +107,10 @@ class _MyMaterialsScreenState extends State<MyMaterialsScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('My Materials')),
+      appBar: AppBar(
+        leading: const DashboardBackButton(fallback: '/home'),
+        title: const Text('My Materials'),
+      ),
       floatingActionButton: FloatingActionButton.extended(
         key: const Key('add-material-button'),
         onPressed: () async {

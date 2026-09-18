@@ -1,3 +1,4 @@
+import 'package:mobile/widgets/profile_fields.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile/auth/auth_controller.dart';
@@ -19,10 +20,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _profile = ProfileFieldsController();
   AppRole _role = AppRole.buyer;
 
   @override
   void dispose() {
+    _profile.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -37,6 +40,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       email: _emailController.text,
       password: _passwordController.text,
       role: _role,
+      profile: _profile.profile,
     );
   }
 
@@ -52,6 +56,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             AuthErrorMessage(widget.authController.errorMessage),
+            ProfileFields(
+              controller: _profile,
+              enabled: !widget.authController.isBusy,
+            ),
             TextFormField(
               key: const Key('register-email'),
               controller: _emailController,

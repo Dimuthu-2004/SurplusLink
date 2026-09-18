@@ -23,6 +23,7 @@ final class FakeAuthGateway implements AuthGateway {
   Completer<AuthSession>? loginCompleter;
   AppUser loginUser = sellerUser;
   AppRole? registeredRole;
+  UserProfile? registeredProfile;
   bool logoutCalled = false;
 
   @override
@@ -52,11 +53,24 @@ final class FakeAuthGateway implements AuthGateway {
     required String email,
     required String password,
     required AppRole role,
+    UserProfile? profile,
   }) async {
     registeredRole = role;
+    registeredProfile = profile;
     final user = role == AppRole.seller ? sellerUser : buyerUser;
     return AuthSession(token: 'test-token', user: user);
   }
+
+  @override
+  Future<AppUser> updateProfile(UserProfile profile) async => AppUser(
+    id: loginUser.id,
+    email: loginUser.email,
+    role: loginUser.role,
+    fullName: profile.fullName,
+    phoneNumber: profile.phoneNumber,
+    businessName: profile.businessName,
+    address: profile.address,
+  );
 
   @override
   Future<void> logout() async {

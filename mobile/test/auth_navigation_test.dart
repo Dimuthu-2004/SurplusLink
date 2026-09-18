@@ -56,6 +56,7 @@ void main() {
     await tester.tap(find.byKey(const Key('go-register')));
     await tester.pumpAndSettle();
 
+    await tester.ensureVisible(find.byKey(const Key('register-role')));
     await tester.tap(find.byKey(const Key('register-role')));
     await tester.pumpAndSettle();
 
@@ -73,10 +74,24 @@ void main() {
       find.byKey(const Key('register-password')),
       'Password123!',
     );
+    await tester.enterText(
+      find.byKey(const Key('profile-name')),
+      'Test Seller',
+    );
+    await tester.enterText(
+      find.byKey(const Key('profile-phone')),
+      '0771234567',
+    );
+    await tester.enterText(find.byKey(const Key('profile-address')), 'Colombo');
+    FocusManager.instance.primaryFocus?.unfocus();
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('register-submit')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('register-submit')));
     await tester.pumpAndSettle();
 
     expect(gateway.registeredRole, AppRole.seller);
+    expect(gateway.registeredProfile!.fullName, 'Test Seller');
     expect(find.text('Seller home'), findsOneWidget);
   });
 

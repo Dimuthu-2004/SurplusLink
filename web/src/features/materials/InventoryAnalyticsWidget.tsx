@@ -1,3 +1,4 @@
+import { AnalyticsChart, AnalyticsMetric } from '../../components/AnalyticsChart';
 import { useEffect, useState } from 'react';
 import {
   managerMaterialsApi,
@@ -49,12 +50,17 @@ export function InventoryAnalyticsWidget({
           <p className="eyebrow">Live overview</p>
           <h2 id="analytics-heading">Inventory analytics</h2>
         </div>
-        <strong className="metric-value">{analytics.activeCount}</strong>
+
       </div>
-      <p className="muted">Active listings</p>
+      <div className="analytics-metrics">
+        <AnalyticsMetric label="Active listings" value={analytics.activeCount} detail="Available inventory" />
+        <AnalyticsMetric label="Total listings" value={analytics.listingsByStatus.reduce((sum, row) => sum + row.count, 0)} />
+        <AnalyticsMetric label="Expiring soon" value={analytics.expiringListings.length} detail="Listings in the attention preview" />
+        <AnalyticsMetric label="Low remaining quantity" value={analytics.lowRemainingQuantityListings.length} detail="Listings in the attention preview" />
+      </div>
       <div className="analytics-grid">
-        <AnalyticsList title="By category" values={analytics.listingsByCategory} />
-        <AnalyticsList title="By status" values={analytics.listingsByStatus} />
+        <AnalyticsChart title="Inventory by category" values={analytics.listingsByCategory} />
+        <AnalyticsChart title="Inventory by status" values={analytics.listingsByStatus} initialView="ring" />
         <div>
           <h3>Needs attention</h3>
           <p>{analytics.expiringListings.length} expiring soon</p>
@@ -62,27 +68,6 @@ export function InventoryAnalyticsWidget({
         </div>
       </div>
     </section>
-  );
-}
-
-function AnalyticsList({
-  title,
-  values,
-}: {
-  title: string;
-  values: InventoryAnalytics['listingsByCategory'];
-}) {
-  return (
-    <div>
-      <h3>{title}</h3>
-      {values.length === 0 ? (
-        <p className="muted">No data yet.</p>
-      ) : (
-        <ul className="summary-list">
-          {values.map((value) => <li key={value.key}>{value.key}: {value.count}</li>)}
-        </ul>
-      )}
-    </div>
   );
 }
 

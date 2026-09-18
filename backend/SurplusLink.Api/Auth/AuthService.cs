@@ -30,6 +30,10 @@ public sealed class AuthService(
             Id = Guid.NewGuid(),
             Email = email,
             Role = Enum.Parse<UserRole>(request.Role, ignoreCase: false),
+            FullName = request.FullName.Trim(),
+            PhoneNumber = request.PhoneNumber.Trim(),
+            BusinessName = request.BusinessName?.Trim(),
+            Address = request.Address.Trim(),
             CreatedAtUtc = DateTime.UtcNow
         };
         user.PasswordHash = passwordHasher.HashPassword(user, request.Password);
@@ -73,5 +77,5 @@ public sealed class AuthService(
         return new AuthResponse(new JwtSecurityTokenHandler().WriteToken(token), ToResponse(user));
     }
 
-    private static UserResponse ToResponse(User user) => new(user.Id, user.Email, user.Role.ToString());
+    private static UserResponse ToResponse(User user) => UserResponse.From(user);
 }

@@ -41,6 +41,21 @@ public sealed class AuthController(IAuthService authService, SurplusLinkDbContex
         }
 
         var user = await dbContext.Users.FindAsync([userId], cancellationToken);
-        return user is null ? NotFound() : Ok(new UserResponse(user.Id, user.Email, user.Role.ToString()));
+        return user is null ? NotFound() : Ok(UserResponse.From(user));
+    }
+
+    [Authorize]
+    [HttpPut("me")]
+    public async Task<ActionResult<UserResponse>> UpdateProfile(ProfileRequest request, CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var id)) return Unauthorized();
+        var user = await dbContext.Users.FindAsync([id], cancellationToken);
+        if (user is null) return NotFound();
+        user.FullName = request.FullName.Trim();
+        user.PhoneNumber = request.PhoneNumber.Trim();
+        user.BusinessName = request.BusinessName?.Trim();
+        user.Address = request.Address.Trim();
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return Ok(UserResponse.From(user));
     }
 }

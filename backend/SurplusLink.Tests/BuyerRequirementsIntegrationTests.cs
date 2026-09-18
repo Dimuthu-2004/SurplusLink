@@ -320,7 +320,11 @@ public sealed class RequirementsDatabase : IAsyncLifetime
             var migrator = db.GetService<IMigrator>();
             await migrator.MigrateAsync("20260915075217_AddMaterialInventoryListings");
             foreach (var (id, role) in new[] { (Buyer, UserRole.BUYER), (OtherBuyer, UserRole.BUYER), (Manager, UserRole.MANAGER), (Seller, UserRole.SELLER) })
-                db.Users.Add(new User { Id = id, Email = id + "@requirements.test", PasswordHash = "unused-test-hash", Role = role });
+                // This fixture intentionally seeds the old schema before testing migrations.
+                await db.Database.ExecuteSqlInterpolatedAsync($"""
+                    INSERT INTO "Users" ("Id", "Email", "PasswordHash", "Role")
+                    VALUES ({id}, {id + "@requirements.test"}, 'unused-test-hash', {role.ToString()});
+                    """);
             await db.SaveChangesAsync();
             var category = Guid.Parse("00000000-0000-0000-0000-000000000101");
             var listing = new Listing { Id = Guid.NewGuid(), SellerId = Seller, CategoryId = category, Title = "Test stock",

@@ -1,3 +1,4 @@
+import { AnalyticsChart, AnalyticsMetric } from '../../components/AnalyticsChart';
 import { useCallback, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { managerRequirementsApi, type ManagerRequirementsApi } from './managerRequirementsApi';
@@ -19,13 +20,17 @@ export function RequestAnalyticsWidget({ api = managerRequirementsApi }: { api?:
     {loading && <p role="status">Loading request analytics…</p>}
     {error && <RequirementError message={error} retry={reload} label="Retry analytics" />}
     {data && <>
-      <div className="requirement-metrics">
-        <Metric label="Total requests" value={requirementNumber(data.total)} />
-        <Metric label="Open requests" value={requirementNumber(data.openCount)} />
-        <Metric label="Upcoming deadlines" value={requirementNumber(data.upcomingDeadlineCount)} />
-        <Metric label="Average maximum budget" value={data.averageMaximumBudget === null ? '—' : requirementNumber(data.averageMaximumBudget, 2)} />
+      <div className="analytics-metrics">
+        <AnalyticsMetric label="Total requests" value={requirementNumber(data.total)} />
+        <AnalyticsMetric label="Open requests" value={requirementNumber(data.openCount)} />
+        <AnalyticsMetric label="Upcoming deadlines" value={requirementNumber(data.upcomingDeadlineCount)} />
+        <AnalyticsMetric label="Average maximum budget" value={data.averageMaximumBudget === null ? '—' : requirementNumber(data.averageMaximumBudget, 2)} />
       </div>
       {data.total === 0 && <p className="empty-state">No buyer requirements yet.</p>}
+      <div className="analytics-grid">
+        <AnalyticsChart title="Requests by status" initialView="ring" values={data.countsByStatus.map(item => ({ key: statusLabel(item.status), count: item.count }))} />
+        <AnalyticsChart title="Requests by category" values={data.countsByCategory.map(item => ({ key: item.categoryName, count: item.count }))} />
+      </div>
       <details className="requirement-breakdown">
         <summary>View status, category and deadline breakdown</summary>
         <div className="analytics-grid">
@@ -52,7 +57,4 @@ export function RequestAnalyticsWidget({ api = managerRequirementsApi }: { api?:
       </small><button className="text-button" type="button" onClick={reload}>Refresh analytics</button></div>
     </>}
   </section>;
-}
-function Metric({ label, value }: { label: string; value: string }) {
-  return <div><span className="muted">{label}</span><strong>{value}</strong></div>;
 }

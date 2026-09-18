@@ -1,8 +1,9 @@
 import 'package:geolocator/geolocator.dart';
 
 class RequirementLocation {
-  const RequirementLocation(this.latitude, this.longitude);
+  const RequirementLocation(this.latitude, this.longitude, {this.accuracy});
   final double latitude, longitude;
+  final double? accuracy;
 }
 
 abstract interface class RequirementLocationSource {
@@ -33,10 +34,14 @@ class DeviceRequirementLocation implements RequirementLocationSource {
         'Location permission was not granted. You can enter coordinates manually.',
       );
     }
-    final position = await Geolocator.getCurrentPosition().timeout(
-      const Duration(seconds: 20),
+    final position = await Geolocator.getCurrentPosition(
+      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+    ).timeout(const Duration(seconds: 20));
+    return RequirementLocation(
+      position.latitude,
+      position.longitude,
+      accuracy: position.accuracy,
     );
-    return RequirementLocation(position.latitude, position.longitude);
   }
 }
 

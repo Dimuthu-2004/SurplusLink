@@ -1,5 +1,9 @@
 final class MaterialPhoto {
-  const MaterialPhoto({required this.id, required this.photoUrl, required this.sortOrder});
+  const MaterialPhoto({
+    required this.id,
+    required this.photoUrl,
+    required this.sortOrder,
+  });
 
   factory MaterialPhoto.fromJson(Map<String, dynamic> json) => MaterialPhoto(
     id: _requiredString(json, 'id'),
@@ -32,34 +36,43 @@ final class MaterialListing {
     required this.createdAtUtc,
     required this.updatedAtUtc,
     required this.photos,
+    this.seller,
   });
 
-  factory MaterialListing.fromJson(Map<String, dynamic> json) => MaterialListing(
-    id: _requiredString(json, 'id'),
-    sellerId: _requiredString(json, 'sellerId'),
-    categoryId: _requiredString(json, 'categoryId'),
-    categoryName: _requiredString(json, 'categoryName'),
-    title: _requiredString(json, 'title'),
-    description: _requiredString(json, 'description'),
-    quantity: _number(json, 'quantity'),
-    reservedQuantity: _number(json, 'reservedQuantity'),
-    unit: _requiredString(json, 'unit'),
-    condition: _requiredString(json, 'condition'),
-    unitPrice: _number(json, 'unitPrice'),
-    latitude: _nullableNumber(json['latitude']),
-    longitude: _nullableNumber(json['longitude']),
-    availableUntil: DateTime.parse(_requiredString(json, 'availableUntil')).toLocal(),
-    status: _requiredString(json, 'status'),
-    createdAtUtc: DateTime.parse(_requiredString(json, 'createdAtUtc')).toLocal(),
-    updatedAtUtc: DateTime.parse(_requiredString(json, 'updatedAtUtc')).toLocal(),
-    photos: (json['photos'] as List<dynamic>? ?? const [])
-        .whereType<Map<String, dynamic>>()
-        .map(MaterialPhoto.fromJson)
-        .toList(),
-  );
+  factory MaterialListing.fromJson(Map<String, dynamic> json) =>
+      MaterialListing(
+        seller: json['seller'] is Map<String, dynamic>
+            ? SellerContact.fromJson(json['seller'] as Map<String, dynamic>)
+            : null,
+        id: _requiredString(json, 'id'),
+        sellerId: _requiredString(json, 'sellerId'),
+        categoryId: _requiredString(json, 'categoryId'),
+        categoryName: _requiredString(json, 'categoryName'),
+        title: _requiredString(json, 'title'),
+        description: _requiredString(json, 'description'),
+        quantity: _number(json, 'quantity'),
+        reservedQuantity: _number(json, 'reservedQuantity'),
+        unit: _requiredString(json, 'unit'),
+        condition: _requiredString(json, 'condition'),
+        unitPrice: _number(json, 'unitPrice'),
+        latitude: _nullableNumber(json['latitude']),
+        longitude: _nullableNumber(json['longitude']),
+        availableUntil: DateTime.parse(_requiredString(json, 'availableUntil'))
+            .toLocal(),
+        status: _requiredString(json, 'status'),
+        createdAtUtc: DateTime.parse(_requiredString(json, 'createdAtUtc'))
+            .toLocal(),
+        updatedAtUtc: DateTime.parse(_requiredString(json, 'updatedAtUtc'))
+            .toLocal(),
+        photos: (json['photos'] as List<dynamic>? ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .map(MaterialPhoto.fromJson)
+            .toList(),
+      );
 
   final String id;
   final String sellerId;
+  final SellerContact? seller;
   final String categoryId;
   final String categoryName;
   final String title;
@@ -91,16 +104,17 @@ final class MaterialListingPage {
     required this.pageSize,
   });
 
-  factory MaterialListingPage.fromJson(Map<String, dynamic> json) => MaterialListingPage(
-    items: (json['items'] as List<dynamic>? ?? const [])
-        .whereType<Map<String, dynamic>>()
-        .map(MaterialListing.fromJson)
-        .toList(),
-    totalCount: _number(json, 'totalCount').toInt(),
-    totalPages: _number(json, 'totalPages').toInt(),
-    page: _number(json, 'page').toInt(),
-    pageSize: _number(json, 'pageSize').toInt(),
-  );
+  factory MaterialListingPage.fromJson(Map<String, dynamic> json) =>
+      MaterialListingPage(
+        items: (json['items'] as List<dynamic>? ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .map(MaterialListing.fromJson)
+            .toList(),
+        totalCount: _number(json, 'totalCount').toInt(),
+        totalPages: _number(json, 'totalPages').toInt(),
+        page: _number(json, 'page').toInt(),
+        pageSize: _number(json, 'pageSize').toInt(),
+      );
 
   final List<MaterialListing> items;
   final int totalCount;
@@ -124,7 +138,8 @@ final class MaterialListingHistoryEntry {
         id: _requiredString(json, 'id'),
         actorUserId: json['actorUserId'] as String?,
         action: _requiredString(json, 'action'),
-        createdAtUtc: DateTime.parse(_requiredString(json, 'createdAtUtc')).toLocal(),
+        createdAtUtc: DateTime.parse(_requiredString(json, 'createdAtUtc'))
+            .toLocal(),
       );
 
   final String id;
@@ -238,4 +253,22 @@ double _number(Map<String, dynamic> json, String key) {
   throw FormatException('Missing or invalid $key.');
 }
 
-double? _nullableNumber(Object? value) => value is num ? value.toDouble() : null;
+double? _nullableNumber(Object? value) =>
+    value is num ? value.toDouble() : null;
+
+class SellerContact {
+  const SellerContact({
+    this.fullName,
+    this.businessName,
+    this.phoneNumber,
+    required this.email,
+  });
+  factory SellerContact.fromJson(Map<String, dynamic> json) => SellerContact(
+    fullName: json['fullName'] as String?,
+    businessName: json['businessName'] as String?,
+    phoneNumber: json['phoneNumber'] as String?,
+    email: json['email'] as String,
+  );
+  final String? fullName, businessName, phoneNumber;
+  final String email;
+}

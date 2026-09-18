@@ -28,6 +28,11 @@ void main() {
 
 final class _FakeMaterialsGateway implements MaterialInventoryGateway {
   @override
+  Future<String> uploadPhoto(List<int> bytes) => throw UnimplementedError();
+  @override
+  String photoUrl(String path) => path;
+
+  @override
   Future<List<MaterialCategory>> categories() async => [
     const MaterialCategory('c1', 'Cement'),
   ];

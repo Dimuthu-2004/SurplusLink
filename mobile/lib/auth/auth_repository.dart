@@ -49,6 +49,7 @@ final class AuthRepository implements AuthGateway {
     required String email,
     required String password,
     required AppRole role,
+    UserProfile? profile,
   }) async {
     if (role != AppRole.seller && role != AppRole.buyer) {
       throw ArgumentError.value(
@@ -61,9 +62,19 @@ final class AuthRepository implements AuthGateway {
       'email': email.trim(),
       'password': password,
       'role': role.apiValue,
+      ...?profile?.toJson(),
     });
     return _persistSession(json);
   }
+
+  @override
+  Future<AppUser> updateProfile(UserProfile profile) async => AppUser.fromJson(
+    await _apiClient.putJson(
+      '/api/auth/me',
+      profile.toJson(),
+      authenticated: true,
+    ),
+  );
 
   @override
   Future<void> logout() => _tokenStorage.deleteToken();

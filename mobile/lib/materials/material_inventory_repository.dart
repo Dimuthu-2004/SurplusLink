@@ -8,6 +8,11 @@ final class MaterialInventoryRepository implements MaterialInventoryGateway {
   MaterialInventoryRepository(this._apiClient);
 
   final ApiClient _apiClient;
+  @override
+  Future<String> uploadPhoto(List<int> bytes) async =>
+      (await _apiClient.uploadPhoto(bytes))['photoUrl'] as String;
+  @override
+  String photoUrl(String path) => _apiClient.baseUri.resolve(path).toString();
 
   @override
   Future<List<MaterialCategory>> categories() =>

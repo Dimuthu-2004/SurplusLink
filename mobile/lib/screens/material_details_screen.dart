@@ -1,3 +1,6 @@
+import 'package:mobile/widgets/location_card.dart';
+import 'package:mobile/location/location_lookup.dart';
+import 'package:mobile/widgets/dashboard_back_button.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile/auth/auth_models.dart';
@@ -11,12 +14,14 @@ class MaterialDetailsScreen extends StatefulWidget {
     required this.gateway,
     required this.user,
     required this.listingId,
+    this.locationLookup,
     super.key,
   });
 
   final MaterialInventoryGateway gateway;
   final AppUser user;
   final String listingId;
+  final AddressLookup? locationLookup;
 
   @override
   State<MaterialDetailsScreen> createState() => _MaterialDetailsScreenState();
@@ -46,7 +51,8 @@ class _MaterialDetailsScreenState extends State<MaterialDetailsScreen> {
       final listing = await widget.gateway.getById(widget.listingId);
       List<MaterialListingHistoryEntry> history = const [];
       String? historyError;
-      if (widget.user.role == AppRole.seller || widget.user.role == AppRole.manager) {
+      if (widget.user.role == AppRole.seller ||
+          widget.user.role == AppRole.manager) {
         try {
           history = await widget.gateway.history(widget.listingId);
         } on ApiException catch (error) {
@@ -94,8 +100,14 @@ class _MaterialDetailsScreenState extends State<MaterialDetailsScreen> {
         title: const Text('Delete material?'),
         content: const Text('This cannot be undone.'),
         actions: [
-          TextButton(onPressed: () => context.pop(false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => context.pop(true), child: const Text('Delete')),
+          TextButton(
+            onPressed: () => context.pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => context.pop(true),
+            child: const Text('Delete'),
+          ),
         ],
       ),
     );
@@ -103,7 +115,13 @@ class _MaterialDetailsScreenState extends State<MaterialDetailsScreen> {
     setState(() => _isActionBusy = true);
     try {
       await widget.gateway.delete(widget.listingId);
-      if (mounted) context.pop(true);
+      if (mounted) {
+        if (context.canPop()) {
+          context.pop(true);
+        } else {
+          context.go('/materials');
+        }
+      }
     } on ApiException catch (error) {
       if (mounted) _showMessage(error.message);
     } on Object {
@@ -114,16 +132,22 @@ class _MaterialDetailsScreenState extends State<MaterialDetailsScreen> {
   }
 
   void _showMessage(String message) =>
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
 
   @override
   Widget build(BuildContext context) {
     final listing = _listing;
     return Scaffold(
       appBar: AppBar(
+        leading: const DashboardBackButton(fallback: '/materials'),
         title: const Text('Material Details'),
         actions: [
-          IconButton(tooltip: 'Refresh', onPressed: _isLoading ? null : _load, icon: const Icon(Icons.refresh)),
+          IconButton(
+            tooltip: 'Refresh',
+            onPressed: _isLoading ? null : _load,
+            icon: const Icon(Icons.refresh),
+          ),
         ],
       ),
       body: _isLoading
@@ -135,7 +159,10 @@ class _MaterialDetailsScreenState extends State<MaterialDetailsScreen> {
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                Text(listing.title, style: Theme.of(context).textTheme.headlineSmall),
+                Text(
+                  listing.title,
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
@@ -148,10 +175,41 @@ class _MaterialDetailsScreenState extends State<MaterialDetailsScreen> {
                 const SizedBox(height: 12),
                 Text(listing.description),
                 const SizedBox(height: 16),
-                _DetailsTable(listing: listing),
+                _DetailsTable(
+                  listing: listing,
+                  locationLookup: widget.locationLookup,
+                ),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Seller',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        Text(
+                          listing.seller?.fullName?.isNotEmpty == true
+                              ? listing.seller!.fullName!
+                              : 'Seller profile not completed',
+                        ),
+                        if (listing.seller?.businessName?.isNotEmpty == true)
+                          Text(listing.seller!.businessName!),
+                        if (listing.seller != null)
+                          SelectableText(listing.seller!.email),
+                        if (listing.seller?.phoneNumber?.isNotEmpty == true)
+                          SelectableText(listing.seller!.phoneNumber!),
+                      ],
+                    ),
+                  ),
+                ),
                 if (listing.photos.isNotEmpty) ...[
                   const SizedBox(height: 20),
-                  Text('Photos', style: Theme.of(context).textTheme.titleMedium),
+                  Text(
+                    'Photos',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                   const SizedBox(height: 8),
                   SizedBox(
                     height: 160,
@@ -162,12 +220,16 @@ class _MaterialDetailsScreenState extends State<MaterialDetailsScreen> {
                       itemBuilder: (_, index) => ClipRRect(
                         borderRadius: BorderRadius.circular(8),
                         child: Image.network(
-                          listing.photos[index].photoUrl,
+                          widget.gateway.photoUrl(
+                            listing.photos[index].photoUrl,
+                          ),
                           width: 200,
                           fit: BoxFit.cover,
                           errorBuilder: (_, _, _) => const SizedBox(
                             width: 200,
-                            child: Center(child: Icon(Icons.broken_image_outlined)),
+                            child: Center(
+                              child: Icon(Icons.broken_image_outlined),
+                            ),
                           ),
                         ),
                       ),
@@ -208,10 +270,18 @@ class _MaterialDetailsScreenState extends State<MaterialDetailsScreen> {
                   ),
                 ],
                 const SizedBox(height: 24),
-                Text('Listing history', style: Theme.of(context).textTheme.titleMedium),
+                Text(
+                  'Listing history',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
                 const SizedBox(height: 8),
                 if (_historyError != null)
-                  Text(_historyError!, style: TextStyle(color: Theme.of(context).colorScheme.error))
+                  Text(
+                    _historyError!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  )
                 else if (_history.isEmpty)
                   const Text('No history entries are available yet.')
                 else
@@ -220,7 +290,9 @@ class _MaterialDetailsScreenState extends State<MaterialDetailsScreen> {
                       contentPadding: EdgeInsets.zero,
                       leading: const Icon(Icons.history),
                       title: Text(entry.action.replaceAll('_', ' ')),
-                      subtitle: Text(entry.createdAtUtc.toString().substring(0, 16)),
+                      subtitle: Text(
+                        entry.createdAtUtc.toString().substring(0, 16),
+                      ),
                     ),
               ],
             ),
@@ -229,8 +301,9 @@ class _MaterialDetailsScreenState extends State<MaterialDetailsScreen> {
 }
 
 class _DetailsTable extends StatelessWidget {
-  const _DetailsTable({required this.listing});
+  const _DetailsTable({required this.listing, this.locationLookup});
   final MaterialListing listing;
+  final AddressLookup? locationLookup;
 
   @override
   Widget build(BuildContext context) => Card(
@@ -239,13 +312,25 @@ class _DetailsTable extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Quantity: ${listing.quantity.toStringAsFixed(2)} ${listing.unit}'),
-          Text('Reserved: ${listing.reservedQuantity.toStringAsFixed(2)} ${listing.unit}'),
-          Text('Remaining: ${listing.remainingQuantity.toStringAsFixed(2)} ${listing.unit}'),
+          Text(
+            'Quantity: ${listing.quantity.toStringAsFixed(2)} ${listing.unit}',
+          ),
+          Text(
+            'Reserved: ${listing.reservedQuantity.toStringAsFixed(2)} ${listing.unit}',
+          ),
+          Text(
+            'Remaining: ${listing.remainingQuantity.toStringAsFixed(2)} ${listing.unit}',
+          ),
           Text('Unit price: Rs. ${listing.unitPrice.toStringAsFixed(2)}'),
-          Text('Available until: ${listing.availableUntil.toString().substring(0, 16)}'),
-          if (listing.latitude != null)
-            Text('Location: ${listing.latitude!.toStringAsFixed(6)}, ${listing.longitude!.toStringAsFixed(6)}'),
+          Text(
+            'Available until: ${listing.availableUntil.toString().substring(0, 16)}',
+          ),
+          if (listing.latitude != null && listing.longitude != null)
+            LocationCard(
+              latitude: listing.latitude!,
+              longitude: listing.longitude!,
+              lookup: locationLookup ?? unavailableAddress,
+            ),
         ],
       ),
     ),

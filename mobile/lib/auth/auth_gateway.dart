@@ -9,7 +9,10 @@ abstract interface class AuthGateway {
     required String email,
     required String password,
     required AppRole role,
+    UserProfile? profile,
   });
+
+  Future<AppUser> updateProfile(UserProfile profile);
 
   Future<void> logout();
 }

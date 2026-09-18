@@ -30,5 +30,11 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Save your material camera photos to your photo library.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Take photos of materials to include in your listings.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Choose material photos from your library.</string>
 </dict>
 </plist>

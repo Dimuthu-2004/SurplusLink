@@ -20,17 +20,30 @@ enum AppRole {
 }
 
 final class AppUser {
-  const AppUser({required this.id, required this.email, required this.role});
+  const AppUser({
+    required this.id,
+    required this.email,
+    required this.role,
+    this.fullName,
+    this.phoneNumber,
+    this.businessName,
+    this.address,
+  });
 
   factory AppUser.fromJson(Map<String, dynamic> json) => AppUser(
     id: _requiredString(json, 'id'),
     email: _requiredString(json, 'email'),
     role: AppRole.fromApi(_requiredString(json, 'role')),
+    fullName: json['fullName'] as String?,
+    phoneNumber: json['phoneNumber'] as String?,
+    businessName: json['businessName'] as String?,
+    address: json['address'] as String?,
   );
 
   final String id;
   final String email;
   final AppRole role;
+  final String? fullName, phoneNumber, businessName, address;
 }
 
 final class AuthSession {
@@ -57,4 +70,20 @@ String _requiredString(Map<String, dynamic> json, String key) {
     throw FormatException('Missing or invalid $key.');
   }
   return value;
+}
+
+class UserProfile {
+  const UserProfile({
+    required this.fullName,
+    required this.phoneNumber,
+    required this.address,
+    this.businessName = '',
+  });
+  final String fullName, phoneNumber, businessName, address;
+  Map<String, dynamic> toJson() => {
+    'fullName': fullName.trim(),
+    'phoneNumber': phoneNumber.trim(),
+    'businessName': businessName.trim(),
+    'address': address.trim(),
+  };
 }

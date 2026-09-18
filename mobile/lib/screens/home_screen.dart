@@ -1,3 +1,4 @@
+import 'package:go_router/go_router.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile/auth/auth_controller.dart';
 import 'package:mobile/auth/auth_models.dart';
@@ -64,7 +65,16 @@ class HomeScreen extends StatelessWidget {
                   style: Theme.of(context).textTheme.headlineMedium,
                 ),
                 const SizedBox(height: 12),
-                Text(user.email),
+                Text(
+                  user.fullName?.isNotEmpty == true
+                      ? user.fullName!
+                      : user.email,
+                ),
+                TextButton.icon(
+                  onPressed: () => context.push('/profile'),
+                  icon: const Icon(Icons.person_outline),
+                  label: const Text('My profile'),
+                ),
                 const SizedBox(height: 12),
                 Text(description, textAlign: TextAlign.center),
                 if (user.role == AppRole.buyer &&

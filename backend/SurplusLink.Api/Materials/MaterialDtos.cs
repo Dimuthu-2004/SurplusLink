@@ -42,7 +42,7 @@ public sealed class UpdateMaterialListingRequest : CreateMaterialListingRequest;
 
 public sealed class ListingPhotoRequest
 {
-    [Required, Url, MaxLength(2_048)]
+    [Required, PhotoUrl, MaxLength(2_048)]
     public string PhotoUrl { get; init; } = string.Empty;
 
     [Range(0, 100)]
@@ -55,6 +55,8 @@ public sealed class VerifyListingRequest
 }
 
 public sealed record ListingPhotoResponse(Guid Id, string PhotoUrl, int SortOrder);
+
+public sealed record SellerContactResponse(string? FullName, string? BusinessName, string Email, string? PhoneNumber);
 
 public sealed record MaterialListingResponse(
     Guid Id,
@@ -74,7 +76,8 @@ public sealed record MaterialListingResponse(
     string Status,
     DateTime CreatedAtUtc,
     DateTime UpdatedAtUtc,
-    IReadOnlyList<ListingPhotoResponse> Photos);
+    IReadOnlyList<ListingPhotoResponse> Photos,
+    SellerContactResponse? Seller = null);
 
 public sealed class MaterialCategoryRequest
 {

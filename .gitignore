@@ -38,3 +38,6 @@ Thumbs.db
 web/*.tsbuildinfo
 web/vite.config.js
 web/vite.config.d.ts
+
+# Uploaded user media
+backend/SurplusLink.Api/App_Data/

@@ -30,6 +30,10 @@ public static class MarketplaceModelConfiguration
             entity.Property(user => user.Email).HasColumnType("citext").HasMaxLength(320).IsRequired();
             entity.HasIndex(user => user.Email).IsUnique().HasDatabaseName("UX_Users_Email");
             entity.Property(user => user.PasswordHash).IsRequired();
+            entity.Property(user => user.FullName).HasMaxLength(120);
+            entity.Property(user => user.PhoneNumber).HasMaxLength(26);
+            entity.Property(user => user.BusinessName).HasMaxLength(160);
+            entity.Property(user => user.Address).HasMaxLength(400);
             entity.Property(user => user.Role).HasConversion<string>().HasMaxLength(20).IsRequired();
         });
     }

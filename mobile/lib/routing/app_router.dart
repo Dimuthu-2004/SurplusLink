@@ -1,3 +1,5 @@
+import 'package:mobile/screens/profile_screen.dart';
+import 'package:mobile/location/location_lookup.dart';
 import 'package:mobile/requirements/requirement_gateway.dart';
 import 'package:mobile/requirements/requirement_location.dart';
 import 'package:mobile/screens/my_requirements_screen.dart';
@@ -35,6 +37,7 @@ GoRouter createAppRouter({
   RequirementGateway? requirementGateway,
   RequirementLocationSource requirementLocation =
       const DeviceRequirementLocation(),
+  AddressLookup? locationLookup,
   String initialLocation = AppRoutes.splash,
 }) {
   String? pendingLocation;
@@ -83,15 +86,19 @@ GoRouter createAppRouter({
             RegisterScreen(authController: authController),
       ),
       GoRoute(
+        path: '/profile',
+        builder: (_, _) => ProfileScreen(authController: authController),
+      ),
+      GoRoute(
         path: AppRoutes.home,
         builder: (context, state) => HomeScreen(
           authController: authController,
           onOpenRequirements: requirementGateway == null
               ? null
-              : () => context.go(AppRoutes.requirements),
+              : () => context.push(AppRoutes.requirements),
           onOpenMaterials: materialGateway == null
               ? null
-              : () => context.go(AppRoutes.materials),
+              : () => context.push(AppRoutes.materials),
         ),
       ),
       if (requirementGateway != null) ...[
@@ -105,6 +112,7 @@ GoRouter createAppRouter({
           builder: (context, state) => RequirementFormScreen(
             gateway: requirementGateway,
             locationSource: requirementLocation,
+            locationLookup: locationLookup,
           ),
         ),
         GoRoute(
@@ -113,6 +121,7 @@ GoRouter createAppRouter({
             gateway: requirementGateway,
             requirementId: state.pathParameters['id']!,
             locationSource: requirementLocation,
+            locationLookup: locationLookup,
           ),
         ),
         GoRoute(
@@ -135,6 +144,7 @@ GoRouter createAppRouter({
           builder: (context, state) => RequirementDetailsScreen(
             gateway: requirementGateway,
             requirementId: state.pathParameters['id']!,
+            locationLookup: locationLookup,
           ),
         ),
       ],
@@ -148,7 +158,10 @@ GoRouter createAppRouter({
           path: AppRoutes.addMaterial,
           builder: (context, state) => _sellerOnly(
             authController,
-            AddMaterialScreen(gateway: materialGateway),
+            AddMaterialScreen(
+              gateway: materialGateway,
+              locationLookup: locationLookup,
+            ),
           ),
         ),
         GoRoute(
@@ -158,6 +171,7 @@ GoRouter createAppRouter({
             EditMaterialScreen(
               gateway: materialGateway,
               listingId: state.pathParameters['id']!,
+              locationLookup: locationLookup,
             ),
           ),
         ),
@@ -167,6 +181,7 @@ GoRouter createAppRouter({
             authController,
             materialGateway,
             state.pathParameters['id']!,
+            locationLookup,
           ),
         ),
       ],
@@ -191,6 +206,7 @@ Widget _detailsScreen(
   AuthController authController,
   MaterialInventoryGateway gateway,
   String listingId,
+  AddressLookup? locationLookup,
 ) {
   final user = authController.user;
   return user == null
@@ -199,6 +215,7 @@ Widget _detailsScreen(
           gateway: gateway,
           user: user,
           listingId: listingId,
+          locationLookup: locationLookup,
         );
 }
 

@@ -7,6 +7,7 @@ import 'package:mobile/materials/material_inventory_gateway.dart';
 import 'package:mobile/routing/app_router.dart';
 import 'package:mobile/requirements/requirement_gateway.dart';
 import 'package:mobile/requirements/requirement_location.dart';
+import 'package:mobile/location/location_lookup.dart';
 
 class SurplusLinkApp extends StatefulWidget {
   const SurplusLinkApp({
@@ -14,6 +15,7 @@ class SurplusLinkApp extends StatefulWidget {
     this.materialGateway,
     this.requirementGateway,
     this.requirementLocation = const DeviceRequirementLocation(),
+    this.locationLookup,
     this.initialLocation = AppRoutes.splash,
     super.key,
   });
@@ -22,6 +24,7 @@ class SurplusLinkApp extends StatefulWidget {
   final MaterialInventoryGateway? materialGateway;
   final RequirementGateway? requirementGateway;
   final RequirementLocationSource requirementLocation;
+  final AddressLookup? locationLookup;
   final String initialLocation;
 
   @override
@@ -39,6 +42,7 @@ class _SurplusLinkAppState extends State<SurplusLinkApp> {
       materialGateway: widget.materialGateway,
       requirementGateway: widget.requirementGateway,
       requirementLocation: widget.requirementLocation,
+      locationLookup: widget.locationLookup,
       initialLocation: widget.initialLocation,
     );
     unawaited(widget.authController.initialize());
