@@ -22,7 +22,7 @@ export function GuestRoute() {
     return <FullPageStatus message="Restoring your session..." />;
   }
   if (status === 'authenticated' && user) {
-    return <Navigate to={roleHomePath(user.role)} replace />;
+    return <Navigate to={roleHomePath(user.roles)} replace />;
   }
   return <Outlet />;
 }
@@ -32,13 +32,13 @@ export function RoleRoute({ role }: { role: UserRole }) {
   if (!user) {
     return <Navigate to="/login" replace />;
   }
-  if (user.role !== role) {
-    return <Navigate to={roleHomePath(user.role)} replace />;
+  if (!user.roles.includes(role)) {
+    return <Navigate to={roleHomePath(user.roles)} replace />;
   }
   return <Outlet />;
 }
 
 export function RoleHomeRedirect() {
   const { user } = useAuth();
-  return <Navigate to={user ? roleHomePath(user.role) : '/login'} replace />;
+  return <Navigate to={user ? roleHomePath(user.roles) : '/login'} replace />;
 }

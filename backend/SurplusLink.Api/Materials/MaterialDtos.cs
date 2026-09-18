@@ -89,6 +89,8 @@ public sealed record MaterialCategoryResponse(Guid Id, string Name, DateTime Cre
 
 public sealed class MaterialListingQuery
 {
+    public bool MineOnly { get; init; }
+
     [MaxLength(200)]
     public string? Search { get; init; }
 

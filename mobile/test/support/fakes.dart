@@ -7,13 +7,13 @@ import 'package:mobile/core/token_storage.dart';
 const sellerUser = AppUser(
   id: '00000000-0000-0000-0000-000000000001',
   email: 'seller@example.com',
-  role: AppRole.seller,
+  roles: [AppRole.seller],
 );
 
 const buyerUser = AppUser(
   id: '00000000-0000-0000-0000-000000000002',
   email: 'buyer@example.com',
-  role: AppRole.buyer,
+  roles: [AppRole.buyer],
 );
 
 final class FakeAuthGateway implements AuthGateway {
@@ -22,7 +22,7 @@ final class FakeAuthGateway implements AuthGateway {
   Object? loginError;
   Completer<AuthSession>? loginCompleter;
   AppUser loginUser = sellerUser;
-  AppRole? registeredRole;
+  List<AppRole>? registeredRoles;
   UserProfile? registeredProfile;
   bool logoutCalled = false;
 
@@ -52,12 +52,12 @@ final class FakeAuthGateway implements AuthGateway {
   Future<AuthSession> register({
     required String email,
     required String password,
-    required AppRole role,
+    required List<AppRole> roles,
     UserProfile? profile,
   }) async {
-    registeredRole = role;
+    registeredRoles = roles;
     registeredProfile = profile;
-    final user = role == AppRole.seller ? sellerUser : buyerUser;
+    final user = AppUser(id: 'registered', email: email, roles: roles);
     return AuthSession(token: 'test-token', user: user);
   }
 
@@ -65,7 +65,7 @@ final class FakeAuthGateway implements AuthGateway {
   Future<AppUser> updateProfile(UserProfile profile) async => AppUser(
     id: loginUser.id,
     email: loginUser.email,
-    role: loginUser.role,
+    roles: loginUser.roles,
     fullName: profile.fullName,
     phoneNumber: profile.phoneNumber,
     businessName: profile.businessName,

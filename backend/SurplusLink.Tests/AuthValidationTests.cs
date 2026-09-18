@@ -12,7 +12,7 @@ public sealed class AuthValidationTests
         {
             Email = "manager@example.com",
             Password = "Manager123!",
-            Role = "MANAGER"
+            Roles = ["MANAGER"]
         };
         var validationContext = new ValidationContext(request);
         var errors = new List<ValidationResult>();
@@ -24,6 +24,6 @@ public sealed class AuthValidationTests
             validateAllProperties: true);
 
         Assert.False(isValid);
-        Assert.Contains(errors, error => error.ErrorMessage == "Role must be SELLER or BUYER.");
+        Assert.Contains(errors, error => error.ErrorMessage == "Select SELLER, BUYER, or both, without duplicates.");
     }
 }

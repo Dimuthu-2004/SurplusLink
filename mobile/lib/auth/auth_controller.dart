@@ -51,13 +51,13 @@ final class AuthController extends ChangeNotifier {
   Future<bool> register({
     required String email,
     required String password,
-    required AppRole role,
+    required List<AppRole> roles,
     UserProfile? profile,
   }) => _authenticate(
     () => _gateway.register(
       email: email,
       password: password,
-      role: role,
+      roles: roles,
       profile: profile,
     ),
   );

@@ -9,6 +9,7 @@ from pydantic import ValidationError
 
 from app.agents.matching_schemas import (
     Candidate,
+    CandidateExclusion,
     MatchingFailure,
     MatchingRequest,
     MatchingResponse,
@@ -92,6 +93,7 @@ class MaterialMatchingAgent:
     def _search_active_materials(self, state: MatchingState) -> MatchingState:
         request = state["request"]
         criteria = ActiveMaterialCriteria(
+            buyer_user_id=request.buyerUserId,
             category_id=request.categoryId,
             category=request.category,
             required_quantity=request.requiredQuantity,
@@ -121,14 +123,21 @@ class MaterialMatchingAgent:
         request = state["request"]
         requested_at = self._clock()
         candidates: list[Candidate] = []
+        exclusions: list[CandidateExclusion] = []
 
         for search_result in state.get("search_results", []):
+            if search_result.seller_id == request.buyerUserId:
+                exclusions.append(CandidateExclusion(listingId=search_result.listing_id))
+                continue
             try:
                 detail = self._tools.get_material_detail(
                     search_result.listing_id,
                     requested_at=requested_at,
                 )
             except Exception:
+                continue
+            if detail is not None and detail.seller_id == request.buyerUserId:
+                exclusions.append(CandidateExclusion(listingId=detail.listing_id))
                 continue
             if detail is None or not self._fits(detail, request):
                 continue
@@ -141,6 +150,7 @@ class MaterialMatchingAgent:
                     "no_candidate",
                     "NO_CANDIDATE",
                     "No active, verified, non-expired listing matches the requested material.",
+                    exclusions,
                 )
             }
 
@@ -148,11 +158,14 @@ class MaterialMatchingAgent:
             "response": MatchingResponse(
                 status="ok",
                 candidates=candidates,
+                exclusions=exclusions,
             )
         }
 
     @staticmethod
     def _fits(listing: MaterialListingRecord, request: MatchingRequest) -> bool:
+        if listing.seller_id == request.buyerUserId:
+            return False
         if listing.available_quantity < request.requiredQuantity:
             return False
         if listing.unit.casefold() != request.unit.casefold():
@@ -196,11 +209,13 @@ class MaterialMatchingAgent:
         status: Literal["invalid_input", "search_unavailable", "no_candidate"],
         code: Literal["INVALID_INPUT", "SEARCH_UNAVAILABLE", "NO_CANDIDATE"],
         message: str,
+        exclusions: list[CandidateExclusion] | None = None,
     ) -> MatchingResponse:
         return MatchingResponse(
             status=status,
             candidates=[],
             failure=MatchingFailure(code=code, message=message),
+            exclusions=exclusions or [],
         )
 
     @staticmethod

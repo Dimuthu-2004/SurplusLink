@@ -41,7 +41,7 @@ class _MyMaterialsScreenState extends State<MyMaterialsScreen> {
   @override
   void initState() {
     super.initState();
-    if (widget.user.role == AppRole.seller) _load(reset: true);
+    if (widget.user.hasRole(AppRole.seller)) _load(reset: true);
   }
 
   @override
@@ -53,6 +53,7 @@ class _MyMaterialsScreenState extends State<MyMaterialsScreen> {
   }
 
   MaterialListingQuery _query(int page) => MaterialListingQuery(
+    mineOnly: true,
     search: _searchController.text,
     category: _category,
     status: _status,
@@ -94,7 +95,7 @@ class _MyMaterialsScreenState extends State<MyMaterialsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (widget.user.role != AppRole.seller) {
+    if (!widget.user.hasRole(AppRole.seller)) {
       return Scaffold(
         appBar: AppBar(
           leading: const DashboardBackButton(fallback: '/home'),

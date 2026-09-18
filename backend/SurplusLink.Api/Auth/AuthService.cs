@@ -19,6 +19,8 @@ public sealed class AuthService(
         RegisterRequest request,
         CancellationToken cancellationToken)
     {
+        System.ComponentModel.DataAnnotations.Validator.ValidateObject(
+            request, new System.ComponentModel.DataAnnotations.ValidationContext(request), true);
         var email = request.Email.Trim().ToLowerInvariant();
         if (await dbContext.Users.AnyAsync(user => user.Email == email, cancellationToken))
         {
@@ -29,7 +31,7 @@ public sealed class AuthService(
         {
             Id = Guid.NewGuid(),
             Email = email,
-            Role = Enum.Parse<UserRole>(request.Role, ignoreCase: false),
+            RoleAssignments = request.Roles.Select(role => new UserRoleAssignment { Role = Enum.Parse<UserRole>(role) }).ToList(),
             FullName = request.FullName.Trim(),
             PhoneNumber = request.PhoneNumber.Trim(),
             BusinessName = request.BusinessName?.Trim(),
@@ -46,7 +48,7 @@ public sealed class AuthService(
     public async Task<AuthResponse?> LoginAsync(LoginRequest request, CancellationToken cancellationToken)
     {
         var email = request.Email.Trim().ToLowerInvariant();
-        var user = await dbContext.Users.SingleOrDefaultAsync(item => item.Email == email, cancellationToken);
+        var user = await dbContext.Users.Include(user => user.RoleAssignments).SingleOrDefaultAsync(item => item.Email == email, cancellationToken);
         if (user is null || passwordHasher.VerifyHashedPassword(user, user.PasswordHash, request.Password) == PasswordVerificationResult.Failed)
         {
             return null;
@@ -61,9 +63,8 @@ public sealed class AuthService(
         var claims = new[]
         {
             new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
-            new Claim(JwtRegisteredClaimNames.Email, user.Email),
-            new Claim(ClaimTypes.Role, user.Role.ToString())
-        };
+            new Claim(JwtRegisteredClaimNames.Email, user.Email)
+        }.Concat(user.RoleAssignments.Select(assignment => new Claim(ClaimTypes.Role, assignment.Role.ToString())));
         var credentials = new SigningCredentials(
             new SymmetricSecurityKey(Encoding.UTF8.GetBytes(options.Secret)),
             SecurityAlgorithms.HmacSha256);

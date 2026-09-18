@@ -1,4 +1,5 @@
 using System.Net;
+using Microsoft.EntityFrameworkCore;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -15,7 +16,7 @@ public sealed class ProfilePersistenceTests(RequirementsDatabase fixture) : ICla
         using var app = fixture.App();
         using var client = app.CreateClient();
         var response = await client.PostAsJsonAsync("/api/auth/register", new {
-            email = Guid.NewGuid() + "@profile.test", password = "Password123!", role = "BUYER",
+            email = Guid.NewGuid() + "@profile.test", password = "Password123!", roles = new[] { "BUYER" },
             fullName = "  New Buyer  ", phoneNumber = "0771234567", businessName = "Buyer Business", address = "Colombo"
         });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
@@ -29,10 +30,10 @@ public sealed class ProfilePersistenceTests(RequirementsDatabase fixture) : ICla
         });
         Assert.Equal(HttpStatusCode.OK, updated.StatusCode);
         using var db = fixture.Context();
-        var user = await db.Users.FindAsync(session.User.Id);
+        var user = await db.Users.Include(x => x.RoleAssignments).SingleAsync(x => x.Id == session.User.Id);
         Assert.Equal("Updated Buyer", user!.FullName);
         Assert.Equal("Kandy", user.Address);
-        Assert.Equal("BUYER", user.Role.ToString());
+        Assert.Equal("BUYER", Assert.Single(user.RoleAssignments).Role.ToString());
     }
 
     [PostgresFact]

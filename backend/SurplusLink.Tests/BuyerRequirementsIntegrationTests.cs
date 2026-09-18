@@ -360,10 +360,10 @@ public sealed class RequirementsDatabase : IAsyncLifetime
             if (starter is not null) builder.ConfigureServices(services => services.AddSingleton(starter));
         });
 
-    public HttpClient Client(WebApplicationFactory<Program> app, Guid id, string role = "BUYER")
+    public HttpClient Client(WebApplicationFactory<Program> app, Guid id, string role = "BUYER", params string[] additionalRoles)
     {
         var token = new JwtSecurityToken("requirements-tests", "requirements-tests",
-            [new Claim(ClaimTypes.NameIdentifier, id.ToString()), new Claim(ClaimTypes.Role, role)],
+            new[] { new Claim(ClaimTypes.NameIdentifier, id.ToString()) }.Concat(new[] { role }.Concat(additionalRoles).Select(value => new Claim(ClaimTypes.Role, value))),
             expires: DateTime.UtcNow.AddMinutes(10),
             signingCredentials: new(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(Secret)), SecurityAlgorithms.HmacSha256));
         var client = app.CreateClient();

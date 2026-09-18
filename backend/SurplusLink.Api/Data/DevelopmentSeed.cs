@@ -18,9 +18,10 @@ public static class DevelopmentSeed
         var passwordHasher = services.GetRequiredService<IPasswordHasher<User>>();
         var users = new[]
         {
-            new { Email = "seller@test.local", Password = "Seller123!", Role = UserRole.SELLER },
-            new { Email = "buyer@test.local", Password = "Buyer123!", Role = UserRole.BUYER },
-            new { Email = "manager@test.local", Password = "Manager123!", Role = UserRole.MANAGER }
+            new { Email = "seller@test.local", Password = "Seller123!", Roles = new[] { UserRole.SELLER } },
+            new { Email = "buyer@test.local", Password = "Buyer123!", Roles = new[] { UserRole.BUYER } },
+            new { Email = "dual@test.local", Password = "Dual123!", Roles = new[] { UserRole.SELLER, UserRole.BUYER } },
+            new { Email = "manager@test.local", Password = "Manager123!", Roles = new[] { UserRole.MANAGER } }
         };
 
         foreach (var seed in users)
@@ -35,7 +36,7 @@ public static class DevelopmentSeed
             {
                 Id = Guid.NewGuid(),
                 Email = email,
-                Role = seed.Role,
+                RoleAssignments = seed.Roles.Select(role => new UserRoleAssignment { Role = role }).ToList(),
                 CreatedAtUtc = DateTime.UtcNow
             };
             user.PasswordHash = passwordHasher.HashPassword(user, seed.Password);

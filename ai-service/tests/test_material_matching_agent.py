@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from decimal import Decimal
 import unittest
+from uuid import UUID
+from dataclasses import replace
 
 from app.agents.material_matching import MaterialMatchingAgent
 from app.materials.read_boundary import ActiveMaterialCriteria, MaterialListingRecord
@@ -83,9 +85,34 @@ class MaterialMatchingAgentTests(unittest.TestCase):
         self.assertEqual(response.failure.code, "NO_CANDIDATE")
         self.assertIn("No active, verified, non-expired", response.failure.message)
 
+    def test_self_match_excluded_while_other_seller_matches(self):
+        own = replace(listing("own", quantity="10", unit_price="8"),
+                      seller_id=UUID(str(request()["buyerUserId"])))
+        other = listing("other", quantity="10", unit_price="8")
+        agent = MaterialMatchingAgent(FakeActiveMaterialsBoundary([own, other]), clock=lambda: NOW)
+        result = agent.match(request())
+        self.assertEqual([c.listingId for c in result.candidates], ["other"])
+        self.assertEqual(result.exclusions[0].code, "SELF_MATCH_NOT_ALLOWED")
+        self.assertNotIn("seller_id", result.model_dump_json())
+        only_self = MaterialMatchingAgent(FakeActiveMaterialsBoundary([own]), clock=lambda: NOW).match(request())
+        self.assertEqual(only_self.status, "no_candidate")
+        self.assertEqual(only_self.exclusions[0].code, "SELF_MATCH_NOT_ALLOWED")
+
+    def test_identity_required_and_detail_rechecked(self):
+        raw = request()
+        del raw["buyerUserId"]
+        boundary = FakeActiveMaterialsBoundary([listing("changed", quantity="10", unit_price="8")])
+        self.assertEqual(MaterialMatchingAgent(boundary).match(raw).status, "invalid_input")
+        detail = replace(boundary.listings["changed"], seller_id=UUID(str(request()["buyerUserId"])))
+        boundary.get_material_detail = lambda _: detail
+        result = MaterialMatchingAgent(boundary, clock=lambda: NOW).match(request())
+        self.assertEqual(result.candidates, [])
+        self.assertEqual(result.exclusions[0].code, "SELF_MATCH_NOT_ALLOWED")
+
 
 def request() -> dict[str, object]:
     return {
+        "buyerUserId": "00000000-0000-0000-0000-000000000001",
         "categoryId": "steel-category",
         "requiredQuantity": "5",
         "unit": "kg",
@@ -104,6 +131,7 @@ def listing(
     available_until: datetime = datetime(2026, 12, 1, tzinfo=timezone.utc),
 ) -> MaterialListingRecord:
     return MaterialListingRecord(
+        seller_id=UUID("00000000-0000-0000-0000-000000000002"),
         listing_id=listing_id,
         category_id="steel-category",
         category="Steel",

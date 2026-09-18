@@ -4,17 +4,20 @@ using SurplusLink.Api.Models;
 
 namespace SurplusLink.Api.Materials;
 
-public readonly record struct MaterialActor(Guid Id, UserRole Role);
+public readonly record struct MaterialActor(Guid Id, IReadOnlySet<UserRole> Roles)
+{
+    public bool HasRole(UserRole role) => Roles.Contains(role);
+}
 
 public abstract class MaterialsControllerBase : ControllerBase
 {
     protected bool TryGetActor(out MaterialActor actor)
     {
         var subject = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
-        var role = User.FindFirstValue(ClaimTypes.Role);
-        if (Guid.TryParse(subject, out var userId) && Enum.TryParse<UserRole>(role, out var userRole))
+        var roles = Enum.GetValues<UserRole>().Where(role => User.IsInRole(role.ToString())).ToHashSet();
+        if (Guid.TryParse(subject, out var userId) && roles.Count > 0)
         {
-            actor = new MaterialActor(userId, userRole);
+            actor = new MaterialActor(userId, roles);
             return true;
         }
 

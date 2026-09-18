@@ -41,6 +41,8 @@ class RequirementPlannerAgentTests(unittest.TestCase):
         self.assertEqual(raw, unchanged)
         self.assertEqual(result.normalizedCriteria.requiredQuantity, Decimal("10.125"))
         self.assertEqual(result.normalizedCriteria.maximumBudget, Decimal("25000.50"))
+        self.assertEqual(str(result.normalizedCriteria.buyerUserId), request()["buyerRequest"]["buyerId"])
+        self.assertIn("normalizedCriteria.buyerUserId", result.planSteps[0].requiredInputs)
         self.assertEqual(result.normalizedCriteria.unit, "kg")
         self.assertEqual(result.normalizedCriteria.notes, "Deliver after lunch.")
         self.assertEqual(result.normalizedCriteria.targetLatitude, Decimal("6.927100"))

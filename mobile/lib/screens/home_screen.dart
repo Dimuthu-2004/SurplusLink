@@ -21,23 +21,28 @@ class HomeScreen extends StatelessWidget {
     builder: (context, child) {
       final user = authController.user;
       if (user == null) return const Scaffold(body: SizedBox.shrink());
-      final (title, description, icon) = switch (user.role) {
-        AppRole.seller => (
-          'Seller home',
-          'Manage your material inventory and listings.',
-          Icons.inventory_2_outlined,
-        ),
-        AppRole.buyer => (
-          'Buyer home',
-          'Create requirements and follow matching progress.',
-          Icons.search,
-        ),
-        AppRole.manager => (
-          'Manager home',
-          'Your manager workspace is ready for future administration features.',
-          Icons.admin_panel_settings_outlined,
-        ),
-      };
+      final seller = user.hasRole(AppRole.seller);
+      final buyer = user.hasRole(AppRole.buyer);
+      final manager = user.hasRole(AppRole.manager);
+      final title = manager
+          ? 'Manager home'
+          : seller && buyer
+          ? 'Marketplace Home'
+          : seller
+          ? 'Seller home'
+          : 'Buyer home';
+      final description = manager
+          ? 'Manage the marketplace from the web workspace.'
+          : seller && buyer
+          ? 'Sell surplus materials and find what your next project needs.'
+          : seller
+          ? 'Manage your material inventory and listings.'
+          : 'Create requirements and follow matching progress.';
+      final icon = manager
+          ? Icons.admin_panel_settings_outlined
+          : seller
+          ? Icons.inventory_2_outlined
+          : Icons.search;
 
       return Scaffold(
         appBar: AppBar(
@@ -51,7 +56,7 @@ class HomeScreen extends StatelessWidget {
             ),
           ],
         ),
-        body: Center(
+        body: SingleChildScrollView(
           child: Padding(
             padding: const EdgeInsets.all(24),
             child: Column(
@@ -77,9 +82,15 @@ class HomeScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 Text(description, textAlign: TextAlign.center),
-                if (user.role == AppRole.buyer &&
+                if (user.hasRole(AppRole.buyer) &&
                     onOpenRequirements != null) ...[
                   const SizedBox(height: 24),
+                  const Text('Buy'),
+                  TextButton.icon(
+                    onPressed: () => context.push('/requirements/new'),
+                    icon: const Icon(Icons.add),
+                    label: const Text('Create Requirement'),
+                  ),
                   FilledButton.icon(
                     key: const Key('open-my-requirements'),
                     onPressed: onOpenRequirements,
@@ -87,8 +98,15 @@ class HomeScreen extends StatelessWidget {
                     label: const Text('My Requirements'),
                   ),
                 ],
-                if (user.role == AppRole.seller && onOpenMaterials != null) ...[
+                if (user.hasRole(AppRole.seller) &&
+                    onOpenMaterials != null) ...[
                   const SizedBox(height: 24),
+                  const Text('Sell'),
+                  TextButton.icon(
+                    onPressed: () => context.push('/materials/new'),
+                    icon: const Icon(Icons.add),
+                    label: const Text('Add Material'),
+                  ),
                   FilledButton.icon(
                     key: const Key('open-my-materials'),
                     onPressed: onOpenMaterials,

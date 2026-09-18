@@ -37,6 +37,7 @@ public sealed class MaterialInventoryService(SurplusLinkDbContext dbContext) : I
     {
         IQueryable<Listing> listings = dbContext.Listings.AsNoTracking();
         listings = RestrictToReadableListings(listings, actor);
+        if (query.MineOnly) listings = listings.Where(listing => listing.SellerId == actor.Id);
         listings = MaterialListingQueryBuilder.ApplyFilters(listings, query);
 
         var totalCount = await listings.CountAsync(cancellationToken);
@@ -64,9 +65,9 @@ public sealed class MaterialInventoryService(SurplusLinkDbContext dbContext) : I
         var listing = await GetListingWithDetailsAsync(listingId, cancellationToken)
             ?? throw new MaterialOperationException(MaterialOperationError.NotFound, "Material listing was not found.");
 
-        var canRead = actor.Role == UserRole.MANAGER
-            || (actor.Role == UserRole.SELLER && listing.SellerId == actor.Id)
-            || (actor.Role == UserRole.BUYER
+        var canRead = actor.HasRole(UserRole.MANAGER)
+            || (actor.HasRole(UserRole.SELLER) && listing.SellerId == actor.Id)
+            || (actor.HasRole(UserRole.BUYER)
                 && listing.Status == ListingStatus.ACTIVE
                 && listing.AvailableUntil > DateTime.UtcNow);
         if (!canRead)
@@ -88,7 +89,7 @@ public sealed class MaterialInventoryService(SurplusLinkDbContext dbContext) : I
             .SingleOrDefaultAsync(cancellationToken)
             ?? throw new MaterialOperationException(MaterialOperationError.NotFound, "Material listing was not found.");
 
-        if (actor.Role != UserRole.MANAGER && (actor.Role != UserRole.SELLER || listing.SellerId != actor.Id))
+        if (!actor.HasRole(UserRole.MANAGER) && (!actor.HasRole(UserRole.SELLER) || listing.SellerId != actor.Id))
         {
             throw new MaterialOperationException(MaterialOperationError.NotFound, "Material listing was not found.");
         }
@@ -331,14 +332,14 @@ public sealed class MaterialInventoryService(SurplusLinkDbContext dbContext) : I
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
-    private static IQueryable<Listing> RestrictToReadableListings(IQueryable<Listing> listings, MaterialActor actor) => actor.Role switch
+    private static IQueryable<Listing> RestrictToReadableListings(IQueryable<Listing> listings, MaterialActor actor)
     {
-        UserRole.MANAGER => listings,
-        UserRole.SELLER => listings.Where(listing => listing.SellerId == actor.Id),
-        UserRole.BUYER => listings.Where(listing =>
-            listing.Status == ListingStatus.ACTIVE && listing.AvailableUntil > DateTime.UtcNow),
-        _ => throw new MaterialOperationException(MaterialOperationError.Forbidden, "This role cannot read material listings.")
-    };
+        if (actor.HasRole(UserRole.MANAGER)) return listings;
+        var seller = actor.HasRole(UserRole.SELLER);
+        var buyer = actor.HasRole(UserRole.BUYER);
+        return listings.Where(listing => (seller && listing.SellerId == actor.Id)
+            || (buyer && listing.Status == ListingStatus.ACTIVE && listing.AvailableUntil > DateTime.UtcNow));
+    }
 
     private async Task<Listing> GetOwnedListingAsync(Guid sellerId, Guid listingId, CancellationToken cancellationToken) =>
         await dbContext.Listings.Include(listing => listing.Photos)

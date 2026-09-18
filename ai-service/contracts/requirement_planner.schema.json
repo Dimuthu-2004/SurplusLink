@@ -133,6 +133,7 @@
         },
         "requiredInputs": {
           "default": [
+            "normalizedCriteria.buyerUserId",
             "normalizedCriteria.categoryId",
             "normalizedCriteria.category",
             "normalizedCriteria.requiredQuantity",
@@ -140,9 +141,13 @@
             "normalizedCriteria.maximumBudget",
             "normalizedCriteria.deadline"
           ],
-          "maxItems": 6,
-          "minItems": 6,
+          "maxItems": 7,
+          "minItems": 7,
           "prefixItems": [
+            {
+              "const": "normalizedCriteria.buyerUserId",
+              "type": "string"
+            },
             {
               "const": "normalizedCriteria.categoryId",
               "type": "string"
@@ -232,6 +237,11 @@
           "title": "Notes",
           "type": "string"
         },
+        "buyerUserId": {
+          "format": "uuid",
+          "title": "Buyeruserid",
+          "type": "string"
+        },
         "targetLatitude": {
           "pattern": "^(?!^[-+.]*$)[+-]?0*(?:\\d{0,3}|(?=[\\d.]{1,10}0*$)\\d{0,3}\\.\\d{0,6}0*$)",
           "title": "Targetlatitude",
@@ -248,6 +258,7 @@
         "unit",
         "maximumBudget",
         "deadline",
+        "buyerUserId",
         "targetLatitude",
         "targetLongitude"
       ],

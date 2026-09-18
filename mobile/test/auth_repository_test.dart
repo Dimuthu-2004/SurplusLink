@@ -30,7 +30,7 @@ void main() {
         password: 'Password123!',
       );
 
-      expect(session.user.role, AppRole.seller);
+      expect(session.user.roles, [AppRole.seller]);
       expect(storage.token, 'signed-jwt');
     },
   );
@@ -46,7 +46,7 @@ void main() {
 
     final user = await repository.restoreSession();
 
-    expect(user?.role, AppRole.buyer);
+    expect(user?.roles, [AppRole.buyer]);
   });
 
   test('registration sends only the selected public role', () async {
@@ -57,7 +57,7 @@ void main() {
       expect(jsonDecode(request.body), {
         'email': 'buyer@example.com',
         'password': 'Password123!',
-        'role': 'BUYER',
+        'roles': ['BUYER'],
       });
       return http.Response(_authJson('BUYER'), 201);
     });
@@ -65,12 +65,57 @@ void main() {
     final session = await repository.register(
       email: 'buyer@example.com',
       password: 'Password123!',
-      role: AppRole.buyer,
+      roles: [AppRole.buyer],
     );
 
-    expect(session.user.role, AppRole.buyer);
+    expect(session.user.roles, [AppRole.buyer]);
     expect(storage.token, 'signed-jwt');
   });
+
+  test(
+    'dual registration sends two roles and invalid capabilities never call API',
+    () async {
+      final storage = MemoryTokenStorage();
+      var calls = 0;
+      final repository = _repository(storage, (request) async {
+        calls++;
+        expect(jsonDecode(request.body)['roles'], ['SELLER', 'BUYER']);
+        return http.Response(
+          jsonEncode({
+            'token': 'dual-token',
+            'user': {
+              'id': 'dual',
+              'email': 'dual@test.local',
+              'roles': ['SELLER', 'BUYER'],
+            },
+          }),
+          201,
+        );
+      });
+      final result = await repository.register(
+        email: 'dual@test.local',
+        password: 'Password123!',
+        roles: [AppRole.seller, AppRole.buyer],
+      );
+      expect(result.user.roles, [AppRole.seller, AppRole.buyer]);
+      for (final roles in <List<AppRole>>[
+        [],
+        [AppRole.manager],
+        [AppRole.seller, AppRole.manager],
+        [AppRole.buyer, AppRole.buyer],
+      ]) {
+        await expectLater(
+          repository.register(
+            email: 'x@test.local',
+            password: 'Password123!',
+            roles: roles,
+          ),
+          throwsArgumentError,
+        );
+      }
+      expect(calls, 1);
+    },
+  );
 
   test('expired session is cleared after an unauthorized response', () async {
     final storage = MemoryTokenStorage()..token = 'expired-jwt';
@@ -128,5 +173,5 @@ String _authJson(String role) =>
 String _userJson(String role) => jsonEncode({
   'id': '00000000-0000-0000-0000-000000000001',
   'email': 'user@example.com',
-  'role': role,
+  'roles': [role],
 });

@@ -5,7 +5,7 @@ export type UserRole = (typeof roles)[number];
 export interface AuthUser {
   id: string;
   email: string;
-  role: UserRole;
+  roles: UserRole[];
 }
 
 export interface AuthResponse {
@@ -17,16 +17,17 @@ export function parseUser(value: unknown): AuthUser {
   if (!isRecord(value)) {
     throw new Error('The server returned an invalid user.');
   }
-  const { id, email, role } = value;
+  const { id, email, roles: assignedRoles } = value;
   if (
     typeof id !== 'string' ||
     typeof email !== 'string' ||
-    typeof role !== 'string' ||
-    !roles.includes(role as UserRole)
+    !Array.isArray(assignedRoles) || assignedRoles.length === 0 ||
+    !assignedRoles.every(role => roles.includes(role as UserRole)) ||
+    new Set(assignedRoles).size !== assignedRoles.length
   ) {
     throw new Error('The server returned an invalid user.');
   }
-  return { id, email, role: role as UserRole };
+  return { id, email, roles: assignedRoles as UserRole[] };
 }
 
 export function parseAuthResponse(value: unknown): AuthResponse {

@@ -8,7 +8,7 @@ abstract interface class AuthGateway {
   Future<AuthSession> register({
     required String email,
     required String password,
-    required AppRole role,
+    required List<AppRole> roles,
     UserProfile? profile,
   });
 
