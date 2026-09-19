@@ -124,6 +124,7 @@ class _MyMaterialsScreenState extends State<MyMaterialsScreen> {
       body: RefreshIndicator(
         onRefresh: () => _load(reset: true),
         child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.all(16),
           children: [
             _FilterPanel(
@@ -165,10 +166,11 @@ class _MyMaterialsScreenState extends State<MyMaterialsScreen> {
                     isThreeLine: true,
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () async {
-                      final changed = await context.push<bool>(
+                      await context.push<bool>(
                         '${AppRoutes.materials}/${listing.id}',
                       );
-                      if (changed == true && mounted) await _load(reset: true);
+                      // Details can publish or edit before a normal back action.
+                      if (mounted) await _load(reset: true);
                     },
                   ),
                 ),
