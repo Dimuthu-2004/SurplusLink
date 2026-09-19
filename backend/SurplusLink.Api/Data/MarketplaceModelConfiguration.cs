@@ -179,9 +179,20 @@ public static class MarketplaceModelConfiguration
         modelBuilder.Entity<MaterialMatch>(entity =>
         {
             entity.ToTable("Matches", table =>
-                table.HasCheckConstraint("CK_Matches_Score_Range", "\"Score\" >= 0 AND \"Score\" <= 1"));
+            {
+                table.HasCheckConstraint("CK_Matches_Score_Range", "\"Score\" >= 0 AND \"Score\" <= 1");
+                table.HasCheckConstraint("CK_Matches_Distance", "\"Distance\" IS NULL OR \"Distance\" >= 0");
+                table.HasCheckConstraint("CK_Matches_TransportCost", "\"EstimatedTransportCost\" IS NULL OR \"EstimatedTransportCost\" >= 0");
+                table.HasCheckConstraint("CK_Matches_Status", "\"Status\" IN ('GENERATED', 'RANKED', 'ROUTED', 'ROUTE_FAILED', 'REJECTED')");
+                table.HasCheckConstraint("CK_Matches_RejectionReason", "(\"Status\" = 'REJECTED' AND length(btrim(\"RejectionReason\")) > 0 AND \"RejectionReason\" IS NOT NULL) OR (\"Status\" <> 'REJECTED' AND \"RejectionReason\" IS NULL)");
+            });
             entity.HasKey(match => match.Id).HasName("PK_Matches");
             entity.Property(match => match.Score).HasPrecision(5, 4);
+            entity.Property(match => match.Status).HasConversion<string>().HasMaxLength(24).HasDefaultValue(MatchStatus.GENERATED);
+            entity.Property(match => match.Distance).HasPrecision(18, 3);
+            entity.Property(match => match.EstimatedTransportCost).HasPrecision(18, 2);
+            entity.Property(match => match.RejectionReason).HasMaxLength(200);
+            entity.Property(match => match.Version).IsRowVersion();
             entity.HasIndex(match => new { match.MaterialRequestId, match.ListingId })
                 .IsUnique()
                 .HasDatabaseName("UX_Matches_MaterialRequestId_ListingId");
