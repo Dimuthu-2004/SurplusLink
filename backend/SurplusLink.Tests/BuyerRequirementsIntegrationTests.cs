@@ -336,7 +336,10 @@ public sealed class RequirementsDatabase : IAsyncLifetime
                 INSERT INTO "MaterialRequests" ("Id", "BuyerId", "CategoryId", "Title", "Quantity", "Budget", "DeadlineUtc", "Status")
                 VALUES ({LegacyRequest}, {Buyer}, {category}, 'Legacy request', 5, 100, {DateTime.UtcNow.AddDays(7)}, 'MATCHED');
                 """);
-            db.Matches.Add(new MaterialMatch { Id = Guid.NewGuid(), MaterialRequestId = LegacyRequest, ListingId = listing.Id, Score = 0.5m });
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO "Matches" ("Id", "MaterialRequestId", "ListingId", "Score")
+                VALUES ({Guid.NewGuid()}, {LegacyRequest}, {listing.Id}, {0.5m});
+                """);
             db.Reservations.Add(new Reservation { Id = Guid.NewGuid(), MaterialRequestId = LegacyRequest, ListingId = listing.Id, Quantity = 2, Status = ReservationStatus.ACTIVE });
             await db.SaveChangesAsync();
             await migrator.MigrateAsync();

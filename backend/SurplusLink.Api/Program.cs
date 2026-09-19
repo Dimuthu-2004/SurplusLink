@@ -117,6 +117,7 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IReservationService, ReservationService>();
 builder.Services.AddScoped<IMaterialInventoryService, MaterialInventoryService>();
 builder.Services.AddScoped<SurplusLink.Api.Requirements.RequirementService>();
+builder.Services.AddScoped<SurplusLink.Api.Matching.MatchService>();
 builder.Services.AddScoped<SurplusLink.Api.Workflows.IRequirementWorkflowStarter,
     SurplusLink.Api.Workflows.DeferredRequirementWorkflowStarter>();
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
