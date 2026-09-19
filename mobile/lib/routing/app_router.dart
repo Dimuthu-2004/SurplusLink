@@ -69,9 +69,7 @@ GoRouter createAppRouter({
         return AppRoutes.home;
       }
       if ((location == AppRoutes.materials ||
-              location == AppRoutes.addMaterial ||
-              (location.startsWith('/materials/') &&
-                  location.endsWith('/edit'))) &&
+              location.startsWith('${AppRoutes.materials}/')) &&
           authController.user?.hasRole(AppRole.seller) != true) {
         return AppRoutes.home;
       }

@@ -4,6 +4,8 @@
 
 This mobile feature consumes the existing authenticated Material Listing API only. It does not add authentication, JWT storage, routes outside the shared router, or backend endpoints.
 
+Access uses the shared `AuthController` and checks whether `AppUser.roles` contains `SELLER`. Both SELLER-only and SELLER+BUYER accounts can manage inventory, regardless of role order. Dual-role accounts open **My Materials** and **Add Material** from **Sell** on **Marketplace Home**, and can return to **Buy** using the same session.
+
 ## Screens and routes
 
 | Screen | Route | Access |
@@ -11,7 +13,7 @@ This mobile feature consumes the existing authenticated Material Listing API onl
 | My Materials | `/materials` | SELLER |
 | Add Material | `/materials/new` | SELLER |
 | Edit Material | `/materials/{id}/edit` | owning SELLER; the API remains the authority |
-| Material Details | `/materials/{id}` | authenticated API access rules apply |
+| Material Details | `/materials/{id}` | SELLER; ownership controls management actions and the API remains the authority |
 
 `GET /api/materials` drives search/filter/sort/pagination. `GET /api/materials/{id}/history` drives the history panel. Existing POST, PUT, PATCH publish, and DELETE endpoints drive seller actions.
 
@@ -35,7 +37,7 @@ This mobile feature consumes the existing authenticated Material Listing API onl
 ## Widget/API tests
 
 - `test/material_inventory_repository_test.dart` checks authenticated search query parameters, create payload fields (including no client `ReservedQuantity`/status), and history parsing.
-- `test/my_materials_screen_test.dart` checks the seller empty state and add action.
+- `test/my_materials_screen_test.dart` checks the seller empty state, add action, role-based route access including Details/Edit, both dual-role orderings, and Sell-to-Buy navigation without changing the authenticated user. My Materials reloads when returning from Details so edits and status changes are reflected.
 - Executed `dart analyze`: no issues found.
 - Executed `flutter test`: 15 passed, 0 failed, including the Material Inventory API-contract and My Materials widget tests.
 - `flutter pub get` resolved the image-picker and geolocator plugins and updated generated desktop registrants plus `pubspec.lock`.
