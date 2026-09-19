@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:mobile/requirements/requirement_gateway.dart';
 import 'package:mobile/requirements/requirement_models.dart';
 import 'package:mobile/requirements/requirement_widgets.dart';
@@ -8,11 +9,13 @@ class RequirementStatusScreen extends StatefulWidget {
     required this.gateway,
     required this.requirementId,
     this.workflowId,
+    this.showMatches = false,
     super.key,
   });
   final RequirementGateway gateway;
   final String requirementId;
   final String? workflowId;
+  final bool showMatches;
   @override
   State<RequirementStatusScreen> createState() =>
       _RequirementStatusScreenState();
@@ -85,9 +88,17 @@ class _RequirementStatusScreenState extends State<RequirementStatusScreen> {
                       'Recommendations',
                       style: TextStyle(fontWeight: FontWeight.bold),
                     ),
-                    const Text(
-                      'Recommendation details are not available in the app yet. Refresh to check the latest requirement status.',
-                    ),
+                    if (widget.showMatches)
+                      OutlinedButton.icon(
+                        onPressed: () =>
+                            context.push('/requirements/${row.id}/matches'),
+                        icon: const Icon(Icons.recommend_outlined),
+                        label: const Text('Recommended Matches'),
+                      )
+                    else
+                      const Text(
+                        'Recommendation details are not available in the app yet. Refresh to check the latest requirement status.',
+                      ),
                     const SizedBox(height: 12),
                     Text('Last updated: ${requirementDate(row.updatedAt)}'),
                     OutlinedButton.icon(

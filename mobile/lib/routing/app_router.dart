@@ -1,4 +1,7 @@
 import 'package:mobile/screens/profile_screen.dart';
+import 'package:mobile/matches/match_gateway.dart';
+import 'package:mobile/screens/recommended_matches_screen.dart';
+import 'package:mobile/screens/match_details_screen.dart';
 import 'package:mobile/location/location_lookup.dart';
 import 'package:mobile/requirements/requirement_gateway.dart';
 import 'package:mobile/requirements/requirement_location.dart';
@@ -35,6 +38,7 @@ GoRouter createAppRouter({
   required AuthController authController,
   MaterialInventoryGateway? materialGateway,
   RequirementGateway? requirementGateway,
+  MatchGateway? matchGateway,
   RequirementLocationSource requirementLocation =
       const DeviceRequirementLocation(),
   AddressLookup? locationLookup,
@@ -106,6 +110,27 @@ GoRouter createAppRouter({
               : () => context.push(AppRoutes.materials),
         ),
       ),
+      if (matchGateway != null) ...[
+        GoRoute(
+          path: '/requirements/:id/matches',
+          builder: (_, state) => RecommendedMatchesScreen(
+            key: ValueKey(state.pathParameters['id']),
+            gateway: matchGateway,
+            requirementId: state.pathParameters['id']!,
+          ),
+        ),
+        GoRoute(
+          path: '/requirements/:id/matches/:matchId',
+          builder: (_, state) => MatchDetailsScreen(
+            key: ValueKey(
+              '${state.pathParameters['id']}/${state.pathParameters['matchId']}',
+            ),
+            gateway: matchGateway,
+            requirementId: state.pathParameters['id']!,
+            matchId: state.pathParameters['matchId']!,
+          ),
+        ),
+      ],
       if (requirementGateway != null) ...[
         GoRoute(
           path: AppRoutes.requirements,
@@ -140,6 +165,7 @@ GoRouter createAppRouter({
           path: '/requirements/:id/status',
           builder: (context, state) => RequirementStatusScreen(
             gateway: requirementGateway,
+            showMatches: matchGateway != null,
             requirementId: state.pathParameters['id']!,
             workflowId: state.extra as String?,
           ),
@@ -148,6 +174,7 @@ GoRouter createAppRouter({
           path: '/requirements/:id',
           builder: (context, state) => RequirementDetailsScreen(
             gateway: requirementGateway,
+            showMatches: matchGateway != null,
             requirementId: state.pathParameters['id']!,
             locationLookup: locationLookup,
           ),

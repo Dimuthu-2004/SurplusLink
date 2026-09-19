@@ -12,11 +12,13 @@ class RequirementDetailsScreen extends StatefulWidget {
     required this.gateway,
     required this.requirementId,
     this.locationLookup,
+    this.showMatches = false,
     super.key,
   });
   final RequirementGateway gateway;
   final String requirementId;
   final AddressLookup? locationLookup;
+  final bool showMatches;
   @override
   State<RequirementDetailsScreen> createState() =>
       _RequirementDetailsScreenState();
@@ -270,6 +272,17 @@ class _RequirementDetailsScreenState extends State<RequirementDetailsScreen> {
                       ],
                     ),
                     const SizedBox(height: 16),
+                    if (widget.showMatches)
+                      OutlinedButton.icon(
+                        key: const Key('open-recommended-matches'),
+                        onPressed: _busy
+                            ? null
+                            : () => context.push(
+                                '/requirements/${row.id}/matches',
+                              ),
+                        icon: const Icon(Icons.recommend_outlined),
+                        label: const Text('Recommended Matches'),
+                      ),
                     OutlinedButton.icon(
                       onPressed: _busy
                           ? null

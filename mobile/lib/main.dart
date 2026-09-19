@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mobile/matches/match_repository.dart';
 import 'package:http/http.dart' as http;
 import 'package:mobile/app.dart';
 import 'package:mobile/auth/auth_controller.dart';
@@ -27,6 +28,10 @@ void main() {
     SurplusLinkApp(
       authController: authController,
       materialGateway: MaterialInventoryRepository(apiClient),
+      matchGateway: MatchRepository(
+        apiClient,
+        onSessionExpired: authController.logout,
+      ),
       requirementGateway: RequirementRepository(
         apiClient,
         onSessionExpired: authController.logout,
