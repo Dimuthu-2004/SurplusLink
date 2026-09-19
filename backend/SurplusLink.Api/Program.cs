@@ -17,6 +17,7 @@ using SurplusLink.Api.Materials;
 using SurplusLink.Api.Locations;
 using SurplusLink.Api.Observability;
 using SurplusLink.Api.Reservations;
+using SurplusLink.Api.Routing;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -69,6 +70,7 @@ builder.Services.AddControllers()
         };
     });
 builder.Services.AddMemoryCache();
+builder.Services.AddRoutingProvider();
 builder.Services.AddHttpClient<IReverseGeocodingService, NominatimReverseGeocodingService>(client =>
 {
     client.BaseAddress = new Uri("https://nominatim.openstreetmap.org/reverse");
