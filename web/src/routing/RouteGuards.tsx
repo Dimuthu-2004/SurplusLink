@@ -38,6 +38,15 @@ export function RoleRoute({ role }: { role: UserRole }) {
   return <Outlet />;
 }
 
+export function MarketplaceRoute() {
+  const { user } = useAuth();
+  if (!user) return <Navigate to="/login" replace />;
+  if (!user.roles.includes('BUYER') && !user.roles.includes('SELLER')) {
+    return <Navigate to={roleHomePath(user.roles)} replace />;
+  }
+  return <Outlet />;
+}
+
 export function RoleHomeRedirect() {
   const { user } = useAuth();
   return <Navigate to={user ? roleHomePath(user.roles) : '/login'} replace />;
