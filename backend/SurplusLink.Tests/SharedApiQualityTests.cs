@@ -93,7 +93,9 @@ public sealed class SharedApiQualityTests(ApiWebApplicationFactory factory)
         {
             "/api/offers", "/api/transactions", "/api/transactions/{id}/history",
             "/api/transactions/analytics/summary", "/api/transactions/{id}/approve",
-            "/api/transactions/{id}/reject", "/api/transactions/{id}/complete"
+            "/api/transactions/{id}/reject", "/api/transactions/{id}/complete",
+            "/api/workflows/{id}", "/api/workflows/{id}/summary", "/api/workflows/{id}/approve",
+            "/api/workflows/{id}/reject", "/api/workflows/{id}/revise"
         })
             Assert.True(paths.TryGetProperty(path, out _), path);
     }

@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using SurplusLink.Api.Data;
@@ -11,9 +12,11 @@ using SurplusLink.Api.Data;
 namespace SurplusLink.Api.Data.Migrations
 {
     [DbContext(typeof(SurplusLinkDbContext))]
-    partial class SurplusLinkDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260920071835_AddAgentWorkflowEntities")]
+    partial class AddAgentWorkflowEntities
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -718,73 +721,6 @@ namespace SurplusLink.Api.Data.Migrations
                         });
                 });
 
-            modelBuilder.Entity("SurplusLink.Api.Models.Offer", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("BuyerId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<Guid>("MaterialMatchId")
-                        .HasColumnType("uuid");
-
-                    b.Property<decimal>("Quantity")
-                        .HasPrecision(18, 3)
-                        .HasColumnType("numeric(18,3)");
-
-                    b.Property<Guid>("SellerId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<decimal>("TotalValue")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)");
-
-                    b.Property<decimal>("UnitValue")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)");
-
-                    b.Property<DateTime>("UpdatedAtUtc")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("BuyerId")
-                        .HasDatabaseName("IX_Offers_BuyerId");
-
-                    b.HasIndex("MaterialMatchId");
-
-                    b.HasIndex("SellerId")
-                        .HasDatabaseName("IX_Offers_SellerId");
-
-                    b.HasIndex("Status", "CreatedAtUtc")
-                        .HasDatabaseName("IX_Offers_Status_CreatedAtUtc");
-
-                    b.ToTable("Offers", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_Offers_BuyerSeller_Different", "\"BuyerId\" <> \"SellerId\"");
-
-                            t.HasCheckConstraint("CK_Offers_Quantity_Positive", "\"Quantity\" > 0");
-
-                            t.HasCheckConstraint("CK_Offers_TotalValue_Positive", "\"TotalValue\" > 0");
-
-                            t.HasCheckConstraint("CK_Offers_UnitValue_Positive", "\"UnitValue\" > 0");
-                        });
-                });
-
             modelBuilder.Entity("SurplusLink.Api.Models.Reservation", b =>
                 {
                     b.Property<Guid>("Id")
@@ -828,82 +764,6 @@ namespace SurplusLink.Api.Data.Migrations
                     b.ToTable("Reservations", null, t =>
                         {
                             t.HasCheckConstraint("CK_Reservations_Quantity_Positive", "\"Quantity\" > 0");
-                        });
-                });
-
-            modelBuilder.Entity("SurplusLink.Api.Models.Transaction", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("BuyerId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime?>("CompletedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<Guid>("OfferId")
-                        .HasColumnType("uuid");
-
-                    b.Property<decimal>("Quantity")
-                        .HasPrecision(18, 3)
-                        .HasColumnType("numeric(18,3)");
-
-                    b.Property<decimal>("ReservedQuantity")
-                        .HasPrecision(18, 3)
-                        .HasColumnType("numeric(18,3)");
-
-                    b.Property<Guid>("SellerId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.Property<decimal>("TotalValue")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)");
-
-                    b.Property<DateTime>("UpdatedAtUtc")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<uint>("Version")
-                        .IsConcurrencyToken()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("xid")
-                        .HasColumnName("xmin");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("BuyerId")
-                        .HasDatabaseName("IX_Transactions_BuyerId");
-
-                    b.HasIndex("OfferId");
-
-                    b.HasIndex("SellerId")
-                        .HasDatabaseName("IX_Transactions_SellerId");
-
-                    b.HasIndex("Status", "CreatedAtUtc")
-                        .HasDatabaseName("IX_Transactions_Status_CreatedAtUtc");
-
-                    b.ToTable("Transactions", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_Transactions_BuyerSeller_Different", "\"BuyerId\" <> \"SellerId\"");
-
-                            t.HasCheckConstraint("CK_Transactions_Quantity_Positive", "\"Quantity\" > 0");
-
-                            t.HasCheckConstraint("CK_Transactions_ReservedQuantity_Range", "\"ReservedQuantity\" >= 0 AND \"ReservedQuantity\" <= \"Quantity\"");
-
-                            t.HasCheckConstraint("CK_Transactions_TotalValue_Positive", "\"TotalValue\" > 0");
                         });
                 });
 
@@ -1156,33 +1016,6 @@ namespace SurplusLink.Api.Data.Migrations
                     b.Navigation("MaterialRequest");
                 });
 
-            modelBuilder.Entity("SurplusLink.Api.Models.Offer", b =>
-                {
-                    b.HasOne("SurplusLink.Api.Models.User", "Buyer")
-                        .WithMany()
-                        .HasForeignKey("BuyerId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("SurplusLink.Api.Models.MaterialMatch", "MaterialMatch")
-                        .WithMany()
-                        .HasForeignKey("MaterialMatchId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("SurplusLink.Api.Models.User", "Seller")
-                        .WithMany()
-                        .HasForeignKey("SellerId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Buyer");
-
-                    b.Navigation("MaterialMatch");
-
-                    b.Navigation("Seller");
-                });
-
             modelBuilder.Entity("SurplusLink.Api.Models.Reservation", b =>
                 {
                     b.HasOne("SurplusLink.Api.Models.Listing", "Listing")
@@ -1202,33 +1035,6 @@ namespace SurplusLink.Api.Data.Migrations
                     b.Navigation("Listing");
 
                     b.Navigation("MaterialRequest");
-                });
-
-            modelBuilder.Entity("SurplusLink.Api.Models.Transaction", b =>
-                {
-                    b.HasOne("SurplusLink.Api.Models.User", "Buyer")
-                        .WithMany()
-                        .HasForeignKey("BuyerId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("SurplusLink.Api.Models.Offer", "Offer")
-                        .WithMany()
-                        .HasForeignKey("OfferId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("SurplusLink.Api.Models.User", "Seller")
-                        .WithMany()
-                        .HasForeignKey("SellerId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Buyer");
-
-                    b.Navigation("Offer");
-
-                    b.Navigation("Seller");
                 });
 
             modelBuilder.Entity("SurplusLink.Api.Models.UserRoleAssignment", b =>
