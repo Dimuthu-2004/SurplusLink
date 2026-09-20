@@ -45,6 +45,7 @@ export function ManagerRequirementDetailsPage({ api = managerRequirementsApi, wo
         <p className="muted">Manager access is read-only. Buyers manage their own requirements.</p>
       </>}
       <nav className="action-row" aria-label="Requirement views">
+        {!workflowOnly && <Link className="button button-secondary" to={base + '/matches'}>View match comparison</Link>}
         {!workflowOnly && <Link className="button button-secondary" to={base + '/workflow'}>View workflow status</Link>}
         <Link className="button button-secondary" to={base + '/history'}>View history</Link>
       </nav>

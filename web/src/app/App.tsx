@@ -7,6 +7,7 @@ import { ManagerMaterialDetailsPage } from '../pages/manager/ManagerMaterialDeta
 import { ManagerRequirementsPage } from '../pages/manager/ManagerRequirementsPage';
 import { ManagerRequirementDetailsPage } from '../pages/manager/ManagerRequirementDetailsPage';
 import { ManagerRequirementHistoryPage } from '../pages/manager/ManagerRequirementHistoryPage';
+import { ManagerMatchComparisonPage } from '../pages/manager/ManagerMatchComparisonPage';
 import { NotFoundPage } from '../pages/NotFoundPage';
 import { RoleHomePage } from '../pages/RoleHomePage';
 import {
@@ -38,6 +39,7 @@ export function App() {
             <Route path="manager/categories" element={<ManagerCategoriesPage />} />
             <Route path="manager/requirements" element={<ManagerRequirementsPage />} />
             <Route path="manager/requirements/:requirementId" element={<ManagerRequirementDetailsPage />} />
+            <Route path="manager/requirements/:requirementId/matches" element={<ManagerMatchComparisonPage />} />
             <Route path="manager/requirements/:requirementId/history" element={<ManagerRequirementHistoryPage />} />
             <Route path="manager/requirements/:requirementId/workflow" element={<ManagerRequirementDetailsPage workflowOnly />} />
           </Route>
