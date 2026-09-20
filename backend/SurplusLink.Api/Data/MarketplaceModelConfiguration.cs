@@ -16,6 +16,7 @@ public static class MarketplaceModelConfiguration
         ConfigureBuyerRequest(modelBuilder);
         ConfigureMatch(modelBuilder);
         ConfigureWorkflow(modelBuilder);
+        ConfigureAgentWorkflow(modelBuilder);
         ConfigureReservation(modelBuilder);
         ConfigureAuditLog(modelBuilder);
         ConfigureTimestamps(modelBuilder);
@@ -253,6 +254,75 @@ public static class MarketplaceModelConfiguration
                 .HasForeignKey(reservation => reservation.MaterialRequestId)
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("FK_Reservations_MaterialRequests_MaterialRequestId");
+        });
+    }
+
+    private static void ConfigureAgentWorkflow(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<AgentWorkflow>(entity =>
+        {
+            entity.ToTable("AgentWorkflows", table =>
+                table.HasCheckConstraint("CK_AgentWorkflows_RetryCount_NonNegative", "\"RetryCount\" >= 0"));
+            entity.HasKey(workflow => workflow.Id);
+            entity.Property(workflow => workflow.Status).HasConversion<string>().HasMaxLength(24).IsRequired();
+            entity.Property(workflow => workflow.CurrentStage).HasMaxLength(120).IsRequired();
+            entity.Property(workflow => workflow.InputJson).HasColumnType("jsonb").IsRequired();
+            entity.Property(workflow => workflow.OutputJson).HasColumnType("jsonb").IsRequired();
+            entity.Property(workflow => workflow.ValidationJson).HasColumnType("jsonb").IsRequired();
+            entity.Property(workflow => workflow.ErrorJson).HasColumnType("jsonb");
+            entity.Property(workflow => workflow.Decision).HasMaxLength(200);
+            entity.HasIndex(workflow => workflow.Status).HasDatabaseName("IX_AgentWorkflows_Status");
+            entity.HasIndex(workflow => workflow.MaterialRequestId).HasDatabaseName("IX_AgentWorkflows_MaterialRequestId");
+            entity.HasIndex(workflow => workflow.MaterialMatchId).HasDatabaseName("IX_AgentWorkflows_MaterialMatchId");
+            entity.HasOne(workflow => workflow.MaterialRequest).WithMany()
+                .HasForeignKey(workflow => workflow.MaterialRequestId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(workflow => workflow.MaterialMatch).WithMany()
+                .HasForeignKey(workflow => workflow.MaterialMatchId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<AgentStep>(entity =>
+        {
+            entity.ToTable("AgentSteps", table =>
+                table.HasCheckConstraint("CK_AgentSteps_RetryCount_NonNegative", "\"RetryCount\" >= 0"));
+            entity.HasKey(step => step.Id);
+            entity.Property(step => step.Stage).HasMaxLength(120).IsRequired();
+            entity.Property(step => step.Status).HasMaxLength(40).IsRequired();
+            entity.Property(step => step.InputJson).HasColumnType("jsonb").IsRequired();
+            entity.Property(step => step.OutputJson).HasColumnType("jsonb").IsRequired();
+            entity.Property(step => step.ValidationJson).HasColumnType("jsonb").IsRequired();
+            entity.Property(step => step.ErrorJson).HasColumnType("jsonb");
+            entity.HasIndex(step => new { step.AgentWorkflowId, step.Sequence })
+                .IsUnique().HasDatabaseName("UX_AgentSteps_Workflow_Sequence");
+            entity.HasOne(step => step.AgentWorkflow).WithMany(workflow => workflow.Steps)
+                .HasForeignKey(step => step.AgentWorkflowId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<AgentToolCall>(entity =>
+        {
+            entity.ToTable("AgentToolCalls", table =>
+                table.HasCheckConstraint("CK_AgentToolCalls_RetryCount_NonNegative", "\"RetryCount\" >= 0"));
+            entity.HasKey(call => call.Id);
+            entity.Property(call => call.ToolName).HasMaxLength(160).IsRequired();
+            entity.Property(call => call.InputJson).HasColumnType("jsonb").IsRequired();
+            entity.Property(call => call.OutputJson).HasColumnType("jsonb").IsRequired();
+            entity.Property(call => call.ErrorJson).HasColumnType("jsonb");
+            entity.HasIndex(call => call.AgentStepId).HasDatabaseName("IX_AgentToolCalls_AgentStepId");
+            entity.HasOne(call => call.AgentStep).WithMany(step => step.ToolCalls)
+                .HasForeignKey(call => call.AgentStepId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<Approval>(entity =>
+        {
+            entity.ToTable("Approvals");
+            entity.HasKey(approval => approval.Id);
+            entity.Property(approval => approval.Decision).HasConversion<string>().HasMaxLength(24).IsRequired();
+            entity.Property(approval => approval.Note).HasMaxLength(2000).IsRequired();
+            entity.HasIndex(approval => new { approval.AgentWorkflowId, approval.DecidedAtUtc })
+                .HasDatabaseName("IX_Approvals_Workflow_DecidedAtUtc");
+            entity.HasOne(approval => approval.AgentWorkflow).WithMany(workflow => workflow.Approvals)
+                .HasForeignKey(approval => approval.AgentWorkflowId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(approval => approval.DecidedByUser).WithMany()
+                .HasForeignKey(approval => approval.DecidedByUserId).OnDelete(DeleteBehavior.Restrict);
         });
     }
 

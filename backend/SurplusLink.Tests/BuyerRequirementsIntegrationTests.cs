@@ -125,7 +125,7 @@ public sealed class BuyerRequirementsIntegrationTests : IClassFixture<Requiremen
     }
 
     [PostgresFact]
-    public async Task Lifecycle_guards_and_deferred_workflow_leave_stock_and_workflows_unchanged()
+    public async Task Lifecycle_guards_and_persisted_workflow_leave_stock_unreserved()
     {
         using var app = fixture.App();
         using var buyer = fixture.Client(app, fixture.Buyer);
@@ -140,12 +140,15 @@ public sealed class BuyerRequirementsIntegrationTests : IClassFixture<Requiremen
         Assert.Equal(HttpStatusCode.Conflict, (await buyer.DeleteAsync(path)).StatusCode);
         using var db = fixture.Context();
         var before = await Snapshot(db);
-        for (var i = 0; i < 2; i++)
-            Assert.Equal(HttpStatusCode.ServiceUnavailable, (await buyer.PostAsync(path + "/start-matching", null)).StatusCode);
-        Assert.Equal(before, await Snapshot(db));
-        Assert.Equal(BuyerRequestStatus.OPEN, (await buyer.GetFromJsonAsync<RequirementResponse>(path))!.Status);
-        Assert.False(await db.AuditLogs.AnyAsync(x => x.EntityId == row.Id && x.Action == "MATCHING_STARTED"));
-        Assert.Equal(HttpStatusCode.OK, (await buyer.PostAsync(path + "/cancel", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await buyer.PostAsync(path + "/start-matching", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await buyer.PostAsync(path + "/start-matching", null)).StatusCode);
+        var after = await Snapshot(db);
+        Assert.Equal(before.Reservations, after.Reservations);
+        Assert.Equal(before.Reserved, after.Reserved);
+        Assert.Equal(before.Workflows + 1, after.Workflows);
+        Assert.Equal(BuyerRequestStatus.MATCHING, (await buyer.GetFromJsonAsync<RequirementResponse>(path))!.Status);
+        Assert.True(await db.AuditLogs.AnyAsync(x => x.EntityId == row.Id && x.Action == "MATCHING_STARTED"));
+        Assert.Equal(HttpStatusCode.Conflict, (await buyer.PostAsync(path + "/cancel", null)).StatusCode);
         foreach (var action in new[] { "submit", "start-matching", "cancel" })
             Assert.Equal(HttpStatusCode.Conflict, (await buyer.PostAsync(path + "/" + action, null)).StatusCode);
         var draft = await Create(buyer);
@@ -220,7 +223,10 @@ public sealed class BuyerRequirementsIntegrationTests : IClassFixture<Requiremen
             Assert.Contains(error.SqlState, new[] { PostgresErrorCodes.CheckViolation, PostgresErrorCodes.ForeignKeyViolation });
         }
         Assert.False(db.Database.HasPendingModelChanges());
-        Assert.DoesNotContain(db.Model.GetEntityTypes(), x => x.ClrType.Name is "AgentWorkflow" or "AgentStep" or "AgentToolCall" or "Approval");
+        Assert.Contains(db.Model.GetEntityTypes(), x => x.ClrType.Name == "AgentWorkflow");
+        Assert.Contains(db.Model.GetEntityTypes(), x => x.ClrType.Name == "AgentStep");
+        Assert.Contains(db.Model.GetEntityTypes(), x => x.ClrType.Name == "AgentToolCall");
+        Assert.Contains(db.Model.GetEntityTypes(), x => x.ClrType.Name == "Approval");
     }
 
     [PostgresFact]
@@ -258,7 +264,9 @@ public sealed class BuyerRequirementsIntegrationTests : IClassFixture<Requiremen
     }
 
     private static async Task<(int Reservations, int Workflows, decimal Reserved)> Snapshot(SurplusLinkDbContext db) =>
-        (await db.Reservations.CountAsync(), await db.Workflows.CountAsync(), await db.Listings.SumAsync(x => x.ReservedQuantity));
+        (await db.Reservations.CountAsync(),
+            await db.Workflows.CountAsync() + await db.AgentWorkflows.CountAsync(),
+            await db.Listings.SumAsync(x => x.ReservedQuantity));
 
     private static Dictionary<string, object?> Body(decimal quantity = 10) => new()
     {
