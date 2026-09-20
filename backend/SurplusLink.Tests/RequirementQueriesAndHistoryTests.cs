@@ -126,17 +126,17 @@ public sealed class RequirementQueriesAndHistoryTests(RequirementsDatabase fixtu
         Assert.Equal(HttpStatusCode.OK, (await buyer.PostAsync(path + "/submit", null)).StatusCode);
         var submitted = await History(buyer, path);
         Assert.Equal(4, submitted.Total); // created, updated, submitted, DRAFT -> OPEN
-        Assert.Equal(HttpStatusCode.ServiceUnavailable, (await buyer.PostAsync(path + "/start-matching", null)).StatusCode);
-        Assert.Equal(submitted.Total, (await History(buyer, path)).Total);
-        Assert.Equal(HttpStatusCode.OK, (await buyer.PostAsync(path + "/cancel", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await buyer.PostAsync(path + "/start-matching", null)).StatusCode);
+        Assert.Equal(submitted.Total + 2, (await History(buyer, path)).Total);
+        Assert.Equal(HttpStatusCode.Conflict, (await buyer.PostAsync(path + "/cancel", null)).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await buyer.PostAsync(path + "/cancel", null)).StatusCode);
         var history = await History(buyer, path);
         Assert.Equal(6, history.Total);
-        Assert.Equal(new[] { "CREATED", "UPDATED", "SUBMITTED", "CANCELLED" }.OrderBy(x => x),
+        Assert.Equal(new[] { "CREATED", "UPDATED", "SUBMITTED", "MATCHING_STARTED" }.OrderBy(x => x),
             history.Items.Where(x => x.Action != "STATUS_CHANGED").Select(x => x.Action).OrderBy(x => x));
         var changes = history.Items.Where(x => x.Action == "STATUS_CHANGED").ToArray();
         Assert.Collection(changes, x => { Assert.Equal("DRAFT", x.FromStatus); Assert.Equal("OPEN", x.ToStatus); },
-            x => { Assert.Equal("OPEN", x.FromStatus); Assert.Equal("CANCELLED", x.ToStatus); });
+            x => { Assert.Equal("OPEN", x.FromStatus); Assert.Equal("MATCHING", x.ToStatus); });
         Assert.All(history.Items, x => Assert.Equal(fixture.Buyer, x.ActorUserId));
         Assert.Equal(history.Items.OrderBy(x => x.CreatedAt).ThenBy(x => x.Id).Select(x => x.Id), history.Items.Select(x => x.Id));
         var page = (await buyer.GetFromJsonAsync<RequirementHistoryPage>(path + "/history?page=2&pageSize=2"))!;

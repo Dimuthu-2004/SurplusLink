@@ -88,6 +88,13 @@ public sealed class SharedApiQualityTests(ApiWebApplicationFactory factory)
         Assert.Equal("JWT", bearer.GetProperty("bearerFormat").GetString());
         Assert.Contains(document.GetProperty("security").EnumerateArray(), item =>
             item.TryGetProperty("Bearer", out _));
+        var paths = document.GetProperty("paths");
+        foreach (var path in new[]
+        {
+            "/api/workflows/{id}", "/api/workflows/{id}/summary", "/api/workflows/{id}/approve",
+            "/api/workflows/{id}/reject", "/api/workflows/{id}/revise"
+        })
+            Assert.True(paths.TryGetProperty(path, out _), path);
     }
 
     [Fact]

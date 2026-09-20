@@ -19,6 +19,14 @@ public sealed class SurplusLinkDbContext(DbContextOptions<SurplusLinkDbContext> 
 
     public DbSet<Workflow> Workflows => Set<Workflow>();
 
+    public DbSet<AgentWorkflow> AgentWorkflows => Set<AgentWorkflow>();
+
+    public DbSet<AgentStep> AgentSteps => Set<AgentStep>();
+
+    public DbSet<AgentToolCall> AgentToolCalls => Set<AgentToolCall>();
+
+    public DbSet<Approval> Approvals => Set<Approval>();
+
     public DbSet<Reservation> Reservations => Set<Reservation>();
 
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
