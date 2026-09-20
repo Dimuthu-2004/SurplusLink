@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using SurplusLink.Api.Data;
@@ -11,9 +12,11 @@ using SurplusLink.Api.Data;
 namespace SurplusLink.Api.Data.Migrations
 {
     [DbContext(typeof(SurplusLinkDbContext))]
-    partial class SurplusLinkDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260920112500_AddOffersAndTransactions")]
+    partial class AddOffersAndTransactions
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -22,257 +25,6 @@ namespace SurplusLink.Api.Data.Migrations
 
             NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "citext");
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
-
-            modelBuilder.Entity("SurplusLink.Api.Models.AgentStep", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("AgentWorkflowId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime?>("CompletedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<long?>("DurationMilliseconds")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("ErrorJson")
-                        .HasColumnType("jsonb");
-
-                    b.Property<string>("InputJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb");
-
-                    b.Property<string>("OutputJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb");
-
-                    b.Property<int>("RetryCount")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("Sequence")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Stage")
-                        .IsRequired()
-                        .HasMaxLength(120)
-                        .HasColumnType("character varying(120)");
-
-                    b.Property<DateTime>("StartedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)");
-
-                    b.Property<DateTime>("UpdatedAtUtc")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<string>("ValidationJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AgentWorkflowId", "Sequence")
-                        .IsUnique()
-                        .HasDatabaseName("UX_AgentSteps_Workflow_Sequence");
-
-                    b.ToTable("AgentSteps", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_AgentSteps_RetryCount_NonNegative", "\"RetryCount\" >= 0");
-                        });
-                });
-
-            modelBuilder.Entity("SurplusLink.Api.Models.AgentToolCall", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("AgentStepId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime?>("CompletedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<long?>("DurationMilliseconds")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("ErrorJson")
-                        .HasColumnType("jsonb");
-
-                    b.Property<string>("InputJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb");
-
-                    b.Property<string>("OutputJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb");
-
-                    b.Property<int>("RetryCount")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("StartedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("ToolName")
-                        .IsRequired()
-                        .HasMaxLength(160)
-                        .HasColumnType("character varying(160)");
-
-                    b.Property<DateTime>("UpdatedAtUtc")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AgentStepId")
-                        .HasDatabaseName("IX_AgentToolCalls_AgentStepId");
-
-                    b.ToTable("AgentToolCalls", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_AgentToolCalls_RetryCount_NonNegative", "\"RetryCount\" >= 0");
-                        });
-                });
-
-            modelBuilder.Entity("SurplusLink.Api.Models.AgentWorkflow", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime?>("CompletedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<string>("CurrentStage")
-                        .IsRequired()
-                        .HasMaxLength(120)
-                        .HasColumnType("character varying(120)");
-
-                    b.Property<string>("Decision")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<string>("ErrorJson")
-                        .HasColumnType("jsonb");
-
-                    b.Property<string>("InputJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb");
-
-                    b.Property<Guid?>("MaterialMatchId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("MaterialRequestId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("OutputJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb");
-
-                    b.Property<int>("RetryCount")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("StartedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(24)
-                        .HasColumnType("character varying(24)");
-
-                    b.Property<DateTime>("UpdatedAtUtc")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<string>("ValidationJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("MaterialMatchId")
-                        .HasDatabaseName("IX_AgentWorkflows_MaterialMatchId");
-
-                    b.HasIndex("MaterialRequestId")
-                        .HasDatabaseName("IX_AgentWorkflows_MaterialRequestId");
-
-                    b.HasIndex("Status")
-                        .HasDatabaseName("IX_AgentWorkflows_Status");
-
-                    b.ToTable("AgentWorkflows", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_AgentWorkflows_RetryCount_NonNegative", "\"RetryCount\" >= 0");
-                        });
-                });
-
-            modelBuilder.Entity("SurplusLink.Api.Models.Approval", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("AgentWorkflowId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<DateTime>("DecidedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("DecidedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Decision")
-                        .IsRequired()
-                        .HasMaxLength(24)
-                        .HasColumnType("character varying(24)");
-
-                    b.Property<string>("Note")
-                        .IsRequired()
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)");
-
-                    b.Property<DateTime>("UpdatedAtUtc")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("DecidedByUserId");
-
-                    b.HasIndex("AgentWorkflowId", "DecidedAtUtc")
-                        .HasDatabaseName("IX_Approvals_Workflow_DecidedAtUtc");
-
-                    b.ToTable("Approvals", (string)null);
-                });
 
             modelBuilder.Entity("SurplusLink.Api.Models.AuditLog", b =>
                 {
@@ -1012,64 +764,6 @@ namespace SurplusLink.Api.Data.Migrations
                     b.ToTable("Workflows", (string)null);
                 });
 
-            modelBuilder.Entity("SurplusLink.Api.Models.AgentStep", b =>
-                {
-                    b.HasOne("SurplusLink.Api.Models.AgentWorkflow", "AgentWorkflow")
-                        .WithMany("Steps")
-                        .HasForeignKey("AgentWorkflowId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("AgentWorkflow");
-                });
-
-            modelBuilder.Entity("SurplusLink.Api.Models.AgentToolCall", b =>
-                {
-                    b.HasOne("SurplusLink.Api.Models.AgentStep", "AgentStep")
-                        .WithMany("ToolCalls")
-                        .HasForeignKey("AgentStepId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("AgentStep");
-                });
-
-            modelBuilder.Entity("SurplusLink.Api.Models.AgentWorkflow", b =>
-                {
-                    b.HasOne("SurplusLink.Api.Models.MaterialMatch", "MaterialMatch")
-                        .WithMany()
-                        .HasForeignKey("MaterialMatchId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("SurplusLink.Api.Models.BuyerRequest", "MaterialRequest")
-                        .WithMany()
-                        .HasForeignKey("MaterialRequestId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.Navigation("MaterialMatch");
-
-                    b.Navigation("MaterialRequest");
-                });
-
-            modelBuilder.Entity("SurplusLink.Api.Models.Approval", b =>
-                {
-                    b.HasOne("SurplusLink.Api.Models.AgentWorkflow", "AgentWorkflow")
-                        .WithMany("Approvals")
-                        .HasForeignKey("AgentWorkflowId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("SurplusLink.Api.Models.User", "DecidedByUser")
-                        .WithMany()
-                        .HasForeignKey("DecidedByUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("AgentWorkflow");
-
-                    b.Navigation("DecidedByUser");
-                });
-
             modelBuilder.Entity("SurplusLink.Api.Models.AuditLog", b =>
                 {
                     b.HasOne("SurplusLink.Api.Models.User", "ActorUser")
@@ -1252,18 +946,6 @@ namespace SurplusLink.Api.Data.Migrations
                         .HasConstraintName("FK_Workflows_Matches_MaterialMatchId");
 
                     b.Navigation("MaterialMatch");
-                });
-
-            modelBuilder.Entity("SurplusLink.Api.Models.AgentStep", b =>
-                {
-                    b.Navigation("ToolCalls");
-                });
-
-            modelBuilder.Entity("SurplusLink.Api.Models.AgentWorkflow", b =>
-                {
-                    b.Navigation("Approvals");
-
-                    b.Navigation("Steps");
                 });
 
             modelBuilder.Entity("SurplusLink.Api.Models.Listing", b =>

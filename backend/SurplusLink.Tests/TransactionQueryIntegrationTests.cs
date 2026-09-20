@@ -1,0 +1,93 @@
+using System.Net;
+using System.Net.Http.Json;
+using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using SurplusLink.Api.Models;
+using SurplusLink.Api.Transactions;
+
+namespace SurplusLink.Tests;
+
+public sealed class TransactionQueryIntegrationTests(RequirementsDatabase fixture) : IClassFixture<RequirementsDatabase>
+{
+    [PostgresFact]
+    public async Task Manager_can_filter_sort_history_analytics_and_complete_transactions()
+    {
+        var seeded = await Seed();
+        using var app = fixture.App();
+        using var manager = fixture.Client(app, fixture.Manager, "MANAGER");
+        using var buyer = fixture.Client(app, fixture.Buyer, "BUYER");
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await buyer.GetAsync("/api/transactions")).StatusCode);
+        var page = await manager.GetFromJsonAsync<JsonElement>(
+            "/api/transactions?status=pending_approval&userId=" + fixture.Buyer + "&sortBy=value&sortDir=asc&pageSize=1");
+        Assert.Equal(1, page.GetProperty("total").GetInt32());
+        Assert.Equal(seeded.Pending.Id, page.GetProperty("items")[0].GetProperty("id").GetGuid());
+
+        var approved = await manager.PostAsync($"/api/transactions/{seeded.Pending.Id}/approve", null);
+        Assert.Equal(HttpStatusCode.OK, approved.StatusCode);
+        var completed = await manager.PostAsync($"/api/transactions/{seeded.Pending.Id}/complete", null);
+        Assert.Equal(HttpStatusCode.OK, completed.StatusCode);
+
+        var history = await manager.GetFromJsonAsync<TransactionHistoryPage>(
+            $"/api/transactions/{seeded.Pending.Id}/history?pageSize=10");
+        Assert.Equal(new[] { "RESERVATION_CREATED", "TRANSACTION_APPROVED", "TRANSACTION_COMPLETED" },
+            history!.Items.Select(x => x.Action).OrderBy(x => x));
+
+        var summary = await manager.GetFromJsonAsync<TransactionAnalyticsSummary>("/api/transactions/analytics/summary");
+        Assert.True(summary!.CompletionCount >= 1);
+        Assert.True(summary.CompletedValue >= seeded.Pending.TotalValue);
+        Assert.True(summary.ReservedQuantity >= seeded.Pending.Quantity);
+    }
+
+    [PostgresFact]
+    public async Task Offer_decisions_are_audited_and_query_validation_is_enforced()
+    {
+        var seeded = await Seed();
+        using var app = fixture.App();
+        using var manager = fixture.Client(app, fixture.Manager, "MANAGER");
+
+        Assert.Equal(HttpStatusCode.OK, (await manager.PostAsync($"/api/offers/{seeded.Offer.Id}/revise", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await manager.PostAsync($"/api/offers/{seeded.Offer.Id}/reject", null)).StatusCode);
+        var offers = await manager.GetFromJsonAsync<JsonElement>("/api/offers?status=rejected&sortBy=status&sortDir=desc");
+        Assert.Contains(offers.GetProperty("items").EnumerateArray(), item => item.GetProperty("id").GetGuid() == seeded.Offer.Id);
+        Assert.Equal(HttpStatusCode.BadRequest, (await manager.GetAsync("/api/transactions?sortBy=bad")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await manager.GetAsync("/api/offers?createdFrom=2030-01-02&createdTo=2030-01-01")).StatusCode);
+
+        using var db = fixture.Context();
+        var actions = await db.AuditLogs.Where(x => x.EntityId == seeded.Offer.Id).Select(x => x.Action).ToListAsync();
+        Assert.Contains("OFFER_REVISION_REQUESTED", actions);
+        Assert.Contains("OFFER_REJECTED", actions);
+    }
+
+    private async Task<(Offer Offer, Transaction Pending)> Seed()
+    {
+        using var db = fixture.Context();
+        var category = await db.Categories.FirstAsync();
+        var request = new BuyerRequest
+        {
+            Id = Guid.NewGuid(), BuyerId = fixture.Buyer, CategoryId = category.Id, Title = "Transaction request",
+            RequiredQuantity = 3, MaximumBudget = 1000, Unit = "kg", Deadline = DateTime.UtcNow.AddDays(5),
+            Status = BuyerRequestStatus.MATCH_FOUND
+        };
+        var listing = new Listing
+        {
+            Id = Guid.NewGuid(), SellerId = fixture.Seller, CategoryId = category.Id, Title = "Transaction listing",
+            Quantity = 20, Unit = "kg", UnitPrice = 10, AvailableUntil = DateTime.UtcNow.AddDays(5),
+            Status = ListingStatus.ACTIVE, Condition = MaterialCondition.GOOD
+        };
+        var match = new MaterialMatch { Id = Guid.NewGuid(), MaterialRequestId = request.Id, ListingId = listing.Id };
+        var offer = new Offer
+        {
+            Id = Guid.NewGuid(), MaterialMatchId = match.Id, BuyerId = fixture.Buyer, SellerId = fixture.Seller,
+            Quantity = 3, UnitValue = 10, TotalValue = 30, Status = OfferStatus.PENDING
+        };
+        var pending = new Transaction
+        {
+            Id = Guid.NewGuid(), OfferId = offer.Id, BuyerId = fixture.Buyer, SellerId = fixture.Seller,
+            Quantity = 3, TotalValue = 30, Status = TransactionStatus.PENDING_APPROVAL
+        };
+        db.AddRange(request, listing, match, offer, pending);
+        await db.SaveChangesAsync();
+        return (offer, pending);
+    }
+}

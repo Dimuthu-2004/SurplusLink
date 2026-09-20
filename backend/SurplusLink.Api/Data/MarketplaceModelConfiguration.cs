@@ -18,6 +18,7 @@ public static class MarketplaceModelConfiguration
         ConfigureWorkflow(modelBuilder);
         ConfigureAgentWorkflow(modelBuilder);
         ConfigureReservation(modelBuilder);
+        ConfigureOffersAndTransactions(modelBuilder);
         ConfigureAuditLog(modelBuilder);
         ConfigureTimestamps(modelBuilder);
     }
@@ -341,6 +342,54 @@ public static class MarketplaceModelConfiguration
                 .HasForeignKey(audit => audit.ActorUserId)
                 .OnDelete(DeleteBehavior.SetNull)
                 .HasConstraintName("FK_AuditLogs_Users_ActorUserId");
+        });
+    }
+
+    private static void ConfigureOffersAndTransactions(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<Offer>(entity =>
+        {
+            entity.ToTable("Offers", table =>
+            {
+                table.HasCheckConstraint("CK_Offers_Quantity_Positive", "\"Quantity\" > 0");
+                table.HasCheckConstraint("CK_Offers_UnitValue_Positive", "\"UnitValue\" > 0");
+                table.HasCheckConstraint("CK_Offers_TotalValue_Positive", "\"TotalValue\" > 0");
+                table.HasCheckConstraint("CK_Offers_BuyerSeller_Different", "\"BuyerId\" <> \"SellerId\"");
+            });
+            entity.HasKey(offer => offer.Id);
+            entity.Property(offer => offer.Status).HasConversion<string>().HasMaxLength(32).IsRequired();
+            entity.Property(offer => offer.Quantity).HasPrecision(18, 3);
+            entity.Property(offer => offer.UnitValue).HasPrecision(18, 2);
+            entity.Property(offer => offer.TotalValue).HasPrecision(18, 2);
+            entity.HasIndex(offer => new { offer.Status, offer.CreatedAtUtc }).HasDatabaseName("IX_Offers_Status_CreatedAtUtc");
+            entity.HasIndex(offer => offer.BuyerId).HasDatabaseName("IX_Offers_BuyerId");
+            entity.HasIndex(offer => offer.SellerId).HasDatabaseName("IX_Offers_SellerId");
+            entity.HasOne(offer => offer.MaterialMatch).WithMany().HasForeignKey(offer => offer.MaterialMatchId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(offer => offer.Buyer).WithMany().HasForeignKey(offer => offer.BuyerId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(offer => offer.Seller).WithMany().HasForeignKey(offer => offer.SellerId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<Transaction>(entity =>
+        {
+            entity.ToTable("Transactions", table =>
+            {
+                table.HasCheckConstraint("CK_Transactions_Quantity_Positive", "\"Quantity\" > 0");
+                table.HasCheckConstraint("CK_Transactions_TotalValue_Positive", "\"TotalValue\" > 0");
+                table.HasCheckConstraint("CK_Transactions_ReservedQuantity_Range", "\"ReservedQuantity\" >= 0 AND \"ReservedQuantity\" <= \"Quantity\"");
+                table.HasCheckConstraint("CK_Transactions_BuyerSeller_Different", "\"BuyerId\" <> \"SellerId\"");
+            });
+            entity.HasKey(transaction => transaction.Id);
+            entity.Property(transaction => transaction.Status).HasConversion<string>().HasMaxLength(32).IsRequired();
+            entity.Property(transaction => transaction.Quantity).HasPrecision(18, 3);
+            entity.Property(transaction => transaction.TotalValue).HasPrecision(18, 2);
+            entity.Property(transaction => transaction.ReservedQuantity).HasPrecision(18, 3);
+            entity.Property(transaction => transaction.Version).IsRowVersion();
+            entity.HasIndex(transaction => new { transaction.Status, transaction.CreatedAtUtc }).HasDatabaseName("IX_Transactions_Status_CreatedAtUtc");
+            entity.HasIndex(transaction => transaction.BuyerId).HasDatabaseName("IX_Transactions_BuyerId");
+            entity.HasIndex(transaction => transaction.SellerId).HasDatabaseName("IX_Transactions_SellerId");
+            entity.HasOne(transaction => transaction.Offer).WithMany().HasForeignKey(transaction => transaction.OfferId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(transaction => transaction.Buyer).WithMany().HasForeignKey(transaction => transaction.BuyerId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(transaction => transaction.Seller).WithMany().HasForeignKey(transaction => transaction.SellerId).OnDelete(DeleteBehavior.Restrict);
         });
     }
 

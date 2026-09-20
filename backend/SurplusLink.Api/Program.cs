@@ -120,6 +120,7 @@ builder.Services.AddScoped<IReservationService, ReservationService>();
 builder.Services.AddScoped<IMaterialInventoryService, MaterialInventoryService>();
 builder.Services.AddScoped<SurplusLink.Api.Requirements.RequirementService>();
 builder.Services.AddScoped<SurplusLink.Api.Matching.MatchService>();
+builder.Services.AddScoped<SurplusLink.Api.Transactions.TransactionService>();
 builder.Services.AddScoped<SurplusLink.Api.Workflows.AgentWorkflowService>();
 builder.Services.AddScoped<SurplusLink.Api.Workflows.IRequirementWorkflowStarter,
     SurplusLink.Api.Workflows.PersistentRequirementWorkflowStarter>();
