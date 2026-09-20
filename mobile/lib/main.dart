@@ -10,6 +10,7 @@ import 'package:mobile/core/token_storage.dart';
 import 'package:mobile/materials/material_inventory_repository.dart';
 import 'package:mobile/location/location_lookup.dart';
 import 'package:mobile/requirements/requirement_repository.dart';
+import 'package:mobile/offers/offer_repository.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -36,6 +37,7 @@ void main() {
         apiClient,
         onSessionExpired: authController.logout,
       ),
+      offerGateway: OfferRepository(apiClient),
       locationLookup: ApiLocationLookup(apiClient).lookup,
     ),
   );

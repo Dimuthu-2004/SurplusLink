@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { roleLabels } from '../routing/roleRoutes';
 import type { UserRole } from '../auth/authTypes';
 
@@ -9,6 +10,7 @@ export function RoleHomePage({ role }: { role: UserRole }) {
       <p>
         The shared shell is ready. Business features for this role will be added separately.
       </p>
+      <Link className="button button-primary" to="/app/offers">My Offers</Link>
     </section>
   );
 }

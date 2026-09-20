@@ -9,9 +9,12 @@ import { ManagerRequirementDetailsPage } from '../pages/manager/ManagerRequireme
 import { ManagerRequirementHistoryPage } from '../pages/manager/ManagerRequirementHistoryPage';
 import { NotFoundPage } from '../pages/NotFoundPage';
 import { RoleHomePage } from '../pages/RoleHomePage';
+import { MyOffersPage } from '../pages/MyOffersPage';
+import { OfferDetailsPage } from '../pages/OfferDetailsPage';
 import {
   GuestRoute,
   ProtectedRoute,
+  MarketplaceRoute,
   RoleHomeRedirect,
   RoleRoute,
 } from '../routing/RouteGuards';
@@ -31,6 +34,10 @@ export function App() {
           </Route>
           <Route element={<RoleRoute role="BUYER" />}>
             <Route path="buyer" element={<RoleHomePage role="BUYER" />} />
+          </Route>
+          <Route element={<MarketplaceRoute />}>
+            <Route path="offers" element={<MyOffersPage />} />
+            <Route path="offers/:offerId" element={<OfferDetailsPage />} />
           </Route>
           <Route element={<RoleRoute role="MANAGER" />}>
             <Route path="manager" element={<ManagerListingsPage />} />

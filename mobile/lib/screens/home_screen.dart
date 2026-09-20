@@ -8,12 +8,14 @@ class HomeScreen extends StatelessWidget {
     required this.authController,
     this.onOpenMaterials,
     this.onOpenRequirements,
+    this.onOpenOffers,
     super.key,
   });
 
   final AuthController authController;
   final VoidCallback? onOpenMaterials;
   final VoidCallback? onOpenRequirements;
+  final VoidCallback? onOpenOffers;
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
@@ -97,6 +99,10 @@ class HomeScreen extends StatelessWidget {
                     icon: const Icon(Icons.assignment_outlined),
                     label: const Text('My Requirements'),
                   ),
+                ],
+                if ((seller || buyer) && onOpenOffers != null) ...[
+                  const SizedBox(height: 16),
+                  FilledButton.icon(onPressed: onOpenOffers, icon: const Icon(Icons.local_offer_outlined), label: const Text('My Offers')),
                 ],
                 if (user.hasRole(AppRole.seller) &&
                     onOpenMaterials != null) ...[

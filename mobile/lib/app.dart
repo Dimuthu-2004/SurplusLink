@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:mobile/matches/match_gateway.dart';
+import 'package:mobile/offers/offer_gateway.dart';
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -17,6 +18,7 @@ class SurplusLinkApp extends StatefulWidget {
     this.materialGateway,
     this.requirementGateway,
     this.matchGateway,
+    this.offerGateway,
     this.requirementLocation = const DeviceRequirementLocation(),
     this.locationLookup,
     this.initialLocation = AppRoutes.splash,
@@ -27,6 +29,7 @@ class SurplusLinkApp extends StatefulWidget {
   final MaterialInventoryGateway? materialGateway;
   final RequirementGateway? requirementGateway;
   final MatchGateway? matchGateway;
+  final OfferGateway? offerGateway;
   final RequirementLocationSource requirementLocation;
   final AddressLookup? locationLookup;
   final String initialLocation;
@@ -46,6 +49,7 @@ class _SurplusLinkAppState extends State<SurplusLinkApp> {
       materialGateway: widget.materialGateway,
       requirementGateway: widget.requirementGateway,
       matchGateway: widget.matchGateway,
+      offerGateway: widget.offerGateway,
       requirementLocation: widget.requirementLocation,
       locationLookup: widget.locationLookup,
       initialLocation: widget.initialLocation,

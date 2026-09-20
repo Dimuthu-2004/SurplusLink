@@ -21,6 +21,8 @@ import 'package:mobile/screens/home_screen.dart';
 import 'package:mobile/screens/login_screen.dart';
 import 'package:mobile/screens/material_details_screen.dart';
 import 'package:mobile/screens/my_materials_screen.dart';
+import 'package:mobile/offers/offer_gateway.dart';
+import 'package:mobile/screens/my_offers_screen.dart';
 import 'package:mobile/screens/register_screen.dart';
 import 'package:mobile/screens/splash_screen.dart';
 
@@ -39,6 +41,7 @@ GoRouter createAppRouter({
   MaterialInventoryGateway? materialGateway,
   RequirementGateway? requirementGateway,
   MatchGateway? matchGateway,
+  OfferGateway? offerGateway,
   RequirementLocationSource requirementLocation =
       const DeviceRequirementLocation(),
   AddressLookup? locationLookup,
@@ -108,6 +111,7 @@ GoRouter createAppRouter({
           onOpenMaterials: materialGateway == null
               ? null
               : () => context.push(AppRoutes.materials),
+              onOpenOffers: offerGateway == null ? null : () => context.push('/offers'),
         ),
       ),
       if (matchGateway != null) ...[
@@ -217,6 +221,11 @@ GoRouter createAppRouter({
           ),
         ),
       ],
+      if (offerGateway != null)
+        GoRoute(path: '/offers', builder: (_, _) {
+          final user = authController.user;
+          return user == null ? const SizedBox.shrink() : MyOffersScreen(gateway: offerGateway, user: user);
+        }),
     ],
     errorBuilder: (context, state) => Scaffold(
       body: Center(child: Text('Page not found: ${state.uri.path}')),
