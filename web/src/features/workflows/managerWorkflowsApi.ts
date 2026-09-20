@@ -1,0 +1,49 @@
+import type { AxiosInstance } from 'axios';
+import { apiClient, normalizeApiError } from '../../api/apiClient';
+
+export const workflowStatuses = ['RUNNING', 'PENDING_APPROVAL', 'REVISION_REQUESTED', 'APPROVED', 'REJECTED', 'FAILED', 'COMPLETED'] as const;
+export type WorkflowStatus = typeof workflowStatuses[number];
+export interface WorkflowListItem {
+  id: string; materialRequestId: string | null; materialMatchId: string | null; status: WorkflowStatus;
+  currentStage: string; retryCount: number; startedAtUtc: string; completedAtUtc: string | null; errorJson: string | null;
+}
+export interface ToolCall {
+  id: string; toolName: string; inputJson: string; outputJson: string; errorJson: string | null;
+  retryCount: number; startedAtUtc: string; completedAtUtc: string | null; durationMilliseconds: number | null;
+}
+export interface AgentStep {
+  id: string; sequence: number; stage: string; status: string; inputJson: string; outputJson: string;
+  validationJson: string; errorJson: string | null; retryCount: number; startedAtUtc: string;
+  completedAtUtc: string | null; durationMilliseconds: number | null; toolCalls: ToolCall[];
+}
+export interface Approval { id: string; decidedByUserId: string; decision: string; note: string; decidedAtUtc: string }
+export interface Workflow extends WorkflowListItem {
+  inputJson: string; outputJson: string; validationJson: string; decision: string | null; steps: AgentStep[]; approvals: Approval[];
+}
+export interface WorkflowPage { items: WorkflowListItem[]; total: number; page: number; pageSize: number; totalPages: number }
+export interface WorkflowQuery { search: string; status: string; sortBy: 'startedAt' | 'status' | 'stage'; sortDir: 'asc' | 'desc'; page: number; pageSize: number }
+export interface TransactionAnalytics { pendingApprovalCount: number; approvedCount: number; rejectedCount: number; reservedQuantity: number; completionCount: number; completedValue: number; completionRate: number | null }
+export interface ManagerWorkflowsApi {
+  list(query: WorkflowQuery): Promise<WorkflowPage>;
+  get(id: string): Promise<Workflow>;
+  approve(id: string, note?: string): Promise<Workflow>;
+  reject(id: string, note: string): Promise<Workflow>;
+  revise(id: string, note: string): Promise<Workflow>;
+  transactionAnalytics(): Promise<TransactionAnalytics>;
+}
+
+export function createManagerWorkflowsApi(client: Pick<AxiosInstance, 'get' | 'post'> = apiClient): ManagerWorkflowsApi {
+  return {
+    list: (query) => read(client.get<WorkflowPage>('/api/workflows', { params: compact(query) })),
+    get: (id) => read(client.get<Workflow>('/api/workflows/' + encodeURIComponent(id))),
+    approve: (id, note) => read(client.post<Workflow>('/api/workflows/' + encodeURIComponent(id) + '/approve', { note: note?.trim() || undefined })),
+    reject: (id, note) => read(client.post<Workflow>('/api/workflows/' + encodeURIComponent(id) + '/reject', { note: note.trim() })),
+    revise: (id, note) => read(client.post<Workflow>('/api/workflows/' + encodeURIComponent(id) + '/revise', { note: note.trim() })),
+    transactionAnalytics: () => read(client.get<TransactionAnalytics>('/api/transactions/analytics/summary')),
+  };
+}
+export const managerWorkflowsApi = createManagerWorkflowsApi();
+async function read<T>(request: Promise<{ data: T }>): Promise<T> { try { return (await request).data; } catch (error) { throw normalizeApiError(error); } }
+function compact(query: WorkflowQuery): Record<string, string | number> {
+  return Object.fromEntries(Object.entries(query).filter(([, value]) => value !== '')) as Record<string, string | number>;
+}

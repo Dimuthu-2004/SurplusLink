@@ -6,6 +6,23 @@ namespace SurplusLink.Api.Workflows;
 
 public sealed class AgentWorkflowService(SurplusLinkDbContext db)
 {
+    public async Task<(IReadOnlyList<AgentWorkflowListItem> Items, int Total)> ListAsync(WorkflowQuery input, CancellationToken ct)
+    {
+        var query = db.AgentWorkflows.AsNoTracking().AsQueryable();
+        if (!string.IsNullOrWhiteSpace(input.Status)) query = query.Where(x => x.Status == Enum.Parse<AgentWorkflowStatus>(input.Status, true));
+        if (!string.IsNullOrWhiteSpace(input.Search)) { var search = input.Search.Trim(); query = query.Where(x => x.CurrentStage.Contains(search) || (x.Decision != null && x.Decision.Contains(search))); }
+        var total = await query.CountAsync(ct);
+        var ordered = input.SortBy.ToLowerInvariant() switch
+        {
+            "status" => input.SortDir.Equals("asc", StringComparison.OrdinalIgnoreCase) ? query.OrderBy(x => x.Status).ThenBy(x => x.Id) : query.OrderByDescending(x => x.Status).ThenBy(x => x.Id),
+            "stage" => input.SortDir.Equals("asc", StringComparison.OrdinalIgnoreCase) ? query.OrderBy(x => x.CurrentStage).ThenBy(x => x.Id) : query.OrderByDescending(x => x.CurrentStage).ThenBy(x => x.Id),
+            _ => input.SortDir.Equals("asc", StringComparison.OrdinalIgnoreCase) ? query.OrderBy(x => x.StartedAtUtc).ThenBy(x => x.Id) : query.OrderByDescending(x => x.StartedAtUtc).ThenBy(x => x.Id),
+        };
+        var items = await ordered.Skip((input.Page - 1) * input.PageSize).Take(input.PageSize)
+            .Select(x => new AgentWorkflowListItem(x.Id, x.MaterialRequestId, x.MaterialMatchId, x.Status, x.CurrentStage, x.RetryCount, x.StartedAtUtc, x.CompletedAtUtc, x.ErrorJson)).ToListAsync(ct);
+        return (items, total);
+    }
+
     public async Task<AgentWorkflowResponse> GetAsync(Guid id, CancellationToken ct)
     {
         var workflow = await LoadAsync(id, ct) ?? throw NotFound();

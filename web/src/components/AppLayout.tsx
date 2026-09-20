@@ -38,6 +38,7 @@ export function AppLayout() {
                 <NavLink to="/app/manager">Material listings</NavLink>
                 <NavLink to="/app/manager/categories">Material categories</NavLink>
                 <NavLink to="/app/manager/requirements">Buyer Requirements</NavLink>
+                <NavLink to="/app/manager/approvals">Pending Approvals</NavLink>
               </>
             )}
           </nav>
