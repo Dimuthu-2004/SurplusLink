@@ -8,6 +8,8 @@ import { ManagerRequirementsPage } from '../pages/manager/ManagerRequirementsPag
 import { ManagerRequirementDetailsPage } from '../pages/manager/ManagerRequirementDetailsPage';
 import { ManagerRequirementHistoryPage } from '../pages/manager/ManagerRequirementHistoryPage';
 import { ManagerMatchComparisonPage } from '../pages/manager/ManagerMatchComparisonPage';
+import { ManagerApprovalsPage } from '../pages/manager/ManagerApprovalsPage';
+import { ManagerWorkflowDetailsPage } from '../pages/manager/ManagerWorkflowDetailsPage';
 import { NotFoundPage } from '../pages/NotFoundPage';
 import { RoleHomePage } from '../pages/RoleHomePage';
 import { MyOffersPage } from '../pages/MyOffersPage';
@@ -49,6 +51,8 @@ export function App() {
             <Route path="manager/requirements/:requirementId/matches" element={<ManagerMatchComparisonPage />} />
             <Route path="manager/requirements/:requirementId/history" element={<ManagerRequirementHistoryPage />} />
             <Route path="manager/requirements/:requirementId/workflow" element={<ManagerRequirementDetailsPage workflowOnly />} />
+            <Route path="manager/approvals" element={<ManagerApprovalsPage />} />
+            <Route path="manager/workflows/:workflowId" element={<ManagerWorkflowDetailsPage />} />
           </Route>
         </Route>
       </Route>

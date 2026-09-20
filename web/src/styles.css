@@ -161,6 +161,16 @@ th { color: #456057; font-size: 0.8rem; text-transform: uppercase; letter-spacin
 .chart-label { display: flex; justify-content: space-between; gap: 12px; font-size: .8rem; margin-bottom: 7px; }
 .chart-label > span { overflow-wrap: anywhere; }
 .chart-label i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 7px; background: var(--chart-color); }
+.structured-result { max-height: 14rem; margin: .75rem 0 0; padding: .85rem; overflow: auto; border-radius: .65rem; background: #f5f8f6; color: #17342b; font: .82rem/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.workflow-steps, .tool-call-list { display: grid; gap: 1rem; padding-left: 1.3rem; }
+.workflow-steps > li { padding: 1rem; border: 1px solid #e6eee8; border-radius: .65rem; }
+.workflow-steps details summary { cursor: pointer; color: #145d3b; font-weight: 700; }
+.tool-call-list li { display: grid; grid-template-columns: auto auto 1fr; align-items: center; gap: .5rem; }
+.tool-call-list li p, .tool-call-list .error-message { grid-column: 1 / -1; margin: 0; }
+.decision-note { display: grid; gap: .35rem; margin-top: .75rem; }
+textarea { width: 100%; min-height: 6rem; padding: .8rem .9rem; border: 1px solid #b8c9bf; border-radius: .65rem; color: #17342b; background: #fff; font: inherit; resize: vertical; }
+textarea:focus { outline: 3px solid rgba(22, 121, 75, .2); border-color: #16794b; }
+.decision-notice { padding: .85rem; border-radius: .65rem; background: #e8f1eb; color: #145d3b; }
 .chart-label strong { white-space: nowrap; }
 .chart-label small { font-weight: 400; color: #5c6f73; }
 .chart-track { height: 9px; background: #edf2f5; border-radius: 5px; overflow: hidden; }

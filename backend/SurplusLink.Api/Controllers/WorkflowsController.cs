@@ -10,6 +10,13 @@ namespace SurplusLink.Api.Controllers;
 [Authorize(Roles = "MANAGER")]
 public sealed class WorkflowsController(AgentWorkflowService service) : ControllerBase
 {
+    [HttpGet]
+    public Task<ActionResult<object>> List([FromQuery] WorkflowQuery query, CancellationToken ct) => Execute(async () =>
+    {
+        var result = await service.ListAsync(query, ct);
+        return (object)new { items = result.Items, total = result.Total, page = query.Page, pageSize = query.PageSize,
+            totalPages = (int)Math.Ceiling(result.Total / (double)query.PageSize) };
+    });
     [HttpGet("{id:guid}")]
     [ProducesResponseType(typeof(AgentWorkflowResponse), StatusCodes.Status200OK)]
     public async Task<ActionResult<AgentWorkflowResponse>> Get(Guid id, CancellationToken ct) =>
