@@ -23,6 +23,10 @@ public sealed class SurplusLinkDbContext(DbContextOptions<SurplusLinkDbContext> 
 
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
+    public DbSet<Offer> Offers => Set<Offer>();
+
+    public DbSet<Transaction> Transactions => Set<Transaction>();
+
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
         AuditRequirementStatusChanges();
