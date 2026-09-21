@@ -77,4 +77,7 @@ Database integrity rules, migration and rollback commands, and viva notes are do
 Backend CI setup, PostgreSQL test requirements, and a step-by-step viva explanation
 are documented in [Backend CI](docs/backend-ci.md).
 
+The platform-neutral deployment checklist, startup order, rollback guidance, and
+React/Flutter post-deploy test are documented in [Deployment checklist](docs/deployment-checklist.md).
+
 
