@@ -73,7 +73,7 @@ class HomeScreen extends StatelessWidget {
                   Text(user.fullName?.isNotEmpty == true ? user.fullName! : user.email, style: Theme.of(context).textTheme.titleMedium?.copyWith(color: const Color(0xFF475569))),
                   const SizedBox(height: 10), Text(description, style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: const Color(0xFF475569))),
                   TextButton.icon(onPressed: () => context.push('/profile'), icon: const Icon(Icons.person_outline), label: const Text('My profile')),
-                ])),
+                ]))),
                 if (user.hasRole(AppRole.buyer) &&
                     onOpenRequirements != null) ...[
                   const SizedBox(height: 24),
