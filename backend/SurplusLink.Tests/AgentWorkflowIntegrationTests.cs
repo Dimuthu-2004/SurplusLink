@@ -54,6 +54,35 @@ public sealed class AgentWorkflowIntegrationTests(RequirementsDatabase fixture) 
         Assert.Equal(2, await db.Approvals.CountAsync(x => x.AgentWorkflowId == rejected.Id || x.AgentWorkflowId == revised.Id));
     }
 
+    [PostgresFact]
+    public async Task Buyer_and_seller_claims_never_grant_manager_workflow_decisions_but_dual_role_trade_with_another_party_is_valid()
+    {
+        var approve = await SeedWorkflow(AgentWorkflowStatus.PENDING_APPROVAL);
+        var reject = await SeedWorkflow(AgentWorkflowStatus.PENDING_APPROVAL);
+        var revise = await SeedWorkflow(AgentWorkflowStatus.PENDING_APPROVAL);
+        using var app = fixture.App();
+        // Both identities carry both marketplace roles; neither carries MANAGER.
+        using var buyer = fixture.Client(app, fixture.Buyer, "BUYER", "SELLER");
+        using var seller = fixture.Client(app, fixture.Seller, "SELLER", "BUYER");
+        using var manager = fixture.Client(app, fixture.Manager, "MANAGER");
+
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await buyer.PostAsJsonAsync($"/api/workflows/{approve.Id}/approve", new { note = "No manager claim." })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await seller.PostAsJsonAsync($"/api/workflows/{reject.Id}/reject", new { note = "No manager claim." })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await buyer.PostAsJsonAsync($"/api/workflows/{revise.Id}/revise", new { note = "No manager claim." })).StatusCode);
+
+        // The dual-role buyer and a distinct seller remain a legitimate pairing;
+        // only the independent manager may authorize its reservation.
+        Assert.Equal(HttpStatusCode.OK,
+            (await manager.PostAsJsonAsync($"/api/workflows/{approve.Id}/approve", new { note = "Different counterparties." })).StatusCode);
+        using var db = fixture.Context();
+        Assert.Equal(1, await db.Reservations.CountAsync(x => x.MaterialRequestId == approve.MaterialRequestId));
+        Assert.All(await db.AgentWorkflows.Where(x => x.Id == reject.Id || x.Id == revise.Id).ToListAsync(),
+            row => Assert.Equal(AgentWorkflowStatus.PENDING_APPROVAL, row.Status));
+    }
+
     private async Task<AgentWorkflow> SeedWorkflow(AgentWorkflowStatus status)
     {
         using var db = fixture.Context();
