@@ -3,6 +3,7 @@ import { AppLayout } from '../components/AppLayout';
 import { LoginPage } from '../pages/LoginPage';
 import { ManagerCategoriesPage } from '../pages/manager/ManagerCategoriesPage';
 import { ManagerListingsPage } from '../pages/manager/ManagerListingsPage';
+import { ManagerDashboardPage } from '../pages/manager/ManagerDashboardPage';
 import { ManagerMaterialDetailsPage } from '../pages/manager/ManagerMaterialDetailsPage';
 import { ManagerRequirementsPage } from '../pages/manager/ManagerRequirementsPage';
 import { ManagerRequirementDetailsPage } from '../pages/manager/ManagerRequirementDetailsPage';
@@ -43,7 +44,8 @@ export function App() {
             <Route path="offers/:offerId" element={<OfferDetailsPage />} />
           </Route>
           <Route element={<RoleRoute role="MANAGER" />}>
-            <Route path="manager" element={<ManagerListingsPage />} />
+            <Route path="manager" element={<ManagerDashboardPage />} />
+            <Route path="manager/materials" element={<ManagerListingsPage />} />
             <Route path="manager/materials/:listingId" element={<ManagerMaterialDetailsPage />} />
             <Route path="manager/categories" element={<ManagerCategoriesPage />} />
             <Route path="manager/requirements" element={<ManagerRequirementsPage />} />

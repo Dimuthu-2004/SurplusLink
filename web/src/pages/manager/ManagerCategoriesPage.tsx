@@ -86,7 +86,7 @@ export function ManagerCategoriesPage({
 
   return (
     <div className="manager-page">
-      <Link className="back-link" to="/app/manager">Back to Material listings</Link>
+      <Link className="back-link" to="/app/manager/materials">Back to Material listings</Link>
       <section className="page-heading">
         <div>
           <p className="eyebrow">Manager workspace</p>
