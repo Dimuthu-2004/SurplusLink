@@ -24,7 +24,14 @@ public sealed class PersistentRequirementWorkflowStarter(SurplusLinkDbContext db
         {
             Id = Guid.NewGuid(), MaterialRequestId = request.Id, Status = AgentWorkflowStatus.RUNNING,
             CurrentStage = "QUEUED", StartedAtUtc = now,
-            InputJson = JsonSerializer.Serialize(new { requirementId = request.Id, buyerId = request.BuyerId }),
+            InputJson = JsonSerializer.Serialize(new
+            {
+                requirementId = request.Id,
+                buyerId = request.BuyerId,
+                // Title is bounded by the requirement contract and retained only as
+                // untrusted planner context; eligibility still comes from fields.
+                objective = request.Title.Length <= 2000 ? request.Title : request.Title[..2000]
+            }),
             OutputJson = "{}", ValidationJson = "{}"
         };
         db.AgentWorkflows.Add(workflow);

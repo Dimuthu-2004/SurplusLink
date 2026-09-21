@@ -58,6 +58,9 @@ class WorkflowRequest(Contract):
     workflowId: UUID
     # Validated by the planner so malformed stored data gives a revision result.
     buyerRequest: dict[str, Any]
+    # A bounded, display-level objective from ASP.NET. It is untrusted context and
+    # never changes topology, tool selection, or deterministic eligibility rules.
+    objective: str | None = Field(default=None, max_length=2000)
     listings: tuple[ListingSnapshot, ...] = Field(max_length=20)
 
     @model_validator(mode="after")
@@ -118,6 +121,21 @@ class SnapshotTools:
 
     def __init__(self, listings):
         self.listings = {str(x.listingId): x for x in listings}
+        self.traces: list[ToolTrace] = []
+
+    def _call(self, name, input_value, action):
+        started, tick = datetime.now(timezone.utc), perf_counter()
+        try:
+            value, output = action()
+            self.traces.append(ToolTrace(toolName=name, status="COMPLETED", output=output,
+                errorCode=None, retryCount=0, startedAtUtc=started, completedAtUtc=datetime.now(timezone.utc),
+                durationMilliseconds=round((perf_counter() - tick) * 1000)))
+            return value
+        except Exception:
+            self.traces.append(ToolTrace(toolName=name, status="FAILED", output=None,
+                errorCode="TOOL_UNAVAILABLE", retryCount=0, startedAtUtc=started, completedAtUtc=datetime.now(timezone.utc),
+                durationMilliseconds=round((perf_counter() - tick) * 1000)))
+            raise
 
     @staticmethod
     def _record(x):
@@ -127,25 +145,34 @@ class SnapshotTools:
             is_verified=x.status == "ACTIVE", available_until=x.availableUntil)
 
     def search_active_materials(self, criteria):
-        return [self._record(x) for x in self.listings.values()]
+        return self._call("search_active_materials", {}, lambda: (
+            [self._record(x) for x in self.listings.values()], {"candidateCount": len(self.listings)}))
 
     def get_material_detail(self, listing_id):
-        row = self.listings.get(str(listing_id))
-        return self._record(row) if row else None
+        return self._call("get_material_detail", {"listingId": str(listing_id)}, lambda: (
+            self._record(self.listings[str(listing_id)]) if str(listing_id) in self.listings else None,
+            {"found": str(listing_id) in self.listings}))
 
     def get_listing_location(self, request):
-        row = self.listings[str(request.listingId)]
-        return dict(listingId=row.listingId, latitude=row.latitude, longitude=row.longitude)
+        return self._call("get_listing_location", {"listingId": str(request.listingId)}, lambda: (
+            dict(listingId=self.listings[str(request.listingId)].listingId,
+                 latitude=self.listings[str(request.listingId)].latitude,
+                 longitude=self.listings[str(request.listingId)].longitude), {"returned": True}))
 
     def get_route_estimate(self, request):
-        row = self.listings[str(request.listingId)]
-        if row.routingError or row.distanceKm is None or row.durationMinutes is None:
-            return dict(success=False, errorCode="ROUTING_UNAVAILABLE")
-        return dict(success=True, distanceKm=row.distanceKm, durationMinutes=row.durationMinutes)
+        def action():
+            row = self.listings[str(request.listingId)]
+            value = (dict(success=False, errorCode="ROUTING_UNAVAILABLE") if row.routingError or row.distanceKm is None or row.durationMinutes is None
+                     else dict(success=True, distanceKm=row.distanceKm, durationMinutes=row.durationMinutes))
+            return value, {"success": value.get("success", False)}
+        return self._call("get_route_estimate", {"listingId": str(request.listingId)}, action)
 
     def calculate_transport_estimate(self, request):
-        row = self.listings[str(request.listingId)]
-        return dict(estimatedTransportCost=row.transportCost) if row.transportCost is not None else dict(errorCode="TRANSPORT_UNAVAILABLE")
+        def action():
+            row = self.listings[str(request.listingId)]
+            value = dict(estimatedTransportCost=row.transportCost) if row.transportCost is not None else dict(errorCode="TRANSPORT_UNAVAILABLE")
+            return value, {"available": row.transportCost is not None}
+        return self._call("calculate_transport_estimate", {"listingId": str(request.listingId)}, action)
 
 
 class State(TypedDict, total=False):
@@ -222,24 +249,29 @@ class WorkflowOrchestrator:
         return execute
 
     async def _planner(self, state):
-        result = await asyncio.to_thread(RequirementPlannerAgent().plan, {"buyerRequest": state["request"].buyerRequest})
+        result = await asyncio.to_thread(RequirementPlannerAgent().plan, {
+            "buyerRequest": state["request"].buyerRequest,
+            "objective": state["request"].objective,
+        })
         return (dict(planner=result) if result.status == "ok" else dict(status="REVISION_REQUESTED", errorCode="INVALID_REQUIREMENT"),
                 result.model_dump(mode="json"), ())
 
     async def _matching(self, state):
         fields = state["planner"].normalizedCriteria.model_dump(mode="json")
         criteria = {k: fields[k] for k in ("buyerUserId", "categoryId", "category", "requiredQuantity", "unit", "maximumBudget", "deadline")}
-        result = await asyncio.to_thread(MaterialMatchingAgent(SnapshotTools(state["request"].listings)).match, criteria)
+        tools = SnapshotTools(state["request"].listings)
+        result = await asyncio.to_thread(MaterialMatchingAgent(tools).match, criteria)
         return (dict(matching=result) if result.status == "ok" else dict(status="REVISION_REQUESTED", errorCode="NO_MATCHING_CANDIDATE"),
-                result.model_dump(mode="json"), ())
+                result.model_dump(mode="json"), tuple(tools.traces))
 
     async def _logistics(self, state):
         criteria = state["planner"].normalizedCriteria
-        result = await asyncio.to_thread(LogisticsAgent(SnapshotTools(state["request"].listings), max_retries=0).assess, dict(
+        tools = SnapshotTools(state["request"].listings)
+        result = await asyncio.to_thread(LogisticsAgent(tools, max_retries=0).assess, dict(
             requirementId=state["planner"].buyerRequestId, candidateListingIds=[x.listingId for x in state["matching"].candidates],
             buyerLocation=dict(latitude=criteria.targetLatitude, longitude=criteria.targetLongitude), deadline=criteria.deadline))
         # Validation must see incomplete/failed logistics rather than accepting a model preference.
-        return dict(logistics=result), result.model_dump(mode="json"), ()
+        return dict(logistics=result), result.model_dump(mode="json"), tuple(tools.traces)
 
     async def _validation(self, state):
         candidate = state["matching"].candidates[0]  # Matching order, stable input order breaks ties.
