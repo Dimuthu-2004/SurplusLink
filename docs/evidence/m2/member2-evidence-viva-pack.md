@@ -136,6 +136,49 @@ ownership checks. Do not show secrets or arbitrary production records.
 Record the exact command, date, commit, environment, and actual status. A
 missing database/service is `BLOCKED`, not `PASS`.
 
+### G. Multi-role marketplace identity: architecture, security, and ADR evidence
+
+Capture this as a separate evidence subsection because the identity decision
+crosses the database, API, Flutter onboarding, React routing, authorization,
+matching, and architecture documentation.
+
+1. `m2-47-identity-erd.png`: schema evidence showing one `User` with normalized
+   `UserRoleAssignment` rows keyed by `(UserId, Role)`. Marketplace roles remain
+   `SELLER` and `BUYER`; `BOTH` is not a third authorization role.
+2. `m2-48-role-claims.png`: sanitized login/auth response or decoded JWT showing
+   separate role claims for a dual-role user and a `roles` array in the API
+   response. Do not expose the bearer token itself.
+3. `m2-49-flutter-onboarding.png`: Flutter registration step showing Sell, Buy,
+   and Both, including validation for empty, duplicate, unknown, or
+   manager-containing selections.
+4. `m2-50-dual-role-dashboard.png`: one dual-role account entering the shared
+   marketplace dashboard and showing both seller and buyer actions.
+5. `m2-51-manager-isolation.png`: evidence that `MANAGER` is not granted through
+   public marketplace onboarding and manager routes remain separately protected.
+6. `m2-52-ownership-role-matrix.png`: buyer, seller, dual-role, manager, and
+   anonymous access results. Record actual HTTP results; do not fill in
+   unobserved results.
+7. `m2-53-self-match-rule.png`: sanitized ownership data and match result
+   showing `Listing.SellerId == BuyerRequest.BuyerId` produces
+   `SELF_MATCH_NOT_ALLOWED`.
+8. `m2-54-self-match-boundary.png`: code/API evidence that the identity check
+   occurs in the trusted deterministic matching/reservation boundary before
+   ranking or recommendation publication, not in an LLM/provider.
+9. `m2-55-adr-decision.png`: `docs/adr/0002-react-auth-state.md` showing the
+   accepted multi-role decision, rejected alternatives, migration rationale,
+   separate claims, manager isolation, and self-match policy.
+10. `m2-56-architecture-flow.png`: architecture flow showing
+    Flutter/React -> API authentication -> normalized role assignments/claims
+    -> ownership checks -> deterministic matching.
+11. `m2-57-role-migration.png`: migration/schema evidence showing roles copied
+    to normalized assignments and ownership foreign keys preserved. Record the
+    actual migration output or mark it `BLOCKED`.
+
+Security evidence must distinguish UI route guards from the real API
+authorization boundary. A hidden button is not proof of authorization. Do not
+claim that any test or migration passed unless its command was actually run and
+the output was recorded.
+
 ## 2. Evidence index placeholders
 
 | ID | Evidence file/link | Behaviour proved | Role/data | Test/commit/PR | Result |
@@ -146,6 +189,9 @@ missing database/service is `BLOCKED`, not `PASS`.
 | M2-E04 | `[file/link]` | Flutter date/GPS form | `[account]` | `[reference]` | `[pass/blocked]` |
 | M2-E05 | `[file/link]` | Planner/injection resistance | `[fixture]` | `[reference]` | `[pass/blocked]` |
 | M2-E06 | `[file/link]` | Tests and PR traceability | `[branch/SHA]` | `[PR]` | `[pass/blocked]` |
+| M2-E07 | `[file/link]` | Multi-role identity architecture | `[role/account]` | `[ADR/commit]` | `[pass/blocked]` |
+| M2-E08 | `[file/link]` | Role claims and manager isolation | `[sanitised role evidence]` | `[API/test reference]` | `[pass/blocked]` |
+| M2-E09 | `[file/link]` | Deterministic self-match prevention | `[buyer/listing fixture]` | `[test/commit]` | `[pass/blocked]` |
 
 ## 3. Contribution outline placeholders
 
@@ -172,6 +218,14 @@ missing database/service is `BLOCKED`, not `PASS`.
 - Flutter form: `[date/GPS fields, UTC conversion, validation, retry]`
 - Planner: `[schemas, graph, canonical steps, output adapter]`
 - Injection resistance: `[extra-forbid/literal steps/trusted DTO/warnings]`
+- Multi-role identity decision: `[normalized role relation, separate claims,
+  Sell/Buy/Both onboarding, dual-role dashboard]`
+- Manager isolation: `[registration restriction, API role boundary, UI route
+  guard, actual evidence]`
+- Self-match prevention: `[deterministic SellerId/BuyerId rule, rejection
+  reason, trusted boundary, actual evidence]`
+- Architecture/ADR evidence: `[diagram path, ADR path, migration/API
+  references]`
 
 ### Verification
 
