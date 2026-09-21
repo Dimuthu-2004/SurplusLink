@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Route, Routes } from 'react-router-dom';
 import { AppLayout } from '../components/AppLayout';
 import { LoginPage } from '../pages/LoginPage';
 import { ManagerCategoriesPage } from '../pages/manager/ManagerCategoriesPage';
@@ -15,6 +15,7 @@ import { NotFoundPage } from '../pages/NotFoundPage';
 import { RoleHomePage } from '../pages/RoleHomePage';
 import { MyOffersPage } from '../pages/MyOffersPage';
 import { OfferDetailsPage } from '../pages/OfferDetailsPage';
+import { LandingPage } from '../pages/LandingPage';
 import {
   GuestRoute,
   ProtectedRoute,
@@ -26,7 +27,7 @@ import {
 export function App() {
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/app" replace />} />
+      <Route path="/" element={<LandingPage />} />
       <Route element={<GuestRoute />}>
         <Route path="/login" element={<LoginPage />} />
       </Route>
