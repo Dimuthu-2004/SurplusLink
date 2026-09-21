@@ -122,6 +122,27 @@ builder.Services.AddScoped<SurplusLink.Api.Requirements.RequirementService>();
 builder.Services.AddScoped<SurplusLink.Api.Matching.MatchService>();
 builder.Services.AddScoped<SurplusLink.Api.Transactions.TransactionService>();
 builder.Services.AddScoped<SurplusLink.Api.Workflows.AgentWorkflowService>();
+builder.Services.AddOptions<SurplusLink.Api.Workflows.WorkflowExecutionOptions>()
+    .BindConfiguration("AgentWorkflow")
+    .Configure(options =>
+    {
+        options.BaseUrl = builder.Configuration["AI_SERVICE_BASE_URL"] ?? options.BaseUrl;
+        options.SharedToken = builder.Configuration["AI_SERVICE_SHARED_TOKEN"] ?? options.SharedToken;
+    })
+    .Validate(x => !x.Enabled || (x.SharedToken.Length >= 32 && !x.SharedToken.Any(char.IsControl) &&
+        Uri.TryCreate(x.BaseUrl, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https" &&
+        string.IsNullOrEmpty(uri.UserInfo) && string.IsNullOrEmpty(uri.Query) && string.IsNullOrEmpty(uri.Fragment)),
+        "Valid internal service URL and token required.")
+    .Validate(x => x.PollSeconds is >= 1 and <= 60 && x.TimeoutSeconds is >= 1 and <= 180 &&
+        x.HttpTimeoutSeconds is >= 1 and <= 120 && x.MaxRetries is >= 0 and <= 3 && x.MaxCandidates is >= 1 and <= 20,
+        "Workflow execution limits are out of range.")
+    .ValidateOnStart();
+builder.Services.AddHttpClient<SurplusLink.Api.Workflows.IAgentWorkflowClient, SurplusLink.Api.Workflows.AgentWorkflowClient>(
+    client => { client.Timeout = Timeout.InfiniteTimeSpan; client.MaxResponseContentBufferSize = 2 * 1024 * 1024; })
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false })
+    .RedactLoggedHeaders(_ => true);
+builder.Services.AddScoped<SurplusLink.Api.Workflows.WorkflowQueueProcessor>();
+builder.Services.AddHostedService<SurplusLink.Api.Workflows.WorkflowExecutionWorker>();
 builder.Services.AddScoped<SurplusLink.Api.Workflows.IRequirementWorkflowStarter,
     SurplusLink.Api.Workflows.PersistentRequirementWorkflowStarter>();
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

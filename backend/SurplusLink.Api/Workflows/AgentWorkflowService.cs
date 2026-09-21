@@ -90,6 +90,18 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db)
 
         if (decision == ApprovalDecision.APPROVED)
         {
+            // Manager preference cannot override a deterministic validation failure.
+            try
+            {
+                using var validation = System.Text.Json.JsonDocument.Parse(workflow.ValidationJson);
+                if (validation.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object ||
+                    !validation.RootElement.TryGetProperty("valid", out var valid) || valid.ValueKind != System.Text.Json.JsonValueKind.True)
+                    throw new AgentWorkflowException(409, "A valid deterministic validation result is required before approval.");
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                throw new AgentWorkflowException(409, "Workflow validation data is invalid.");
+            }
             if (workflow.MaterialMatchId is not Guid matchId)
                 throw new AgentWorkflowException(409, "Approval requires a workflow match.");
             var match = await db.Matches.Include(x => x.Listing).Include(x => x.MaterialRequest)

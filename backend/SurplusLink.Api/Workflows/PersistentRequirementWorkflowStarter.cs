@@ -14,7 +14,8 @@ public sealed class PersistentRequirementWorkflowStarter(SurplusLinkDbContext db
             ?? throw new RequirementWorkflowUnavailableException();
         var existing = await db.AgentWorkflows.FirstOrDefaultAsync(
             x => x.MaterialRequestId == requirementId &&
-                 x.Status != AgentWorkflowStatus.REJECTED && x.Status != AgentWorkflowStatus.FAILED,
+                 (x.Status == AgentWorkflowStatus.RUNNING || x.Status == AgentWorkflowStatus.PENDING_APPROVAL ||
+                  x.Status == AgentWorkflowStatus.APPROVED || x.Status == AgentWorkflowStatus.COMPLETED),
             cancellationToken);
         if (existing is not null) return existing.Id;
 
@@ -22,15 +23,10 @@ public sealed class PersistentRequirementWorkflowStarter(SurplusLinkDbContext db
         var workflow = new AgentWorkflow
         {
             Id = Guid.NewGuid(), MaterialRequestId = request.Id, Status = AgentWorkflowStatus.RUNNING,
-            CurrentStage = "MATCHING", StartedAtUtc = now,
+            CurrentStage = "QUEUED", StartedAtUtc = now,
             InputJson = JsonSerializer.Serialize(new { requirementId = request.Id, buyerId = request.BuyerId }),
             OutputJson = "{}", ValidationJson = "{}"
         };
-        workflow.Steps.Add(new AgentStep
-        {
-            Id = Guid.NewGuid(), Sequence = 1, Stage = "MATCHING", Status = "RUNNING",
-            InputJson = workflow.InputJson, OutputJson = "{}", ValidationJson = "{}", StartedAtUtc = now
-        });
         db.AgentWorkflows.Add(workflow);
         await db.SaveChangesAsync(cancellationToken);
         return workflow.Id;
