@@ -62,32 +62,23 @@ class HomeScreen extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.all(24),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(icon, size: 72),
-                const SizedBox(height: 24),
-                Text(
-                  title,
-                  key: const Key('role-home-title'),
-                  style: Theme.of(context).textTheme.headlineMedium,
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  user.fullName?.isNotEmpty == true
-                      ? user.fullName!
-                      : user.email,
-                ),
-                TextButton.icon(
-                  onPressed: () => context.push('/profile'),
-                  icon: const Icon(Icons.person_outline),
-                  label: const Text('My profile'),
-                ),
-                const SizedBox(height: 12),
-                Text(description, textAlign: TextAlign.center),
+                Card(child: Padding(padding: const EdgeInsets.all(22), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: const Color(0xFFFFF0E4), borderRadius: BorderRadius.circular(12)), child: Icon(icon, size: 30, color: const Color(0xFFC2410C))),
+                  const SizedBox(height: 20),
+                  Text(title, key: const Key('role-home-title'), style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 8),
+                  Text(user.fullName?.isNotEmpty == true ? user.fullName! : user.email, style: Theme.of(context).textTheme.titleMedium?.copyWith(color: const Color(0xFF475569))),
+                  const SizedBox(height: 10), Text(description, style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: const Color(0xFF475569))),
+                  TextButton.icon(onPressed: () => context.push('/profile'), icon: const Icon(Icons.person_outline), label: const Text('My profile')),
+                ])),
                 if (user.hasRole(AppRole.buyer) &&
                     onOpenRequirements != null) ...[
                   const SizedBox(height: 24),
-                  const Text('Buy'),
+                  Text('BUY', style: Theme.of(context).textTheme.labelSmall?.copyWith(letterSpacing: 1.1, fontWeight: FontWeight.w900, color: const Color(0xFFC2410C))),
+                  const SizedBox(height: 8),
                   TextButton.icon(
                     onPressed: () => context.push('/requirements/new'),
                     icon: const Icon(Icons.add),
@@ -101,13 +92,14 @@ class HomeScreen extends StatelessWidget {
                   ),
                 ],
                 if ((seller || buyer) && onOpenOffers != null) ...[
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
                   FilledButton.icon(onPressed: onOpenOffers, icon: const Icon(Icons.local_offer_outlined), label: const Text('My Offers')),
                 ],
                 if (user.hasRole(AppRole.seller) &&
                     onOpenMaterials != null) ...[
                   const SizedBox(height: 24),
-                  const Text('Sell'),
+                  Text('SELL', style: Theme.of(context).textTheme.labelSmall?.copyWith(letterSpacing: 1.1, fontWeight: FontWeight.w900, color: const Color(0xFFC2410C))),
+                  const SizedBox(height: 8),
                   TextButton.icon(
                     onPressed: () => context.push('/materials/new'),
                     icon: const Icon(Icons.add),

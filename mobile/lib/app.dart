@@ -11,6 +11,7 @@ import 'package:mobile/routing/app_router.dart';
 import 'package:mobile/requirements/requirement_gateway.dart';
 import 'package:mobile/requirements/requirement_location.dart';
 import 'package:mobile/location/location_lookup.dart';
+import 'package:mobile/theme/surplus_link_theme.dart';
 
 class SurplusLinkApp extends StatefulWidget {
   const SurplusLinkApp({
@@ -67,13 +68,7 @@ class _SurplusLinkAppState extends State<SurplusLinkApp> {
   Widget build(BuildContext context) => MaterialApp.router(
     title: 'SurplusLink',
     debugShowCheckedModeBanner: false,
-    theme: ThemeData(
-      colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF16794B)),
-      inputDecorationTheme: const InputDecorationTheme(
-        border: OutlineInputBorder(),
-      ),
-      useMaterial3: true,
-    ),
+    theme: SurplusLinkTheme.light,
     routerConfig: _router,
   );
 }

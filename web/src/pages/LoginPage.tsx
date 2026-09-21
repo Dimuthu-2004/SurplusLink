@@ -31,6 +31,12 @@ export function LoginPage() {
 
   return (
     <main className="auth-page">
+      <aside className="auth-intro" aria-hidden="true">
+        <span className="auth-intro-mark">S</span>
+        <p>THE SMARTER MATERIAL MARKETPLACE</p>
+        <h2>Bring every useful material closer to its next purpose.</h2>
+        <div><b>AI-assisted matching</b><span>Human-controlled decisions</span></div>
+      </aside>
       <section className="auth-card" aria-labelledby="login-title">
         <div className="auth-brand" aria-hidden="true">S</div>
         <p className="eyebrow">SurplusLink</p>
