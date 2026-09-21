@@ -74,4 +74,7 @@ In development, Swagger UI is available at `/swagger` and describes JWT bearer a
 
 Database integrity rules, migration and rollback commands, and viva notes are documented in [`docs/database-integrity.md`](docs/database-integrity.md).
 
+Backend CI setup, PostgreSQL test requirements, and a step-by-step viva explanation
+are documented in [Backend CI](docs/backend-ci.md).
+
 
