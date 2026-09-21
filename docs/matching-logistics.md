@@ -58,6 +58,16 @@ provider, pricing algorithm, or reservation/workflow transition. Each state
 change and audit event is saved atomically. Optimistic concurrency prevents a
 stale writer from overwriting a rejection or appending a misleading success log.
 
+Self-matching is a hard backend rule based on stored ownership:
+`Listing.SellerId != BuyerRequest.BuyerId`. `GenerateAsync` persists a self-match
+as `REJECTED` with `SELF_MATCH_NOT_ALLOWED`; it is absent from `valid=true`
+results and cannot be revived by ranking or routing. The workflow excludes own
+listings before limiting candidates and rechecks ownership before publishing a
+recommendation. An agent/LLM cannot override this rule by supplying a high score
+or a successful validation result. Category, quantity, budget, unit, active and
+expiry checks continue to apply to other sellers' listings. The existing
+MaterialMatch model, endpoint contracts and ranking rules are unchanged.
+
 Apply the `AddMatchLogistics` EF migration before using the endpoints. Existing
 matches retain their scores and receive GENERATED status with unknown route
 measurements; historical events and route outcomes are not invented.

@@ -165,6 +165,48 @@ public sealed class WorkflowPersistenceTests(RequirementsDatabase fixture) : ICl
     }
 
     [PostgresFact]
+    public async Task Self_owned_listing_is_excluded_before_candidate_limit_and_agent_cannot_reintroduce_it()
+    {
+        foreach (var forgeSelfMatch in new[] { false, true })
+        {
+            var id = await Seed();
+            using var db = fixture.Context();
+            var request = await db.BuyerRequests.SingleAsync(x => x.Id == id);
+            // Cheaper than the other seller: exclusion must happen before Take(1).
+            var own = new Listing { Id = Guid.NewGuid(), SellerId = request.BuyerId, CategoryId = request.CategoryId,
+                Title = "Self-owned stock", Quantity = 20, UnitPrice = 1, Unit = "kg", Condition = MaterialCondition.GOOD,
+                Status = ListingStatus.ACTIVE, AvailableUntil = DateTime.UtcNow.AddDays(30), Latitude = 6.8m, Longitude = 79.9m };
+            db.Listings.Add(own);
+            await db.SaveChangesAsync();
+            Assert.False(WorkflowQueueProcessor.StillEligible(request, own, 0));
+
+            var client = new FakeClient(snapshot =>
+            {
+                var candidate = Assert.Single(snapshot.Listings);
+                Assert.NotEqual(request.BuyerId, candidate.SellerId);
+                Assert.NotEqual(own.Id, candidate.ListingId);
+                var result = WorkflowExecutionTests.Success(snapshot);
+                // Even a fully successful agent envelope with all validation checks
+                // passing cannot nominate a listing excluded by backend policy.
+                return forgeSelfMatch ? result with
+                {
+                    Recommendation = result.Recommendation! with { ListingId = own.Id }
+                } : result;
+            });
+            var processor = new WorkflowQueueProcessor(db, client, new DemoTransport(),
+                Options.Create(new WorkflowExecutionOptions { MaxCandidates = 1 }));
+            Assert.True(await processor.ProcessNextAsync(default));
+            var workflow = await db.AgentWorkflows.SingleAsync(x => x.MaterialRequestId == id);
+            Assert.Equal(forgeSelfMatch ? AgentWorkflowStatus.FAILED : AgentWorkflowStatus.PENDING_APPROVAL, workflow.Status);
+            Assert.False(await db.Matches.AnyAsync(x => x.MaterialRequestId == id && x.ListingId == own.Id));
+            Assert.Equal(forgeSelfMatch ? 0 : 1, await db.Matches.CountAsync(x => x.MaterialRequestId == id));
+            Assert.Equal(0, await db.Reservations.CountAsync(x => x.MaterialRequestId == id));
+            Assert.Equal(0, (await db.Listings.SingleAsync(x => x.Id == own.Id)).ReservedQuantity);
+            Assert.Equal(1, client.Calls);
+        }
+    }
+
+    [PostgresFact]
     public async Task Transport_or_internal_service_failure_is_terminal_safe_and_does_not_leak_secrets()
     {
         var id = await Seed();

@@ -111,9 +111,58 @@ public sealed class MatchIntegrationTests(RequirementsDatabase fixture) : IClass
         Assert.Equal(MatchStatus.REJECTED, match.Status);
         Assert.Equal(MarketplaceMatchPolicy.SelfMatchNotAllowed, match.RejectionReason);
         Assert.Equal(2, await db.AuditLogs.CountAsync(x => x.EntityId == match.Id));
+        // A supplied score or successful route cannot revive a deterministic rejection.
+        Assert.Equal(409, (await Assert.ThrowsAsync<MatchException>(() => service.RankAsync(match.Id, 1, fixture.Manager, default))).StatusCode);
+        Assert.Equal(409, (await Assert.ThrowsAsync<MatchException>(() => service.RecordRouteAsync(match.Id, true, 0, 0, fixture.Manager, default))).StatusCode);
         Assert.Equal(409, (await Assert.ThrowsAsync<MatchException>(() => service.GenerateAsync(request.Id, listing.Id, fixture.Manager, default))).StatusCode);
         Assert.Equal(400, (await Assert.ThrowsAsync<MatchException>(() => service.RecordRouteAsync(match.Id, true, -1, 0, fixture.Manager, default))).StatusCode);
         Assert.Equal(2, await db.AuditLogs.CountAsync(x => x.EntityId == match.Id));
+
+        using var app = fixture.App();
+        using var buyer = fixture.Client(app, fixture.Buyer, "SELLER", "BUYER");
+        var path = $"/api/matches/requirement/{request.Id}";
+        Assert.Empty((await buyer.GetFromJsonAsync<MatchPage>(path + "?valid=true"))!.Items);
+        var rejected = Assert.Single((await buyer.GetFromJsonAsync<MatchPage>(path + "?rejected=true"))!.Items);
+        Assert.False(rejected.Valid);
+        Assert.Equal("SELF_MATCH_NOT_ALLOWED", rejected.RejectionReason);
+        var history = (await buyer.GetFromJsonAsync<MatchHistoryPage>($"/api/matches/{match.Id}/history"))!;
+        // Both events share one save timestamp; their ID tie-break order is arbitrary.
+        Assert.Equal(new[] { "GENERATE", "REJECT" }, history.Items.Select(x => x.Action).Order());
+    }
+
+    [PostgresFact]
+    public async Task Other_sellers_still_obey_every_existing_candidate_eligibility_rule()
+    {
+        var cases = new (string? Reason, Action<Listing> Change)[]
+        {
+            (null, _ => { }),
+            ("LISTING_NOT_ACTIVE", listing => listing.Status = ListingStatus.DRAFT),
+            ("LISTING_EXPIRED", listing => listing.AvailableUntil = DateTime.UtcNow.AddDays(-1)),
+            ("UNIT_MISMATCH", listing => listing.Unit = "unit"),
+            ("INSUFFICIENT_QUANTITY", listing => listing.ReservedQuantity = 99),
+            ("BUDGET_EXCEEDED", listing => listing.UnitPrice = 3000),
+        };
+        foreach (var (reason, change) in cases)
+        {
+            var (request, listing) = await Seed();
+            using var db = fixture.Context();
+            var stored = await db.Listings.SingleAsync(x => x.Id == listing.Id);
+            change(stored);
+            await db.SaveChangesAsync();
+            var match = await new MatchService(db).GenerateAsync(request.Id, listing.Id, null, default);
+            Assert.Equal(reason, match.RejectionReason);
+            Assert.Equal(reason is null ? MatchStatus.GENERATED : MatchStatus.REJECTED, match.Status);
+        }
+
+        var (categoryRequest, categoryListing) = await Seed();
+        using var categoryDb = fixture.Context();
+        var otherCategory = new Category { Id = Guid.NewGuid(), Name = "Other category " + Guid.NewGuid() };
+        categoryDb.Categories.Add(otherCategory);
+        (await categoryDb.Listings.SingleAsync(x => x.Id == categoryListing.Id)).CategoryId = otherCategory.Id;
+        await categoryDb.SaveChangesAsync();
+        var mismatch = await new MatchService(categoryDb).GenerateAsync(categoryRequest.Id, categoryListing.Id, null, default);
+        Assert.Equal(MatchStatus.REJECTED, mismatch.Status);
+        Assert.Equal("CATEGORY_MISMATCH", mismatch.RejectionReason);
     }
 
     [PostgresFact]
