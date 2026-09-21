@@ -14,7 +14,9 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 using Npgsql;
+using SurplusLink.Api.Materials;
 using SurplusLink.Api.Data;
+using SurplusLink.Api.Matching;
 using SurplusLink.Api.Models;
 using SurplusLink.Api.Requirements;
 using SurplusLink.Api.Workflows;
@@ -91,6 +93,64 @@ public sealed class BuyerRequirementsIntegrationTests : IClassFixture<Requiremen
         foreach (var action in new[] { "submit", "start-matching", "cancel" })
             Assert.Equal(HttpStatusCode.Forbidden, (await manager.PostAsync(path + "/" + action, null)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await manager.GetAsync("/api/requirements/my")).StatusCode);
+    }
+
+    [PostgresFact]
+    public async Task Marketplace_role_matrix_preserves_listing_ownership_admin_boundaries_and_self_match_exclusion()
+    {
+        using var app = fixture.App();
+        using var seller = fixture.Client(app, fixture.Seller, "SELLER");
+        using var buyer = fixture.Client(app, fixture.Buyer, "BUYER");
+        using var dual = fixture.Client(app, fixture.Buyer, "SELLER", "BUYER");
+
+        var sellerListingResponse = await seller.PostAsJsonAsync("/api/materials", ListingBody());
+        Assert.Equal(HttpStatusCode.Created, sellerListingResponse.StatusCode);
+        var sellerListing = (await sellerListingResponse.Content.ReadFromJsonAsync<MaterialListingResponse>())!;
+        Assert.Equal(fixture.Seller, sellerListing.SellerId);
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await buyer.PostAsJsonAsync("/api/materials", ListingBody())).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await buyer.PutAsJsonAsync($"/api/materials/{sellerListing.Id}", ListingBody())).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await buyer.DeleteAsync($"/api/materials/{sellerListing.Id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await buyer.PatchAsync($"/api/materials/{sellerListing.Id}/publish", null)).StatusCode);
+
+        var dualListingResponse = await dual.PostAsJsonAsync("/api/materials", ListingBody());
+        Assert.Equal(HttpStatusCode.Created, dualListingResponse.StatusCode);
+        var dualListing = (await dualListingResponse.Content.ReadFromJsonAsync<MaterialListingResponse>())!;
+        Assert.Equal(fixture.Buyer, dualListing.SellerId);
+        Assert.Equal(HttpStatusCode.OK,
+            (await dual.PutAsJsonAsync($"/api/materials/{dualListing.Id}", ListingBody())).StatusCode);
+        var ownListings = (await dual.GetFromJsonAsync<PagedMaterialListingsResponse>("/api/materials?mineOnly=true"))!;
+        Assert.Contains(ownListings.Items, item => item.Id == dualListing.Id && item.SellerId == fixture.Buyer);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await dual.PutAsJsonAsync($"/api/materials/{sellerListing.Id}", ListingBody())).StatusCode);
+
+        Assert.Equal(HttpStatusCode.OK,
+            (await dual.PatchAsync($"/api/materials/{dualListing.Id}/publish", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await dual.PatchAsJsonAsync($"/api/materials/{dualListing.Id}/verify", new { approved = true })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await dual.PostAsJsonAsync("/api/material-categories", new { name = "dual-forbidden-" + Guid.NewGuid() })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await dual.PutAsJsonAsync($"/api/material-categories/{Guid.NewGuid()}", new { name = "dual-forbidden" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await dual.DeleteAsync($"/api/material-categories/{Guid.NewGuid()}")).StatusCode);
+
+        var requirementResponse = await Create(dual);
+        using var db = fixture.Context();
+        var requirement = await db.BuyerRequests.SingleAsync(x => x.Id == requirementResponse.Id);
+        requirement.Status = BuyerRequestStatus.MATCHING;
+        var selfOwnedListing = new Listing
+        {
+            Id = Guid.NewGuid(), SellerId = fixture.Buyer, CategoryId = requirement.CategoryId,
+            Title = "Self-owned stock", Quantity = 100, Unit = requirement.Unit, UnitPrice = 1,
+            AvailableUntil = requirement.Deadline.AddDays(1), Status = ListingStatus.ACTIVE,
+            Condition = MaterialCondition.GOOD
+        };
+        db.Listings.Add(selfOwnedListing);
+        await db.SaveChangesAsync();
+        Assert.Equal(MarketplaceMatchPolicy.SelfMatchNotAllowed,
+            MarketplaceMatchPolicy.RejectionReason(requirement.BuyerId, selfOwnedListing.SellerId));
     }
 
     [PostgresFact]
@@ -273,6 +333,14 @@ public sealed class BuyerRequirementsIntegrationTests : IClassFixture<Requiremen
         ["categoryId"] = Guid.Parse("00000000-0000-0000-0000-000000000101"),
         ["requiredQuantity"] = quantity, ["unit"] = " kg ", ["maximumBudget"] = 25000m,
         ["deadline"] = DateTimeOffset.UtcNow.AddDays(7), ["latitude"] = 6.9271m, ["longitude"] = 79.8612m
+    };
+
+    private static object ListingBody() => new
+    {
+        categoryId = "00000000-0000-0000-0000-000000000101",
+        title = "Role matrix listing", description = "Test stock", quantity = 10,
+        unit = "kg", condition = "GOOD", unitPrice = 5,
+        availableUntil = DateTime.UtcNow.AddDays(30)
     };
 
     private static async Task<RequirementResponse> Create(HttpClient client)
