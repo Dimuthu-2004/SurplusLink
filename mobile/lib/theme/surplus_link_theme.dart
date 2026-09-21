@@ -98,14 +98,14 @@ abstract final class SurplusLinkTheme {
           minimumSize: const Size(48, 48),
           side: const BorderSide(color: slate300),
           shape: const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
-          textStyle: const TextStyle(fontWeight: FontWeight.w750),
+          textStyle: const TextStyle(fontWeight: FontWeight.w700),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: amberDark,
           minimumSize: const Size(44, 44),
-          textStyle: const TextStyle(fontWeight: FontWeight.w750),
+          textStyle: const TextStyle(fontWeight: FontWeight.w700),
         ),
       ),
       floatingActionButtonTheme: const FloatingActionButtonThemeData(
