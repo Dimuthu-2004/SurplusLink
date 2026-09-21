@@ -143,7 +143,9 @@ class MaterialMatchingAgent:
                 continue
             candidates.append(self._candidate(detail, request))
 
-        candidates.sort(key=lambda candidate: candidate.basicFitScore, reverse=True)
+        # The repository order is not an input to policy.  Make equal scores stable
+        # across providers and repeat executions before the orchestrator selects one.
+        candidates.sort(key=lambda candidate: (-candidate.basicFitScore, candidate.listingId))
         if not candidates:
             return {
                 "response": self._failure(

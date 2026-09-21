@@ -53,11 +53,27 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db)
     {
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         var workflow = await LockAsync(id, ct) ?? throw NotFound();
-        EnsureDecisionState(workflow);
+        EnsurePendingApproval(workflow);
         var cleanNote = NormalizeNote(note);
         workflow.Status = AgentWorkflowStatus.REVISION_REQUESTED;
         workflow.CurrentStage = "REVISION";
         workflow.Decision = cleanNote;
+        // A revision must be actionable. MATCH_FOUND cannot be edited or matched
+        // again by the buyer, whereas OPEN can be amended and explicitly restarted.
+        if (workflow.MaterialRequestId is Guid requestId)
+        {
+            var request = await db.BuyerRequests.SingleOrDefaultAsync(x => x.Id == requestId, ct)
+                ?? throw new AgentWorkflowException(409, "The workflow material request was not found.");
+            if (request.Status == BuyerRequestStatus.MATCH_FOUND)
+            {
+                request.Status = BuyerRequestStatus.OPEN;
+                db.AuditLogs.Add(new AuditLog
+                {
+                    Id = Guid.NewGuid(), ActorUserId = managerId, EntityType = nameof(BuyerRequest), EntityId = request.Id,
+                    Action = "WORKFLOW_REVISION_REOPENED"
+                });
+            }
+        }
         db.AgentSteps.Add(new AgentStep
         {
             Id = Guid.NewGuid(), AgentWorkflowId = workflow.Id, Sequence = await db.AgentSteps.CountAsync(x => x.AgentWorkflowId == workflow.Id, ct) + 1,
@@ -85,7 +101,7 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db)
             await tx.CommitAsync(ct);
             return ToResponse(await LoadAsync(id, ct) ?? workflow);
         }
-        EnsureDecisionState(workflow);
+        EnsurePendingApproval(workflow);
         var cleanNote = NormalizeNote(note);
 
         if (decision == ApprovalDecision.APPROVED)
@@ -167,10 +183,12 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db)
         return await db.AgentWorkflows.SingleOrDefaultAsync(x => x.Id == id, ct);
     }
 
-    private static void EnsureDecisionState(AgentWorkflow workflow)
+    private static void EnsurePendingApproval(AgentWorkflow workflow)
     {
-        if (workflow.Status is not AgentWorkflowStatus.PENDING_APPROVAL and not AgentWorkflowStatus.REVISION_REQUESTED)
-            throw new AgentWorkflowException(409, $"This decision requires PENDING_APPROVAL or REVISION_REQUESTED; current status is {workflow.Status}.");
+        // A revision invalidates the prior recommendation. It must be rerun through
+        // deterministic validation before any later manager decision can reserve.
+        if (workflow.Status != AgentWorkflowStatus.PENDING_APPROVAL)
+            throw new AgentWorkflowException(409, $"This decision requires PENDING_APPROVAL; current status is {workflow.Status}.");
     }
 
     private static string NormalizeNote(string? note) => note?.Trim() ?? string.Empty;

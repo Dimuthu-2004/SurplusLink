@@ -26,7 +26,8 @@ public sealed record WorkflowListingSnapshot(Guid MatchId, Guid ListingId, Guid 
     decimal AvailableQuantity, string Unit, decimal UnitPrice, string Condition, string Status,
     DateTime AvailableUntil, decimal? Latitude, decimal? Longitude, decimal? DistanceKm,
     decimal? DurationMinutes, decimal? TransportCost, string? RoutingError);
-public sealed record WorkflowRunRequest(Guid WorkflowId, object BuyerRequest, IReadOnlyList<WorkflowListingSnapshot> Listings);
+public sealed record WorkflowRunRequest(Guid WorkflowId, object BuyerRequest, IReadOnlyList<WorkflowListingSnapshot> Listings,
+    string? Objective = null);
 public sealed record WorkflowValidation(bool Valid, bool RequiresApproval, Guid? RecommendedMatchId,
     string[] Violations, string[] Warnings);
 public sealed record WorkflowRecommendation(Guid MatchId, Guid ListingId, decimal Score, decimal DistanceKm, decimal TransportCost);
@@ -157,7 +158,8 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
         return new(workflow.Id, new { id = request.Id, buyerId = request.BuyerId, categoryId = request.CategoryId,
             requiredQuantity = request.RequiredQuantity, unit = request.Unit, maximumBudget = request.MaximumBudget,
             deadline = request.Deadline, latitude = request.Latitude, longitude = request.Longitude,
-            notes = request.Notes, status = request.Status.ToString() }, rows);
+            notes = request.Notes, status = request.Status.ToString() }, rows,
+            request.Title.Length <= 2000 ? request.Title : request.Title[..2000]);
     }
 
     internal static bool StillEligible(BuyerRequest request, Listing listing, decimal transportCost) =>
@@ -171,8 +173,15 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
     {
         var allowedStatuses = new[] { "PENDING_APPROVAL", "REVISION_REQUESTED", "REJECTED", "FAILED" };
         var stages = new[] { "PLANNER", "MATCHING", "LOGISTICS", "VALIDATION" };
-        var tools = new[] { "check_listing_active", "check_listing_not_expired", "check_available_quantity",
+        var validationTools = new[] { "check_listing_active", "check_listing_not_expired", "check_available_quantity",
             "check_budget", "check_match_data_complete", "check_transaction_threshold" };
+        var toolsByStage = new Dictionary<string, string[]>
+        {
+            ["PLANNER"] = [],
+            ["MATCHING"] = ["search_active_materials", "get_material_detail"],
+            ["LOGISTICS"] = ["get_listing_location", "get_route_estimate", "calculate_transport_estimate"],
+            ["VALIDATION"] = validationTools,
+        };
         if (result.WorkflowId != input.WorkflowId || !allowedStatuses.Contains(result.Status) || result.Validation is null ||
             result.Steps is null || result.Steps.Length > 4 || result.Validation.Violations is null || result.Validation.Warnings is null)
             throw new JsonException("Invalid workflow envelope.");
@@ -182,7 +191,7 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
                 step.DurationMilliseconds < 0 || step.CompletedAtUtc < step.StartedAtUtc || step.ToolCalls is null ||
                 step.Status is not ("COMPLETED" or "FAILED") || step.Output.ValueKind != JsonValueKind.Object)
                 throw new JsonException("Invalid step trace.");
-            if (step.ToolCalls.Any(call => call is null || !tools.Contains(call.ToolName) || call.RetryCount is < 0 or > 3 ||
+            if (step.ToolCalls.Any(call => call is null || !toolsByStage[step.Stage].Contains(call.ToolName) || call.RetryCount is < 0 or > 3 ||
                 call.DurationMilliseconds < 0 || call.CompletedAtUtc < call.StartedAtUtc ||
                 call.Status is not ("COMPLETED" or "FAILED"))) throw new JsonException("Invalid tool trace.");
         }
@@ -199,7 +208,7 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
             result.Steps.Any(x => x.Status != "COMPLETED" || x.ErrorCode is not null))
             throw new JsonException("Incomplete approval validation.");
         var calls = result.Steps[3].ToolCalls;
-        if (!calls.Select(x => x.ToolName).SequenceEqual(tools) || calls.Any(x => x.ErrorCode is not null ||
+        if (!calls.Select(x => x.ToolName).SequenceEqual(validationTools) || calls.Any(x => x.ErrorCode is not null ||
             x.Status != "COMPLETED" || x.Output is not { ValueKind: JsonValueKind.Object } output ||
             !output.TryGetProperty("passed", out var passed) || passed.ValueKind != JsonValueKind.True))
             throw new JsonException("Deterministic checks must all pass.");

@@ -17,6 +17,8 @@ ALLOWED_TOOLS = (
     "check_budget", "check_match_data_complete", "check_transaction_threshold",
 )
 ToolName = Literal[
+    "search_active_materials", "get_material_detail", "get_listing_location",
+    "get_route_estimate", "calculate_transport_estimate",
     "check_listing_active", "check_listing_not_expired", "check_available_quantity",
     "check_budget", "check_match_data_complete", "check_transaction_threshold",
 ]
@@ -67,7 +69,9 @@ class ValidationResult(Contract):
 class ToolTrace(Contract):
     toolName: ToolName
     status: Literal["COMPLETED", "FAILED"]
-    output: CheckResult | None = None
+    # Read-only matching/logistics adapters have a deliberately small, generic
+    # telemetry payload; validation calls retain their stricter CheckResult shape.
+    output: CheckResult | dict[str, object] | None = None
     errorCode: str | None = None
     retryCount: int = Field(ge=0, le=3)
     startedAtUtc: AwareDatetime
