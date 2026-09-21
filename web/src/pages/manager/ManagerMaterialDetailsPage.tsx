@@ -73,7 +73,7 @@ export function ManagerMaterialDetailsPage({
 
   return (
     <div className="manager-page">
-      <Link className="back-link" to="/app/manager">Back to all listings</Link>
+      <Link className="back-link" to="/app/manager/materials">Back to all listings</Link>
       {error && <p className="error-message" role="alert">{error}</p>}
       <section className="manager-panel">
         <div className="section-heading">

@@ -30,12 +30,12 @@ export function AppLayout() {
         <aside className="side-nav">
           <nav aria-label={user.roles.map(role => roleLabels[role]).join(' + ') + ' navigation'}>
             <NavLink to={roleHomePath(user.roles)} end>
-              {user.roles.map(role => roleLabels[role]).join(' + ')} home
+              {manager ? 'Manager Dashboard' : user.roles.map(role => roleLabels[role]).join(' + ') + ' home'}
             </NavLink>
             {(user.roles.includes('BUYER') || user.roles.includes('SELLER')) && <NavLink to="/app/offers">My Offers</NavLink>}
             {manager && (
               <>
-                <NavLink to="/app/manager">Material listings</NavLink>
+                <NavLink to="/app/manager/materials">Material listings</NavLink>
                 <NavLink to="/app/manager/categories">Material categories</NavLink>
                 <NavLink to="/app/manager/requirements">Buyer Requirements</NavLink>
                 <NavLink to="/app/manager/approvals">Pending Approvals</NavLink>

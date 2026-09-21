@@ -94,6 +94,16 @@ input:focus { outline: 3px solid rgba(22, 121, 75, 0.2); border-color: #16794b; 
 }
 
 .manager-page { display: grid; gap: 1.25rem; max-width: 78rem; }
+.dashboard-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem; align-items: start; }
+.manager-dashboard .manager-panel { min-width: 0; }
+.manager-dashboard .section-heading { flex-wrap: wrap; }
+.manager-dashboard .section-heading h2 { margin-bottom: 0; }
+.manager-dashboard .analytics-metrics { grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr)); }
+.manager-dashboard table { min-width: 0; }
+.manager-dashboard th, .manager-dashboard td { overflow-wrap: anywhere; }
+.manager-dashboard .table-scroll { margin-bottom: 1rem; }
+.manager-dashboard .table-scroll:focus-visible { outline: 3px solid #16794b; outline-offset: 3px; }
+@media (max-width: 1100px) { .dashboard-grid { grid-template-columns: minmax(0, 1fr); } }
 .page-heading, .section-heading, .action-row, .pagination { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 .page-heading { align-items: flex-end; }
 .page-heading .eyebrow, .section-heading .eyebrow { margin-top: 0; }
