@@ -5,6 +5,7 @@ using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using SurplusLink.Api.Data;
+using SurplusLink.Api.Matching;
 using SurplusLink.Api.Models;
 using SurplusLink.Api.Routing;
 
@@ -141,7 +142,9 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
     private async Task<WorkflowRunRequest> SnapshotAsync(AgentWorkflow workflow, BuyerRequest request, CancellationToken ct)
     {
         var listings = await db.Listings.AsNoTracking().Where(x => x.CategoryId == request.CategoryId &&
-            x.SellerId != request.BuyerId && x.Status == ListingStatus.ACTIVE)
+            x.SellerId != request.BuyerId && x.Status == ListingStatus.ACTIVE && x.AvailableUntil > DateTime.UtcNow &&
+            x.AvailableUntil.Date >= request.Deadline.Date && x.Quantity - x.ReservedQuantity >= request.RequiredQuantity &&
+            x.Unit.ToLower() == request.Unit.ToLower() && x.UnitPrice * request.RequiredQuantity <= request.MaximumBudget)
             .OrderByDescending(x => x.AvailableUntil >= request.Deadline &&
                 x.Quantity - x.ReservedQuantity >= request.RequiredQuantity && x.Unit.ToLower() == request.Unit.ToLower() &&
                 x.UnitPrice * request.RequiredQuantity <= request.MaximumBudget)
@@ -170,7 +173,7 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
 
     internal static bool StillEligible(BuyerRequest request, Listing listing, decimal transportCost) =>
         request.Status == BuyerRequestStatus.MATCHING && request.Deadline > DateTime.UtcNow &&
-        listing.Status == ListingStatus.ACTIVE && listing.AvailableUntil >= request.Deadline &&
+        listing.Status == ListingStatus.ACTIVE && DeliveryAvailabilityPolicy.IsAvailableThrough(listing.AvailableUntil, request.Deadline) &&
         listing.SellerId != request.BuyerId && listing.CategoryId == request.CategoryId &&
         string.Equals(listing.Unit, request.Unit, StringComparison.OrdinalIgnoreCase) &&
         listing.Quantity - listing.ReservedQuantity >= request.RequiredQuantity && transportCost >= 0 &&
@@ -237,12 +240,11 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
         var persisted = await db.Matches.Where(x => x.MaterialRequestId == request.Id).ToDictionaryAsync(x => x.Id, ct);
         foreach (var row in snapshot.Listings)
         {
-            var reason = row.AvailableUntil < request.Deadline ? "LISTING_EXPIRES_BEFORE_DELIVERY"
+            var reason = !DeliveryAvailabilityPolicy.IsAvailableThrough(row.AvailableUntil, request.Deadline) ? "LISTING_EXPIRES_BEFORE_DELIVERY"
                 : !string.Equals(row.Unit, request.Unit, StringComparison.OrdinalIgnoreCase) ? "UNIT_MISMATCH"
                 : row.AvailableQuantity < request.RequiredQuantity ? "INSUFFICIENT_QUANTITY"
                 : row.UnitPrice * request.RequiredQuantity > request.MaximumBudget ? "BUDGET_EXCEEDED"
-                : row.DistanceKm is null || row.DurationMinutes is null || row.TransportCost is null ? "ROUTING_UNAVAILABLE"
-                : row.UnitPrice * request.RequiredQuantity + row.TransportCost > request.MaximumBudget ? "TOTAL_COST_EXCEEDS_BUDGET"
+                : row.UnitPrice * request.RequiredQuantity + (row.TransportCost ?? 0) > request.MaximumBudget && row.TransportCost is not null ? "TOTAL_COST_EXCEEDS_BUDGET"
                 : null;
             if (!persisted.TryGetValue(row.MatchId, out var candidate))
             {
@@ -254,17 +256,17 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
             }
             if (row.DurationMinutes > (decimal)(request.Deadline - DateTime.UtcNow).TotalMinutes)
                 reason ??= "DELIVERY_DEADLINE_EXCEEDED";
-            candidate.Status = reason is null ? MatchStatus.ROUTED : MatchStatus.REJECTED;
+            var routeSucceeded = row.DistanceKm is not null && row.DurationMinutes is not null && row.TransportCost is not null;
+            candidate.Status = reason is not null ? MatchStatus.REJECTED : routeSucceeded ? MatchStatus.ROUTED : MatchStatus.ROUTE_FAILED;
             candidate.RejectionReason = reason;
-            candidate.Distance = row.DistanceKm;
-            candidate.DurationMinutes = row.DurationMinutes;
-            candidate.EstimatedTransportCost = row.TransportCost;
+            candidate.Distance = routeSucceeded ? row.DistanceKm : null;
+            candidate.DurationMinutes = routeSucceeded ? row.DurationMinutes : null;
+            candidate.EstimatedTransportCost = routeSucceeded ? row.TransportCost : null;
             candidate.Score = Math.Round((50m + 30m * (request.MaximumBudget - row.UnitPrice * request.RequiredQuantity) /
                 request.MaximumBudget + 20m * Math.Min((row.AvailableQuantity - request.RequiredQuantity) / request.RequiredQuantity, 1m)) / 100m, 4);
             candidate.Score = Math.Clamp(candidate.Score, 0m, 1m);
             db.AuditLogs.Add(new AuditLog { Id = Guid.NewGuid(), EntityType = nameof(MaterialMatch), EntityId = candidate.Id,
-                Action = row.DistanceKm is not null && row.DurationMinutes is not null && row.TransportCost is not null
-                    ? "ROUTE_SUCCEEDED" : "ROUTE_FAILED" });
+                Action = routeSucceeded ? "ROUTE_SUCCEEDED" : "ROUTE_FAILED" });
             db.AuditLogs.Add(new AuditLog { Id = Guid.NewGuid(), EntityType = nameof(MaterialMatch), EntityId = candidate.Id,
                 Action = reason is null ? "RANK" : "REJECT" });
         }
@@ -351,3 +353,4 @@ public sealed class WorkflowExecutionWorker(IServiceScopeFactory scopes, IOption
         }
     }
 }
+

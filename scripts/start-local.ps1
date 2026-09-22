@@ -12,6 +12,9 @@ if (!$env:AI_SERVICE_SHARED_TOKEN) {
 }
 $env:AI_SERVICE_BASE_URL = "http://127.0.0.1:$AiPort"
 $env:AgentWorkflow__Enabled = 'true'
+$routingRequired = 'Routing__Endpoint', 'Routing__ApiKey', 'Routing__BaseFee', 'Routing__CostPerKm', 'Routing__CostPerMinute'
+$missingRouting = $routingRequired | Where-Object { [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($_)) }
+if ($missingRouting) { Write-Warning ("Routing provider configuration is missing: " + ($missingRouting -join ', ')) }
 $logs = Join-Path $projectRoot '.runtime'
 New-Item -ItemType Directory -Force $logs | Out-Null
 if (Get-NetTCPConnection -LocalPort $AiPort -State Listen -ErrorAction SilentlyContinue) {

@@ -172,7 +172,7 @@ class MaterialMatchingAgent:
             return False
         if listing.unit.casefold() != request.unit.casefold():
             return False
-        if listing.available_until < request.deadline:
+        if listing.available_until.astimezone(timezone.utc).date() < request.deadline.astimezone(timezone.utc).date():
             return False
         if listing.unit_price * request.requiredQuantity > request.maximumBudget:
             return False

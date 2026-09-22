@@ -105,7 +105,9 @@ class DeterministicValidationTools:
         return self._result(value.listingStatus == "ACTIVE", "LISTING_NOT_ACTIVE")
 
     async def check_listing_not_expired(self, value):
-        return self._result(value.availableUntil > self.clock() and value.availableUntil >= value.deadline,
+        available_date = value.availableUntil.astimezone(timezone.utc).date()
+        deadline_date = value.deadline.astimezone(timezone.utc).date()
+        return self._result(value.availableUntil > self.clock() and available_date >= deadline_date,
                             "LISTING_EXPIRED_OR_EXPIRES_BEFORE_DELIVERY")
 
     async def check_available_quantity(self, value):
