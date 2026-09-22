@@ -47,10 +47,31 @@ The API key is sent in the Authorization header, never in a URL or response DTO.
 To change provider, implement `IRoutingProvider` and replace its DI registration;
 the estimator and callers depend only on the interface. Replace the interface
 with a fake in tests, or supply an HttpMessageHandler to test the HTTP adapter.
-The current branch has no match logistics service; a future workflow should
-invoke this service and persist the result through its own match action boundary.
+`MatchService.RouteCandidateAsync` and the workflow worker invoke the estimator
+and persist distance, duration and transport cost on `MaterialMatch`. Missing
+coordinates or a failed provider result persist `ROUTE_FAILED` with null metrics.
 
 Run `dotnet test backend/SurplusLink.Tests --filter RoutingProviderTests` for
 normal routing, timeout, rate limiting, invalid payloads, upstream failures,
 cancellation, configuration, credential handling, pricing and provider swapping.
 No live provider credentials or network calls are needed by these tests.
+
+## Local configuration
+
+Create an ignored `.env.local` at the repository root containing the `Routing__*`
+block from `.env.example`. Replace the placeholder key and example tariffs with
+real development values. Run `scripts/start-local.ps1` (optionally with
+`-RoutingEnvFile <path>`). The launcher imports only routing entries, strips
+optional surrounding quotes, does not execute values, and preserves existing
+process environment settings. Both child services inherit that environment;
+only the ASP.NET adapter consumes it. Missing settings produce a warning listing
+names only, never values. Do not put these settings in `VITE_*` or Flutter defines.
+For direct API startup, dot-source `scripts/import-routing-env.ps1` first.
+
+After configuring credentials, create a listing and requirement with valid
+coordinates, generate candidates, and route the candidate through
+`POST /api/matches/{id}/route` while the requirement is OPEN. Read
+`GET /api/matches/requirement/{requirementId}` and confirm `distance`,
+`durationMinutes`, and `estimatedTransportCost`. The returned estimate must equal
+base fee + kilometres ? per-km tariff + minutes ? per-minute tariff, rounded to
+2 decimals. A workflow retry also recomputes routing from authoritative coordinates.

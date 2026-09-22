@@ -51,6 +51,7 @@ export function App() {
             <Route path="manager/categories" element={<ManagerCategoriesPage />} />
             <Route path="manager/requirements" element={<ManagerRequirementsPage />} />
             <Route path="manager/requirements/:requirementId" element={<ManagerRequirementDetailsPage />} />
+            <Route path="manager/matches" element={<ManagerMatchComparisonPage />} />
             <Route path="manager/requirements/:requirementId/matches" element={<ManagerMatchComparisonPage />} />
             <Route path="manager/requirements/:requirementId/history" element={<ManagerRequirementHistoryPage />} />
             <Route path="manager/requirements/:requirementId/workflow" element={<ManagerRequirementDetailsPage workflowOnly />} />

@@ -23,7 +23,7 @@ export function MatchAnalyticsWidget({ api = managerMatchesApi, requirementId }:
       <div className="analytics-grid">
         <div><h3>Cost and route</h3><ul className="summary-list">
           <li>Average route: {data.averageRouteKm === null ? '—' : requirementNumber(data.averageRouteKm, 1) + ' km'}</li>
-          <li>Average cost: {data.averageCost === null ? '—' : '$' + requirementNumber(data.averageCost, 2)}</li>
+          <li>Average cost: {data.averageCost === null ? '—' : 'LKR ' + requirementNumber(data.averageCost, 2)}</li>
           <li>Top candidate: {data.topCandidate ? data.topCandidate.materialTitle : 'No candidates'}</li>
         </ul></div>
       </div>

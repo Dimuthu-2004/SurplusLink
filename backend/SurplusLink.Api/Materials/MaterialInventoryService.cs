@@ -226,6 +226,22 @@ public sealed class MaterialInventoryService(SurplusLinkDbContext dbContext) : I
             throw new MaterialOperationException(MaterialOperationError.Validation, "An expired listing cannot be verified.");
 
         listing.Status = request.Approved ? ListingStatus.ACTIVE : ListingStatus.REJECTED;
+        if (request.Approved)
+        {
+            // Durable invalidation notice only: no hidden background matching or
+            // changes to approved outcomes. The next explicit run re-evaluates.
+            var staleIds = await dbContext.Matches.Where(x => x.ListingId == listingId &&
+                (x.MaterialRequest.Status == BuyerRequestStatus.OPEN || x.MaterialRequest.Status == BuyerRequestStatus.MATCHING) &&
+                !dbContext.Reservations.Any(r => r.MaterialRequestId == x.MaterialRequestId) &&
+                !dbContext.AgentWorkflows.Any(w => w.MaterialRequestId == x.MaterialRequestId &&
+                    (w.Status == AgentWorkflowStatus.PENDING_APPROVAL || w.Status == AgentWorkflowStatus.APPROVED ||
+                     w.Status == AgentWorkflowStatus.COMPLETED)))
+                .Select(x => x.Id).ToListAsync(cancellationToken);
+            foreach (var id in staleIds)
+                dbContext.AuditLogs.Add(new AuditLog { Id = Guid.NewGuid(), EntityType = nameof(MaterialMatch),
+                    EntityId = id, ActorUserId = managerId, Action = "STALE_LISTING_VERIFIED" });
+        }
+
         AddAudit(managerId, listing.Id, request.Approved ? "LISTING_VERIFIED" : "LISTING_REJECTED");
         await dbContext.SaveChangesAsync(cancellationToken);
         return await GetResponseAsync(listing.Id, cancellationToken);

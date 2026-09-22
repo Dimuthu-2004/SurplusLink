@@ -26,10 +26,8 @@ public sealed partial class MatchService
                 x.SellerId != request.BuyerId && x.Quantity - x.ReservedQuantity >= request.RequiredQuantity &&
                 x.Unit.ToLower() == request.Unit.ToLower() && x.UnitPrice * request.RequiredQuantity <= request.MaximumBudget)
             .ThenBy(x => x.UnitPrice).ThenBy(x => x.Id).Take(100).ToListAsync(ct);
-        var existing = await db.Matches.Where(x => x.MaterialRequestId == id).ToDictionaryAsync(x => x.ListingId, ct);
         foreach (var listing in listings)
         {
-            if (existing.ContainsKey(listing.Id)) continue;
             await GenerateAsync(id, listing.Id, actor, ct);
         }
         await tx.CommitAsync(ct);
@@ -118,7 +116,7 @@ public sealed partial class MatchService
         MarketplaceMatchPolicy.RejectionReason(request.BuyerId, listing.SellerId)
         ?? (listing.Status != ListingStatus.ACTIVE ? "LISTING_NOT_ACTIVE" : null)
         ?? (listing.AvailableUntil <= DateTime.UtcNow ? "LISTING_EXPIRED" : null)
-        ?? (listing.AvailableUntil < request.Deadline ? "LISTING_EXPIRES_BEFORE_DELIVERY" : null)
+        ?? (!DeliveryAvailabilityPolicy.IsAvailableThrough(listing.AvailableUntil, request.Deadline) ? "LISTING_EXPIRES_BEFORE_DELIVERY" : null)
         ?? (listing.CategoryId != request.CategoryId ? "CATEGORY_MISMATCH" : null)
         ?? (!string.Equals(listing.Unit, request.Unit, StringComparison.OrdinalIgnoreCase) ? "UNIT_MISMATCH" : null)
         ?? (listing.Quantity - listing.ReservedQuantity < request.RequiredQuantity ? "INSUFFICIENT_QUANTITY" : null)
@@ -127,5 +125,7 @@ public sealed partial class MatchService
     private static MatchResponse Response(MaterialMatch x) => new(x.Id, x.MaterialRequestId, x.ListingId,
         x.Score, x.Distance, x.EstimatedTransportCost, x.Status.ToString(), x.Status != MatchStatus.REJECTED,
         x.Status == MatchStatus.REJECTED, x.RejectionReason, x.CreatedAtUtc, x.DurationMinutes,
-        x.Listing.Title, x.Listing.Category.Name, x.Listing.SellerId, x.MaterialRequest.RequiredQuantity, x.Listing.Unit, x.Listing.UnitPrice);
+        x.Listing.Title, x.Listing.Category.Name, x.Listing.SellerId, x.MaterialRequest.RequiredQuantity, x.Listing.Unit, x.Listing.UnitPrice,
+        x.Listing.AvailableUntil, x.MaterialRequest.Deadline, x.Listing.Quantity - x.Listing.ReservedQuantity,
+        x.MaterialRequest.MaximumBudget, x.MaterialRequest.Status.ToString());
 }

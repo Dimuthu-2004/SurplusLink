@@ -42,3 +42,4 @@ web/vite.config.d.ts
 # Uploaded user media
 backend/SurplusLink.Api/App_Data/
 .runtime/
+.env.local

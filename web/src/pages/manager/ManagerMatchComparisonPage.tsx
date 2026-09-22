@@ -1,19 +1,22 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { MatchAnalyticsWidget } from '../../features/matches/MatchAnalyticsWidget';
-import { managerMatchesApi, type ManagerMatchesApi, type MatchComparisonQuery, type MatchCandidate } from '../../features/matches/managerMatchesApi';
+import { managerMatchesApi, type ManagerMatchesApi, type MatchComparisonQuery, type MatchCandidate, type MatchStatus } from '../../features/matches/managerMatchesApi';
+import { matchReason, matchCurrency, matchRoute } from '../../features/matches/matchFormatters';
 import { RequirementBadge, RequirementError, RequirementPagination, requirementDate, requirementNumber, useRequirementResource } from '../../features/requirements/requirementUi';
 
-const defaultQuery = {
-  status: 'ALL' as MatchComparisonQuery['status'],
-  sort: 'score' as MatchComparisonQuery['sort'],
-  sortDir: 'desc' as MatchComparisonQuery['sortDir'],
-  page: 1,
-  pageSize: 20,
-};
-
 export function ManagerMatchComparisonPage({ api = managerMatchesApi }: { api?: ManagerMatchesApi }) {
-  const { requirementId = '' } = useParams();
+  const { requirementId } = useParams();
+  if (!requirementId) return <section className="manager-panel">
+    <h1>Match comparison</h1><p>Select a buyer requirement to compare its match candidates.</p>
+    <Link to="/app/manager/requirements">Choose requirement</Link>
+  </section>;
+  return <RequirementMatches key={requirementId} api={api} requirementId={requirementId} />;
+}
+
+function RequirementMatches({ api, requirementId }: { api: ManagerMatchesApi; requirementId: string }) {
+  const [matchStatus, setMatchStatus] = useState<MatchStatus | ''>('');
+  const [revision, setRevision] = useState(0);
   const [status, setStatus] = useState<'ALL' | 'VALID' | 'REJECTED'>('ALL');
   const [sort, setSort] = useState<MatchComparisonQuery['sort']>('score');
   const [sortDir, setSortDir] = useState<MatchComparisonQuery['sortDir']>('desc');
@@ -22,11 +25,12 @@ export function ManagerMatchComparisonPage({ api = managerMatchesApi }: { api?: 
   const requirement = useRequirementResource(useCallback(() => api.requirement(requirementId), [api, requirementId]));
   const query = useMemo<MatchComparisonQuery>(() => ({
     status,
+    matchStatus: matchStatus || undefined,
     sort,
     sortDir,
     page,
     pageSize: 20,
-  }), [page, sort, sortDir, status]);
+  }), [page, sort, sortDir, status, matchStatus]);
   const list = useRequirementResource(useCallback(() => api.list(requirementId, query), [api, requirementId, query]));
 
   const row = requirement.data;
@@ -41,7 +45,7 @@ export function ManagerMatchComparisonPage({ api = managerMatchesApi }: { api?: 
         <p className="eyebrow">Manager review</p>
         <h1>Match comparison</h1>
       </div>
-      <button type="button" className="button button-secondary" disabled={list.loading} onClick={list.reload}>Refresh matches</button>
+      <button type="button" className="button button-secondary" disabled={list.loading} onClick={() => { list.reload(); requirement.reload(); setRevision(value => value + 1); }}>Refresh matches</button>
     </header>
 
     {requirement.loading && <p role="status">Loading requirement context…</p>}
@@ -55,14 +59,14 @@ export function ManagerMatchComparisonPage({ api = managerMatchesApi }: { api?: 
         <div><dt>Requirement ID</dt><dd>{row.id}</dd></div>
         <div><dt>Category</dt><dd>{row.categoryId}</dd></div>
         <div><dt>Required quantity</dt><dd>{requirementNumber(row.requiredQuantity)} {row.unit}</dd></div>
-        <div><dt>Budget</dt><dd>${requirementNumber(row.maximumBudget, 2)}</dd></div>
+        <div><dt>Budget</dt><dd>{matchCurrency(row.maximumBudget)}</dd></div>
         <div><dt>Deadline</dt><dd>{requirementDate(row.deadline)}</dd></div>
         <div><dt>Location</dt><dd>{row.latitude === null || row.longitude === null ? 'Not recorded' : `${row.latitude}, ${row.longitude}`}</dd></div>
       </dl>
       <p className="muted">{row.notes || 'No notes added.'}</p>
     </section>}
 
-    <MatchAnalyticsWidget api={api} requirementId={requirementId} />
+    <MatchAnalyticsWidget key={revision} api={api} requirementId={requirementId} />
 
     <section className="manager-panel" aria-label="Candidate comparison filters">
       <div className="section-heading">
@@ -77,12 +81,16 @@ export function ManagerMatchComparisonPage({ api = managerMatchesApi }: { api?: 
         ))}
       </div>
       <div className="filter-form no-gap">
-        <label>Sort by<select value={sort} onChange={(event) => setSort(event.target.value as MatchComparisonQuery['sort'])}>
+        <label>Match status<select value={matchStatus} onChange={event => { setMatchStatus(event.target.value as MatchStatus | ''); setPage(1); }}>
+          <option value="">Any status</option>
+          {(['GENERATED', 'RANKED', 'ROUTED', 'ROUTE_FAILED', 'REJECTED'] as const).map(value => <option key={value} value={value}>{value.replaceAll('_', ' ')}</option>)}
+        </select></label>
+        <label>Sort by<select value={sort} onChange={(event) => { setSort(event.target.value as MatchComparisonQuery['sort']); setPage(1); }}>
           <option value="score">Score</option>
           <option value="distance">Distance</option>
           <option value="cost">Cost</option>
         </select></label>
-        <label>Direction<select value={sortDir} onChange={(event) => setSortDir(event.target.value as MatchComparisonQuery['sortDir'])}>
+        <label>Direction<select value={sortDir} onChange={(event) => { setSortDir(event.target.value as MatchComparisonQuery['sortDir']); setPage(1); }}>
           <option value="desc">Descending</option>
           <option value="asc">Ascending</option>
         </select></label>
@@ -96,12 +104,13 @@ export function ManagerMatchComparisonPage({ api = managerMatchesApi }: { api?: 
       {list.loading && <p role="status">Loading candidate matches…</p>}
       {list.error && <RequirementError message={list.error} retry={list.reload} />}
       {list.data && <>
-        {!done ? <p className="empty-state">No matches match these filters.</p> : <>
+        {!done ? <p className="empty-state">{status === 'ALL' && !matchStatus ? 'No match candidates have been generated for this requirement yet.' : 'No candidates match these filters.'}</p> : <>
           <div className="table-scroll" tabIndex={0} role="region" aria-label="Match comparison table">
             <table>
               <thead>
                 <tr>
                   <th scope="col">Candidate</th>
+                  <th scope="col">Required quantity</th><th scope="col">Available quantity</th><th scope="col">Unit price</th>
                   <th scope="col">Score</th>
                   <th scope="col">Route</th>
                   <th scope="col">Transport cost (LKR)</th>
@@ -128,11 +137,14 @@ function MatchCandidateRow({ candidate, requirementId }: { candidate: MatchCandi
       <strong>{candidate.materialTitle}</strong><br />
       <small>{candidate.categoryName}</small>
     </td>
-    <td>{candidate.score}</td>
-    <td>{candidate.routeDistanceKm === null ? '—' : `${requirementNumber(candidate.routeDistanceKm, 1)} km`}<br />{candidate.durationMinutes == null ? 'Duration unavailable' : `${requirementNumber(candidate.durationMinutes, 1)} min`}</td>
-    <td>{candidate.estimatedCost === null ? '—' : `$${requirementNumber(candidate.estimatedCost, 2)}`}</td>
-    <td><span className="status-badge">{candidate.status}</span></td>
-    <td>{candidate.rejectionReason || '—'}</td>
+    <td>{candidate.quantity == null ? 'Not available' : `${requirementNumber(candidate.quantity)} ${candidate.unit ?? ''}`}</td>
+    <td>{candidate.availableQuantity == null ? 'Not available' : `${requirementNumber(candidate.availableQuantity)} ${candidate.unit ?? ''}`}</td>
+    <td>{matchCurrency(candidate.unitPrice)}</td>
+    <td>{requirementNumber(candidate.score, 1)}%</td>
+    <td>{matchRoute(candidate)}</td>
+    <td>{matchCurrency(candidate.estimatedCost)}</td>
+    <td><RequirementBadge status={candidate.status} /><br />{candidate.rejected || candidate.status === 'REJECTED' ? 'Rejected' : 'Not rejected'}</td>
+    <td>{candidate.rejectionReason ? matchReason(candidate.rejectionReason) : 'None'}</td>
     <td>
       <Link className="text-button" to={'/app/manager/materials/' + encodeURIComponent(candidate.materialListingId)}>View material</Link>
       <br />
