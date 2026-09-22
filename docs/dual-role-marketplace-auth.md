@@ -1,6 +1,6 @@
 # Dual-role marketplace authentication
 
-One account can hold SELLER, BUYER, or both. MANAGER remains seeded/admin-created and is never accepted through public registration. No Member 3 features are implemented.
+One account can hold SELLER, BUYER, or both. MANAGER remains seeded/admin-created and is never accepted through public registration. Matching, logistics and the canonical approval workflow now enforce this identity model.
 
 ## API and client contract
 
@@ -14,15 +14,15 @@ Deploy API and clients together for this contract change. Existing single-role a
 
 `Users` has many `UserRoleAssignments`, keyed by `(UserId, Role)` with a Users FK and valid-role constraint. Exactly one migration was created: `20260918145314_AddUserRoleAssignments`. Its generated SQL was reviewed before application: create relation, copy every old role, then drop `Users.Role`, all in one transaction. No ownership FK or user ID is changed. Downgrade refuses any account with zero or multiple roles rather than discarding information.
 
-The local migration was applied with the existing connection from API user secrets, without changing its value or tracked appsettings files. Before/after hashes confirmed preservation of all **5 existing users and their roles**. Local listing/request counts were both zero; PostgreSQL integration fixtures independently verify preservation with populated listings, requests, matches, and reservations. All seven migrations are applied and EF reports no pending model changes.
+The local migration was applied with the existing connection from API user secrets, without changing its value or tracked appsettings files. Before/after hashes confirmed preservation of all **5 existing users and their roles**. Local listing/request counts were both zero; PostgreSQL integration fixtures independently verify preservation with populated listings, requests, matches, and reservations. At that milestone all seven migrations were applied. The resumed audit applied the subsequent duration migration and verified all eleven current migrations and no pending model changes.
 
 Development startup seeds seller@test.local, buyer@test.local, dual@test.local, and manager@test.local using the existing development-only credential pattern in `DevelopmentSeed.cs`. Existing accounts are skipped, preserving their passwords, identities, and assigned capabilities. No secrets or connection values are recorded here.
 
 ## Matching contract
 
-The planner derives `normalizedCriteria.buyerUserId` from stored `buyerRequest.buyerId`. Matching requires that nonempty UUID and trusted `MaterialListingRecord.seller_id` values. It checks both search records and refreshed details and reports `SELF_MATCH_NOT_ALLOWED` exclusions. Other eligible sellers still match. No identity is included in normal candidate output or sent to a model provider. The existing reservation service repeats the rule with a structured error code. Future M3 queries must filter `Listing.SellerId != BuyerRequest.BuyerId` and reuse `MarketplaceMatchPolicy`; workflow execution remains deferred.
+The planner derives `normalizedCriteria.buyerUserId` from stored `buyerRequest.buyerId`. Matching requires that nonempty UUID and trusted `MaterialListingRecord.seller_id` values. It checks both search records and refreshed details and reports `SELF_MATCH_NOT_ALLOWED` exclusions. Other eligible sellers still match. No identity is included in normal candidate output or sent to a model provider. The existing reservation service repeats the rule with a structured error code. M3 generation and workflow execution enforce `Listing.SellerId != BuyerRequest.BuyerId` using the same deterministic policy. See the current pre-S12 audit for integrated verification.
 
-ADR 0002 is amended; the ADR count stays at two. Earlier milestone evidence documents historical single-role behavior and is superseded by this contract.
+ADR 0002 is amended; the identity amendment remains in ADR 0002; ADR 0003 now records the implemented workflow and reservation boundary. Earlier milestone evidence documents historical single-role behavior and is superseded by this contract.
 
 ## Verification (2026-09-18)
 

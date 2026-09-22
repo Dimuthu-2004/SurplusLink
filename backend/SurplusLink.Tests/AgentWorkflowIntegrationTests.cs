@@ -119,6 +119,31 @@ public sealed class AgentWorkflowIntegrationTests(RequirementsDatabase fixture) 
             row => Assert.Equal(AgentWorkflowStatus.PENDING_APPROVAL, row.Status));
     }
 
+    [PostgresFact]
+    public async Task Approval_rechecks_transport_budget_delivery_and_route_completeness()
+    {
+        using var app = fixture.App();
+        using var manager = fixture.Client(app, fixture.Manager, "MANAGER");
+        foreach (var defect in new[] { "budget", "delivery", "route", "travelTime" })
+        {
+            var workflow = await SeedWorkflow(AgentWorkflowStatus.PENDING_APPROVAL);
+            using (var db = fixture.Context())
+            {
+                var match = await db.Matches.Include(x => x.Listing).SingleAsync(x => x.Id == workflow.MaterialMatchId);
+                if (defect == "budget") match.EstimatedTransportCost = 990;
+                if (defect == "delivery") match.Listing.AvailableUntil = DateTime.UtcNow.AddDays(1);
+                if (defect == "route") match.DurationMinutes = null;
+                if (defect == "travelTime") match.DurationMinutes = 10000;
+                await db.SaveChangesAsync();
+            }
+            Assert.Equal(HttpStatusCode.Conflict,
+                (await manager.PostAsJsonAsync($"/api/workflows/{workflow.Id}/approve", new { note = defect })).StatusCode);
+            using var verify = fixture.Context();
+            Assert.False(await verify.Reservations.AnyAsync(x => x.MaterialRequestId == workflow.MaterialRequestId));
+            Assert.Equal(AgentWorkflowStatus.PENDING_APPROVAL, (await verify.AgentWorkflows.FindAsync(workflow.Id))!.Status);
+        }
+    }
+
     private async Task<AgentWorkflow> SeedWorkflow(AgentWorkflowStatus status)
     {
         using var db = fixture.Context();
@@ -135,7 +160,7 @@ public sealed class AgentWorkflowIntegrationTests(RequirementsDatabase fixture) 
             Quantity = 10, ReservedQuantity = 0, Unit = "kg", UnitPrice = 10, AvailableUntil = DateTime.UtcNow.AddDays(5),
             Status = ListingStatus.ACTIVE, Condition = MaterialCondition.GOOD
         };
-        var match = new MaterialMatch { Id = Guid.NewGuid(), MaterialRequestId = request.Id, ListingId = listing.Id, Status = MatchStatus.GENERATED };
+        var match = new MaterialMatch { Id = Guid.NewGuid(), MaterialRequestId = request.Id, ListingId = listing.Id, Status = MatchStatus.ROUTED, Distance = 10, DurationMinutes = 30, EstimatedTransportCost = 100 };
         var workflow = new AgentWorkflow
         {
             Id = Guid.NewGuid(), MaterialRequestId = request.Id, MaterialMatchId = match.Id, Status = status,

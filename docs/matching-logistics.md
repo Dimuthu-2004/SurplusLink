@@ -36,27 +36,16 @@ are null, not a fabricated 0% success rate.
 
 ## Action persistence and workflow integration
 
-This branch previously had only the basic match entity; no matching/logistics
-action endpoints or production workflow integration existed. `MatchService`
-provides trusted integration methods, registered in dependency injection:
+The same `MatchService` supports standalone preparation and integrated workflow persistence.
 
-- `GenerateAsync`: records a candidate and GENERATE. Deterministically invalid
-  candidates are stored as REJECTED with a reason and REJECT event, including
-  SELF_MATCH_NOT_ALLOWED. Rejects expired or non-open/non-matching requirements
-  and duplicate candidate generation. It does not search inventory itself.
-- `RankAsync`: stores a caller-computed score from 0 to 1 and records RANK.
-- `RecordRouteAsync`: stores a computed route result and records ROUTE_SUCCEEDED
-  or ROUTE_FAILED. History exposes action ROUTE and outcome SUCCEEDED/FAILED.
-  Failed attempts clear stale route measurements; successful attempts require
-  nonnegative distance and cost. Ranking preserves an existing route outcome.
-- `RejectAsync`: stores the supplied reason and records REJECT. Rejected matches
-  cannot be reranked or rerouted.
+- `POST /api/matches/requirement/{id}/generate`: owning BUYER or MANAGER, OPEN future request, no active workflow. Searches up to 100 category-compatible listings, prioritizes feasible inventory, persists rejection reasons and reuses existing candidate IDs on repeated calls.
+- `POST /api/matches/requirement/{id}/rank`: same access/state guard; computes deterministic scores from cost and known distance on the server.
+- `POST /api/matches/{id}/route`: same guard; calls the API-owned routing adapter, persists distance/duration/cost or ROUTE_FAILED with unknown measurements, and rejects transport-budget/deadline failures.
+- `GET /api/matches/{id}`: owning BUYER or MANAGER; returns the same detail fields used in the list.
 
-The workflow must supply trusted calculations and actor identity; these methods
-are not exposed as buyer-facing write endpoints. They do not implement a route
-provider, pricing algorithm, or reservation/workflow transition. Each state
-change and audit event is saved atomically. Optimistic concurrency prevents a
-stale writer from overwriting a rejection or appending a misleading success log.
+These routes accept no client scores, route measurements or approval decisions. Request-row locking prevents a standalone write from racing the canonical start-matching operation. Once a workflow is active, these writes return 409. None creates an offer, approval or reservation; the canonical workflow remains responsible for those transitions.
+
+Internal `GenerateAsync`, `RankAsync`, `RecordRouteAsync` and `RejectAsync` methods remain for trusted integration and regression coverage. Workflow persistence records candidate, ranking/rejection and routing history; route failures are included in analytics.
 
 Self-matching is a hard backend rule based on stored ownership:
 `Listing.SellerId != BuyerRequest.BuyerId`. `GenerateAsync` persists a self-match
@@ -68,7 +57,7 @@ or a successful validation result. Category, quantity, budget, unit, active and
 expiry checks continue to apply to other sellers' listings. The existing
 MaterialMatch model, endpoint contracts and ranking rules are unchanged.
 
-Apply the `AddMatchLogistics` EF migration before using the endpoints. Existing
+Apply all migrations through `AddMatchDuration` before using the endpoints. Existing
 matches retain their scores and receive GENERATED status with unknown route
 measurements; historical events and route outcomes are not invented.
 

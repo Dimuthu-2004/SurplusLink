@@ -56,9 +56,10 @@ Use the offline demo when presenting without a configured maps service.
    the stored requirement/listing snapshot. FastAPI fails closed when its token is missing.
    The endpoint is internal; do not publish it through the public API ingress.
 5. The four graph nodes adapt the snapshot to the existing agent contracts. Matching ranks
-   candidates; Logistics consumes actual route/price estimates; Validation checks the top-ranked
-   candidate. The shortlist is ordered by unit price then listing ID and capped at 10 by default.
-   An invalid top candidate produces revision, rather than silently selecting a different deal.
+   candidates; Logistics consumes actual route/price estimates; Validation checks
+   candidates in ranked order until one passes all deterministic checks. If none passes, the result
+   requests revision. The shortlist prioritizes feasible inventory before unit price and listing ID,
+   and is capped at 10 by default.
 6. ASP.NET validates the response envelope, IDs, stage order, all six successful tool results and
    route costs against its snapshot. It rereads stock, price, expiry and eligibility before saving
    the recommendation. It writes the result, steps, tool traces and audit atomically to PostgreSQL.
@@ -146,7 +147,7 @@ No new tables or migration are required. The existing workflow tables are used:
 | --- | --- |
 | Start accepted | `AgentWorkflows.Status=RUNNING`, `CurrentStage=QUEUED`; `MaterialRequests.Status=MATCHING`. |
 | Valid result | `AgentWorkflows.Status/CurrentStage=PENDING_APPROVAL`; selected ID in `MaterialMatchId`; `ValidationJson` contains the exact validation contract. |
-| Selected match | Existing match reused or new API-assigned ID inserted in `Matches`; normalized score 0–1, route distance/cost and `Status=ROUTED`. |
+| Evaluated candidates | Snapshot candidates persist with score, route distance/duration/cost and explicit rejection reasons; the selected match is ROUTED. |
 | Buyer state after valid result | `MaterialRequests.Status=MATCH_FOUND`, matching the existing manager approval precondition; workflow owns the approval gate. |
 | Invalid business result | `AgentWorkflows.Status=REVISION_REQUESTED`; no selected match; request returns to `OPEN` for explicit retry. |
 | Execution failure | `AgentWorkflows.Status=FAILED`, sanitized `ErrorJson`, invalid `ValidationJson`; request returns to `OPEN`. |
@@ -154,12 +155,11 @@ No new tables or migration are required. The existing workflow tables are used:
 | Validation checks | Six `AgentToolCalls` under the validation step, structured check output, retry count, timestamps and duration. |
 | Full envelope | `AgentWorkflows.OutputJson`; workflow retry total includes HTTP, stage and tool retries. |
 | Audit | `AuditLogs` action `WORKFLOW_<STATUS>`, system actor; existing `Approvals` remain manager-only. |
-| Inventory/transactions | Workflow execution creates no reservation, offer, transaction or inventory quantity update. |
+| Inventory/transactions | A valid recommendation creates a PENDING offer and PENDING_APPROVAL transaction with zero reserved quantity. Only manager approval reserves inventory and updates participant outcomes. |
 
 For a fresh attempt after revision/failure, the starter creates a new workflow and preserves the old
 audit history. It reuses an existing running/pending/approved/completed workflow instead of duplicating it.
-The existing manager revision action records a revision step and note; automatically re-running a
-manager-requested revision is intentionally outside this worker, which processes queued starts only.
+The existing manager revision action records a revision step and note; the buyer reviews the note, edits the reopened OPEN requirement if needed, and explicitly starts a fresh attempt. The live golden test verifies that this attempt returns to approval and can complete without reserving twice.
 
 ## Verification
 
@@ -176,3 +176,9 @@ database. The configured application database is never migrated or cleared by th
 For the live cross-language test, additionally run FastAPI and set `SURPLUSLINK_AI_TEST_URL`
 and the matching `AI_SERVICE_SHARED_TOKEN` in the test terminal. The test uses the real FastAPI
 graph plus an explicit test-only transport fixture, then verifies persisted steps/checks and unchanged stock.
+
+## Final audit follow-up (22 September 2026)
+
+Approval rechecks the current listing, request, offered terms, route completeness, transport-inclusive budget and delivery timing while locking the request and listing inside the workflow transaction. The transaction-approval endpoint delegates to this same gate. Completion confirms reservations and updates the buyer request, workflow and participant history.
+
+Apply `AddMatchDuration` before running these versions. See the current [audit report](evidence/shared/pre-s12-audit-2026-09-22.md); earlier test summaries in this document are historical. The real FastAPI golden regression uses test-only routing, not a live provider.

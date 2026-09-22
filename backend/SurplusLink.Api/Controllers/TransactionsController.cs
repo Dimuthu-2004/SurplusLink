@@ -31,6 +31,14 @@ public sealed class TransactionsController(TransactionService service) : Control
                 totalPages = (int)Math.Ceiling(result.Total / (double)query.PageSize) };
         });
 
+    [HttpGet("offers/{id:guid}")]
+    public Task<ActionResult<OfferResponse>> Offer(Guid id, CancellationToken ct) =>
+        Execute(() => service.GetOfferAsync(id, Actor(), User.IsInRole("MANAGER"), ct));
+
+    [HttpGet("transactions/{id:guid}")]
+    public Task<ActionResult<TransactionResponse>> Transaction(Guid id, CancellationToken ct) =>
+        Execute(() => service.GetAsync(id, Actor(), User.IsInRole("MANAGER"), ct));
+
     [HttpGet("transactions/{id:guid}/history")]
     public Task<ActionResult<TransactionHistoryPage>> History(Guid id, [FromQuery] TransactionQuery query, CancellationToken ct) =>
         Execute(async () =>
@@ -78,7 +86,7 @@ public sealed class TransactionsController(TransactionService service) : Control
     }
 
     private Guid Actor() => Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub"), out var id)
-        ? id : throw new TransactionOperationException(401, "A valid manager identity is required.");
+        ? id : throw new TransactionOperationException(401, "A valid user identity is required.");
 
     private async Task<ActionResult<T>> Execute<T>(Func<Task<T>> action)
     {

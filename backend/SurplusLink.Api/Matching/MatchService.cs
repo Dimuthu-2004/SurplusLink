@@ -6,7 +6,7 @@ using SurplusLink.Api.Models;
 
 namespace SurplusLink.Api.Matching;
 
-public sealed class MatchService(SurplusLinkDbContext db)
+public sealed partial class MatchService(SurplusLinkDbContext db)
 {
     public async Task<MatchPage> ListAsync(Guid requirementId, Guid actor, bool manager, MatchQuery query, CancellationToken ct)
     {
@@ -75,13 +75,7 @@ public sealed class MatchService(SurplusLinkDbContext db)
             throw new MatchException(409, "The requirement has expired.");
         if (await db.Matches.AnyAsync(x => x.MaterialRequestId == requirementId && x.ListingId == listingId, ct))
             throw new MatchException(409, "This candidate has already been generated.");
-        var reason = MarketplaceMatchPolicy.RejectionReason(request.BuyerId, listing.SellerId)
-            ?? (listing.Status != ListingStatus.ACTIVE ? "LISTING_NOT_ACTIVE" : null)
-            ?? (listing.AvailableUntil <= DateTime.UtcNow ? "LISTING_EXPIRED" : null)
-            ?? (listing.CategoryId != request.CategoryId ? "CATEGORY_MISMATCH" : null)
-            ?? (!string.Equals(listing.Unit, request.Unit, StringComparison.OrdinalIgnoreCase) ? "UNIT_MISMATCH" : null)
-            ?? (listing.Quantity - listing.ReservedQuantity < request.RequiredQuantity ? "INSUFFICIENT_QUANTITY" : null)
-            ?? (listing.UnitPrice * request.RequiredQuantity > request.MaximumBudget ? "BUDGET_EXCEEDED" : null);
+        var reason = EligibilityReason(request, listing);
         var match = new MaterialMatch
         {
             Id = Guid.NewGuid(), MaterialRequestId = requirementId, ListingId = listingId,

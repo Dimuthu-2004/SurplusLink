@@ -1,0 +1,9 @@
+# ADR 0003: Canonical workflow and manager reservation boundary
+
+- Status: Accepted; documents the implemented design reviewed on 22 September 2026.
+- Context: Four agents recommend a deal; concurrent managers and alternative transaction actions must not bypass validation or reserve the same inventory twice.
+- Decision: Persist queued attempts in AgentWorkflow. ASP.NET claims work with PostgreSQL row locks, supplies trusted stored inputs and API-owned route estimates, and validates the internal FastAPI result. Agents have no mutation or approval tools. A valid result creates a pending offer/transaction with zero reserved quantity. Manager approval locks workflow, request and listing, rechecks authoritative terms and reserves inside one transaction. Transaction approval delegates to this gate.
+- Revision: Preserve the reviewed attempt and manager note, reopen the requirement, and let the buyer amend/restart explicitly. The new attempt must pass the same four agents and a fresh manager review.
+- Rejected alternatives: Client/AI reservation would bypass the trusted policy boundary; separate reservation logic in transaction approval creates divergent checks; duplicate workflow tables split audit history. A distributed queue was unnecessary for the current bounded local demonstration.
+- Consequences: Repeated approval is idempotent and separate workflows cannot over-reserve stock. Workflow execution holds a bounded database transaction while calling internal services, which limits throughput. Standalone candidate preparation is blocked while a workflow is active. Failed providers never produce invented zero-distance routes.
+- Verification: AgentWorkflowIntegrationTests, MatchIntegrationTests, WorkflowExecutionTests, TransactionQueryIntegrationTests and PreS12GoldenWorkflowTests. Test routing is explicitly simulated; live-provider/device evidence is separate.

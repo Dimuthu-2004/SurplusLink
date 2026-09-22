@@ -1,6 +1,9 @@
 using System.Net;
 using System.Net.Http.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
+using SurplusLink.Api.Routing;
 using SurplusLink.Api.Matching;
 using SurplusLink.Api.Models;
 
@@ -217,6 +220,64 @@ public sealed class MatchIntegrationTests(RequirementsDatabase fixture) : IClass
             Assert.Empty(page.Items);
         }
         finally { await empty.DisposeAsync(); }
+    }
+
+    [PostgresFact]
+    public async Task Standalone_matching_routes_rank_details_and_ownership_preserve_workflow_gate()
+    {
+        var (request, listing) = await Seed();
+        using (var db = fixture.Context())
+        {
+            var r = await db.BuyerRequests.FindAsync(request.Id);
+            r!.RequiredQuantity = 10; r.MaximumBudget = 2000; r.Latitude = 6.9m; r.Longitude = 79.8m;
+            var l = await db.Listings.FindAsync(listing.Id);
+            l!.Quantity = 20; l.UnitPrice = 150; l.Unit = "KG"; l.Latitude = 6.8m; l.Longitude = 79.9m;
+            await db.SaveChangesAsync();
+        }
+        var routing = new ControlledTransport();
+        using var app = fixture.App().WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            services.AddSingleton<ITransportEstimateService>(routing)));
+        using var buyer = fixture.Client(app, fixture.Buyer, "BUYER", "SELLER");
+        using var other = fixture.Client(app, fixture.OtherBuyer);
+        using var seller = fixture.Client(app, fixture.Seller, "SELLER");
+        var path = $"/api/matches/requirement/{request.Id}";
+        Assert.Equal(HttpStatusCode.Forbidden, (await other.PostAsync(path + "/generate", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await seller.PostAsync(path + "/generate", null)).StatusCode);
+        var generated = await buyer.PostAsync(path + "/generate", null);
+        generated.EnsureSuccessStatusCode();
+        var page = (await generated.Content.ReadFromJsonAsync<MatchPage>())!;
+        var match = Assert.Single(page.Items, x => x.ListingId == listing.Id);
+        Assert.Equal("GENERATED", match.Status);
+        var again = await buyer.PostAsync(path + "/generate", null);
+        Assert.Equal(page.Total, (await again.Content.ReadFromJsonAsync<MatchPage>())!.Total);
+        var detailPath = $"/api/matches/{match.Id}";
+        Assert.Equal(HttpStatusCode.Forbidden, (await other.GetAsync(detailPath)).StatusCode);
+        var route = await buyer.PostAsync(detailPath + "/route", null);
+        route.EnsureSuccessStatusCode();
+        var routed = (await route.Content.ReadFromJsonAsync<MatchResponse>())!;
+        Assert.Equal(30m, routed.DurationMinutes);
+        Assert.Equal("ROUTED", routed.Status);
+        (await buyer.PostAsync(path + "/rank", null)).EnsureSuccessStatusCode();
+        Assert.True((await buyer.GetFromJsonAsync<MatchResponse>(detailPath))!.Score > 0);
+        routing.Fail = true;
+        var failed = await buyer.PostAsync(detailPath + "/route", null);
+        var failedMatch = (await failed.Content.ReadFromJsonAsync<MatchResponse>())!;
+        Assert.Equal("ROUTE_FAILED", failedMatch.Status);
+        Assert.Null(failedMatch.Distance); Assert.Null(failedMatch.DurationMinutes);
+        (await buyer.PostAsync($"/api/requirements/{request.Id}/start-matching", null)).EnsureSuccessStatusCode();
+        Assert.Equal(HttpStatusCode.Conflict, (await buyer.PostAsync(path + "/generate", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await buyer.PostAsync(detailPath + "/route", null)).StatusCode);
+        using var verify = fixture.Context();
+        Assert.False(await verify.Reservations.AnyAsync(x => x.MaterialRequestId == request.Id));
+        Assert.Equal(1, await verify.AgentWorkflows.CountAsync(x => x.MaterialRequestId == request.Id));
+    }
+
+    private sealed class ControlledTransport : ITransportEstimateService
+    {
+        public bool Fail;
+        public Task<TransportEstimate> EstimateAsync(RouteRequest request, CancellationToken ct) => Task.FromResult(Fail
+            ? new TransportEstimate(RouteResult.Failure("PROVIDER_UNAVAILABLE"), null, ErrorCode: "PROVIDER_UNAVAILABLE")
+            : new TransportEstimate(new RouteResult(10, 30), 100));
     }
 
     private async Task<(BuyerRequest Request, Listing Listing)> Seed(bool selfOwned = false)

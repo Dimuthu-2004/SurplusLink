@@ -106,9 +106,45 @@ class TransactionHistoryScreen extends StatefulWidget {
 class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
   TransactionHistoryPage? data;
   String? error;
-  @override void initState() { super.initState(); widget.gateway.history(widget.transactionId).then((value) { if (mounted) setState(() => data = value); }).catchError((_) { if (mounted) setState(() => error = 'Unable to load transaction history.'); }); }
-  @override Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Transaction History')),
-    body: error != null ? Center(child: Text(error!)) : data == null ? const Center(child: CircularProgressIndicator()) : data!.items.isEmpty ? const Center(child: Text('No history events yet.')) : ListView(children: data!.items.map((entry) => ListTile(title: Text(entry.action.replaceAll('_', ' ')), subtitle: Text(entry.createdAt.toLocal().toString()))).toList()),
+  int page = 1;
+  bool loading = true;
+
+  @override
+  void initState() { super.initState(); load(); }
+
+  Future<void> load() async {
+    setState(() { loading = true; error = null; });
+    try {
+      final result = await widget.gateway.history(widget.transactionId, page: page);
+      if (mounted) setState(() => data = result);
+    } on Object {
+      if (mounted) setState(() => error = 'Unable to load transaction history.');
+    } finally {
+      if (mounted) setState(() => loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Transaction History'), actions: [
+      IconButton(onPressed: loading ? null : load, tooltip: 'Refresh history', icon: const Icon(Icons.refresh)),
+    ]),
+    body: ListView(padding: const EdgeInsets.all(16), children: [
+      if (loading) const Center(child: CircularProgressIndicator()),
+      if (error != null) ...[
+        Text(error!),
+        TextButton(onPressed: loading ? null : load, child: const Text('Retry')),
+      ],
+      if (!loading && error == null && data?.items.isEmpty == true) const Text('No history events yet.'),
+      if (data != null && !loading && error == null) ...[
+        ...data!.items.map((entry) => ListTile(
+          title: Text(entry.action.replaceAll('_', ' ')), subtitle: Text(entry.createdAt.toLocal().toString()))),
+        Row(children: [
+          TextButton(onPressed: page <= 1 ? null : () { page--; load(); }, child: const Text('Previous')),
+          Expanded(child: Text('Page $page of ${data!.totalPages == 0 ? 1 : data!.totalPages}', textAlign: TextAlign.center)),
+          TextButton(onPressed: page >= data!.totalPages ? null : () { page++; load(); }, child: const Text('Next')),
+        ]),
+      ],
+    ]),
   );
 }
