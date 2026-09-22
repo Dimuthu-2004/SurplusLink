@@ -23,11 +23,21 @@ public sealed class TransactionQueryIntegrationTests(RequirementsDatabase fixtur
         var privatePage = await otherBuyer.GetFromJsonAsync<JsonElement>("/api/transactions?userId=" + fixture.Buyer);
         Assert.Equal(0, privatePage.GetProperty("total").GetInt32());
         Assert.Equal(HttpStatusCode.Forbidden, (await otherBuyer.GetAsync($"/api/transactions/{seeded.Pending.Id}/history")).StatusCode);
+        foreach (var path in new[] { $"/api/offers/{seeded.Offer.Id}", $"/api/transactions/{seeded.Pending.Id}" })
+        {
+            Assert.Equal(HttpStatusCode.Forbidden, (await otherBuyer.GetAsync(path)).StatusCode);
+            Assert.Equal(HttpStatusCode.OK, (await buyer.GetAsync(path)).StatusCode);
+            Assert.Equal(HttpStatusCode.OK, (await manager.GetAsync(path)).StatusCode);
+        }
         var page = await manager.GetFromJsonAsync<JsonElement>(
             "/api/transactions?status=pending_approval&userId=" + fixture.Buyer + "&sortBy=value&sortDir=asc&pageSize=1");
         Assert.Equal(1, page.GetProperty("total").GetInt32());
         Assert.Equal(seeded.Pending.Id, page.GetProperty("items")[0].GetProperty("id").GetGuid());
 
+        var scoped = await manager.GetFromJsonAsync<JsonElement>("/api/transactions?matchId=" + seeded.Offer.MaterialMatchId);
+        Assert.Equal(seeded.Pending.Id, Assert.Single(scoped.GetProperty("items").EnumerateArray()).GetProperty("id").GetGuid());
+        var byOffer = await buyer.GetFromJsonAsync<JsonElement>("/api/transactions?offerId=" + seeded.Offer.Id);
+        Assert.Equal(seeded.Pending.Id, Assert.Single(byOffer.GetProperty("items").EnumerateArray()).GetProperty("id").GetGuid());
         var approved = await manager.PostAsync($"/api/transactions/{seeded.Pending.Id}/approve", null);
         Assert.Equal(HttpStatusCode.OK, approved.StatusCode);
         var completed = await manager.PostAsync($"/api/transactions/{seeded.Pending.Id}/complete", null);
@@ -80,7 +90,7 @@ public sealed class TransactionQueryIntegrationTests(RequirementsDatabase fixtur
             Quantity = 20, Unit = "kg", UnitPrice = 10, AvailableUntil = DateTime.UtcNow.AddDays(5),
             Status = ListingStatus.ACTIVE, Condition = MaterialCondition.GOOD
         };
-        var match = new MaterialMatch { Id = Guid.NewGuid(), MaterialRequestId = request.Id, ListingId = listing.Id };
+        var match = new MaterialMatch { Id = Guid.NewGuid(), MaterialRequestId = request.Id, ListingId = listing.Id, Status = MatchStatus.ROUTED, Distance = 10, DurationMinutes = 30, EstimatedTransportCost = 100 };
         var offer = new Offer
         {
             Id = Guid.NewGuid(), MaterialMatchId = match.Id, BuyerId = fixture.Buyer, SellerId = fixture.Seller,

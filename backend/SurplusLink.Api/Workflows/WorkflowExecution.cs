@@ -126,6 +126,8 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
                 ["WORKFLOW_EXECUTION_FAILED"], []), AgentWorkflowClient.Json);
             request.Status = BuyerRequestStatus.OPEN; // Buyer may explicitly start a fresh attempt.
         }
+        db.AuditLogs.Add(new AuditLog { Id = Guid.NewGuid(), EntityId = request.Id, EntityType = nameof(BuyerRequest),
+            Action = "WORKFLOW_" + workflow.Status });
         db.AuditLogs.Add(new AuditLog { Id = Guid.NewGuid(), EntityId = workflow.Id, EntityType = nameof(AgentWorkflow),
             Action = "WORKFLOW_" + workflow.Status });
         await db.SaveChangesAsync(stop);
@@ -244,7 +246,11 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
                 candidate = new MaterialMatch { Id = row.MatchId, MaterialRequestId = request.Id, ListingId = row.ListingId };
                 db.Matches.Add(candidate);
                 persisted.Add(candidate.Id, candidate);
+                db.AuditLogs.Add(new AuditLog { Id = Guid.NewGuid(), EntityType = nameof(MaterialMatch),
+                    EntityId = candidate.Id, Action = "GENERATE" });
             }
+            if (row.DurationMinutes > (decimal)(request.Deadline - DateTime.UtcNow).TotalMinutes)
+                reason ??= "DELIVERY_DEADLINE_EXCEEDED";
             candidate.Status = reason is null ? MatchStatus.ROUTED : MatchStatus.REJECTED;
             candidate.RejectionReason = reason;
             candidate.Distance = row.DistanceKm;
@@ -254,7 +260,10 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
                 request.MaximumBudget + 20m * Math.Min((row.AvailableQuantity - request.RequiredQuantity) / request.RequiredQuantity, 1m)) / 100m, 4);
             candidate.Score = Math.Clamp(candidate.Score, 0m, 1m);
             db.AuditLogs.Add(new AuditLog { Id = Guid.NewGuid(), EntityType = nameof(MaterialMatch), EntityId = candidate.Id,
-                Action = reason is null ? "ROUTE_SUCCEEDED" : "REJECT" });
+                Action = row.DistanceKm is not null && row.DurationMinutes is not null && row.TransportCost is not null
+                    ? "ROUTE_SUCCEEDED" : "ROUTE_FAILED" });
+            db.AuditLogs.Add(new AuditLog { Id = Guid.NewGuid(), EntityType = nameof(MaterialMatch), EntityId = candidate.Id,
+                Action = reason is null ? "RANK" : "REJECT" });
         }
         workflow.Status = Enum.Parse<AgentWorkflowStatus>(result.Status);
         workflow.CurrentStage = result.Status;
@@ -286,6 +295,7 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
                 Quantity = offer.Quantity, TotalValue = offer.TotalValue, Status = TransactionStatus.PENDING_APPROVAL
             };
             db.Offers.Add(offer);
+            db.AuditLogs.Add(new AuditLog { Id = Guid.NewGuid(), EntityType = nameof(Offer), EntityId = offer.Id, Action = "OFFER_CREATED" });
             db.Transactions.Add(transaction);
             db.AuditLogs.Add(new AuditLog { Id = Guid.NewGuid(), EntityType = nameof(Transaction),
                 EntityId = transaction.Id, Action = "PENDING_APPROVAL" });

@@ -9,10 +9,10 @@ export interface Offer { id: string; materialMatchId: string; buyerId: string; s
 export interface Transaction { id: string; offerId: string; buyerId: string; sellerId: string; quantity: number; totalValue: number; reservedQuantity: number; status: TransactionStatus; createdAt: string; updatedAt: string; completedAt: string | null }
 export interface TransactionHistoryEntry { id: string; actorUserId: string | null; action: string; createdAt: string; note: string | null }
 export interface Page<T> { items: T[]; total: number; page: number; pageSize: number; totalPages: number }
-export interface TransactionQuery { status?: string; createdFrom?: string; createdTo?: string; userId?: string; sortBy: 'createdAt' | 'value' | 'status'; sortDir: 'asc' | 'desc'; page: number; pageSize: number }
-export interface TransactionsApi { offers(query: TransactionQuery): Promise<Page<Offer>>; transactions(query: TransactionQuery): Promise<Page<Transaction>>; history(id: string, page: number): Promise<Page<TransactionHistoryEntry>> }
+export interface TransactionQuery { offerId?: string; status?: string; createdFrom?: string; createdTo?: string; userId?: string; sortBy: 'createdAt' | 'value' | 'status'; sortDir: 'asc' | 'desc'; page: number; pageSize: number }
+export interface TransactionsApi { offer(id: string): Promise<Offer>; offers(query: TransactionQuery): Promise<Page<Offer>>; transactions(query: TransactionQuery): Promise<Page<Transaction>>; history(id: string, page: number): Promise<Page<TransactionHistoryEntry>> }
 export function createTransactionsApi(client: Pick<AxiosInstance, 'get'> = apiClient): TransactionsApi {
-  return { offers: query => read(client.get<Page<Offer>>('/api/offers', { params: compact(query) })), transactions: query => read(client.get<Page<Transaction>>('/api/transactions', { params: compact(query) })), history: (id, page) => read(client.get<Page<TransactionHistoryEntry>>(`/api/transactions/${encodeURIComponent(id)}/history`, { params: { page, pageSize: 20, sortBy: 'createdAt', sortDir: 'asc' } })) };
+  return { offer: id => read(client.get<Offer>('/api/offers/' + encodeURIComponent(id))), offers: query => read(client.get<Page<Offer>>('/api/offers', { params: compact(query) })), transactions: query => read(client.get<Page<Transaction>>('/api/transactions', { params: compact(query) })), history: (id, page) => read(client.get<Page<TransactionHistoryEntry>>(`/api/transactions/${encodeURIComponent(id)}/history`, { params: { page, pageSize: 20, sortBy: 'createdAt', sortDir: 'asc' } })) };
 }
 export const transactionsApi = createTransactionsApi();
 async function read<T>(request: Promise<{ data: T }>): Promise<T> { try { return (await request).data; } catch (error) { throw normalizeApiError(error); } }

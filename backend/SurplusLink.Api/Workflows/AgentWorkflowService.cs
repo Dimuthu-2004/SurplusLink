@@ -127,16 +127,26 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db)
             var match = await db.Matches.Include(x => x.Listing).Include(x => x.MaterialRequest)
                 .SingleOrDefaultAsync(x => x.Id == matchId, ct)
                 ?? throw new AgentWorkflowException(409, "The workflow match was not found.");
+            // Serialize decisions for the same requirement and shared inventory.
+            await db.Database.ExecuteSqlInterpolatedAsync(
+                $"SELECT 1 FROM \"MaterialRequests\" WHERE \"Id\" = {match.MaterialRequestId} FOR UPDATE", ct);
             // Serialize stock changes across different workflows targeting the same listing.
             await db.Database.ExecuteSqlInterpolatedAsync(
                 $"SELECT 1 FROM \"Listings\" WHERE \"Id\" = {match.ListingId} FOR UPDATE", ct);
             await db.Entry(match.Listing).ReloadAsync(ct);
             await db.Entry(match.MaterialRequest).ReloadAsync(ct);
-            if (workflow.MaterialRequestId != match.MaterialRequestId || match.Status == MatchStatus.REJECTED ||
-                match.Listing.AvailableUntil <= DateTime.UtcNow || match.MaterialRequest.Deadline <= DateTime.UtcNow ||
+            if (workflow.MaterialRequestId != match.MaterialRequestId || match.Status != MatchStatus.ROUTED ||
+                match.Distance is null or < 0 || match.DurationMinutes is null or < 0 ||
+                match.EstimatedTransportCost is null or < 0 ||
+                match.Listing.AvailableUntil < match.MaterialRequest.Deadline || match.MaterialRequest.Deadline <= DateTime.UtcNow ||
+                match.DurationMinutes > (decimal)(match.MaterialRequest.Deadline - DateTime.UtcNow).TotalMinutes ||
                 !string.Equals(match.Listing.Unit, match.MaterialRequest.Unit, StringComparison.OrdinalIgnoreCase) ||
-                match.Listing.UnitPrice * match.MaterialRequest.RequiredQuantity > match.MaterialRequest.MaximumBudget)
+                match.Listing.UnitPrice * match.MaterialRequest.RequiredQuantity + match.EstimatedTransportCost > match.MaterialRequest.MaximumBudget)
                 throw new AgentWorkflowException(409, "The recommendation is no longer eligible. Request a revision.");
+            var pendingOffers = await db.Offers.Where(x => x.MaterialMatchId == match.Id && x.Status == OfferStatus.PENDING).ToListAsync(ct);
+            if (pendingOffers.Any(x => x.Quantity != match.MaterialRequest.RequiredQuantity || x.UnitValue != match.Listing.UnitPrice ||
+                x.TotalValue != x.Quantity * x.UnitValue || x.BuyerId != match.MaterialRequest.BuyerId || x.SellerId != match.Listing.SellerId))
+                throw new AgentWorkflowException(409, "The offered terms changed. Request a revision.");
             if (MarketplaceMatchPolicy.RejectionReason(match.MaterialRequest.BuyerId, match.Listing.SellerId) is not null)
                 throw new AgentWorkflowException(409, "A workflow cannot approve a self-dealing match.");
             if (match.Listing.Status != ListingStatus.ACTIVE)
@@ -187,6 +197,9 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db)
             decision == ApprovalDecision.APPROVED ? TransactionStatus.APPROVED : TransactionStatus.REJECTED, ct);
 
         workflow.Decision = cleanNote;
+        if (workflow.MaterialRequestId is Guid outcomeRequestId)
+            db.AuditLogs.Add(new AuditLog { Id = Guid.NewGuid(), ActorUserId = managerId,
+                EntityType = nameof(BuyerRequest), EntityId = outcomeRequestId, Action = "WORKFLOW_" + decision });
         db.Approvals.Add(new Approval
         {
             Id = Guid.NewGuid(), AgentWorkflowId = workflow.Id, DecidedByUserId = managerId, Decision = decision,

@@ -7,6 +7,22 @@ namespace SurplusLink.Api.Transactions;
 
 public sealed class TransactionService(SurplusLinkDbContext db)
 {
+    public async Task<OfferResponse> GetOfferAsync(Guid id, Guid actor, bool manager, CancellationToken ct)
+    {
+        var row = await db.Offers.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct)
+            ?? throw new TransactionOperationException(404, "Offer was not found.");
+        if (!manager && row.BuyerId != actor && row.SellerId != actor)
+            throw new TransactionOperationException(403, "This offer belongs to other participants.");
+        return new(row.Id, row.MaterialMatchId, row.BuyerId, row.SellerId, row.Quantity, row.UnitValue,
+            row.TotalValue, row.Status, row.CreatedAtUtc, row.UpdatedAtUtc);
+    }
+
+    public async Task<TransactionResponse> GetAsync(Guid id, Guid actor, bool manager, CancellationToken ct)
+    {
+        await AuthorizeHistoryAsync(id, actor, manager, ct);
+        return ToResponse(await db.Transactions.AsNoTracking().SingleAsync(x => x.Id == id, ct));
+    }
+
     public async Task AuthorizeHistoryAsync(Guid id, Guid actor, bool manager, CancellationToken ct)
     {
         var row = await db.Transactions.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct)
@@ -32,6 +48,8 @@ public sealed class TransactionService(SurplusLinkDbContext db)
     {
         Validate(input);
         var query = db.Transactions.AsNoTracking().AsQueryable();
+        if (input.OfferId.HasValue) query = query.Where(x => x.OfferId == input.OfferId.Value);
+        if (input.MatchId.HasValue) query = query.Where(x => x.Offer.MaterialMatchId == input.MatchId.Value);
         query = Filter(query, input.Status, input.CreatedFrom, input.CreatedTo, input.UserId);
         var total = await query.CountAsync(ct);
         var ordered = SortTransactions(query, input);
@@ -103,6 +121,13 @@ public sealed class TransactionService(SurplusLinkDbContext db)
         var workflows = await db.AgentWorkflows.Where(x => x.MaterialMatchId == match.Id && x.Status == AgentWorkflowStatus.APPROVED).ToListAsync(ct);
         foreach (var row in workflows) { row.Status = AgentWorkflowStatus.COMPLETED; row.CurrentStage = "COMPLETED"; row.CompletedAtUtc = DateTime.UtcNow; }
         db.AuditLogs.Add(Log(id, actor, "TRANSACTION_COMPLETED"));
+        db.AuditLogs.Add(new AuditLog { Id = Guid.NewGuid(), ActorUserId = actor,
+            EntityType = nameof(BuyerRequest), EntityId = match.MaterialRequestId, Action = "TRANSACTION_COMPLETED" });
+        db.AuditLogs.Add(new AuditLog { Id = Guid.NewGuid(), ActorUserId = actor,
+            EntityType = nameof(Listing), EntityId = match.ListingId, Action = "TRANSFER_COMPLETED" });
+        foreach (var row in workflows)
+            db.AuditLogs.Add(new AuditLog { Id = Guid.NewGuid(), ActorUserId = actor,
+                EntityType = nameof(AgentWorkflow), EntityId = row.Id, Action = "WORKFLOW_COMPLETED" });
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
         return ToResponse(transaction);

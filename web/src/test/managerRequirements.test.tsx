@@ -154,7 +154,7 @@ describe('manager requirement components', () => {
     expect(screen.queryByRole('button', { name: /submit|cancel|start matching/i })).not.toBeInTheDocument();
     const visitor = userEvent.setup();
     await visitor.click(screen.getByRole('link', { name: 'View workflow status' }));
-    expect(await screen.findByText('Detailed workflow information and recommendations are not available yet.')).toBeInTheDocument();
+    expect(await screen.findByText('No workflow has been started for this requirement.')).toBeInTheDocument();
     expect(screen.getByText('This requirement is open. Matching has not started.')).toBeInTheDocument();
     await visitor.click(screen.getByRole('link', { name: 'View history' }));
     expect(await screen.findByText('Draft → Open')).toBeInTheDocument();

@@ -23,7 +23,13 @@ export interface Workflow extends WorkflowListItem {
 export interface WorkflowPage { items: WorkflowListItem[]; total: number; page: number; pageSize: number; totalPages: number }
 export interface WorkflowQuery { search: string; status: string; sortBy: 'startedAt' | 'status' | 'stage'; sortDir: 'asc' | 'desc'; page: number; pageSize: number }
 export interface TransactionAnalytics { pendingApprovalCount: number; approvedCount: number; rejectedCount: number; reservedQuantity: number; completionCount: number; completedValue: number; completionRate: number | null }
+export interface TransactionOutcome { id: string; offerId: string; status: string; quantity: number; totalValue: number; reservedQuantity: number; completedAt: string | null }
+export interface TransactionOutcomePage { items: TransactionOutcome[]; page: number; pageSize: number; total: number; totalPages: number }
+export interface TransactionHistory { items: { id: string; action: string; createdAt: string }[]; page: number; totalPages: number }
 export interface ManagerWorkflowsApi {
+  transactions(matchId: string, page: number): Promise<TransactionOutcomePage>;
+  completeTransaction(id: string): Promise<TransactionOutcome>;
+  transactionHistory(id: string, page: number): Promise<TransactionHistory>;
   list(query: WorkflowQuery): Promise<WorkflowPage>;
   get(id: string): Promise<Workflow>;
   approve(id: string, note?: string): Promise<Workflow>;
@@ -34,6 +40,9 @@ export interface ManagerWorkflowsApi {
 
 export function createManagerWorkflowsApi(client: Pick<AxiosInstance, 'get' | 'post'> = apiClient): ManagerWorkflowsApi {
   return {
+    transactions: (matchId, page) => read(client.get<TransactionOutcomePage>('/api/transactions', { params: { matchId, page, pageSize: 10 } })),
+    completeTransaction: (id) => read(client.post<TransactionOutcome>('/api/transactions/' + encodeURIComponent(id) + '/complete')),
+    transactionHistory: (id, page) => read(client.get<TransactionHistory>('/api/transactions/' + encodeURIComponent(id) + '/history', { params: { page, pageSize: 20 } })),
     list: (query) => read(client.get<WorkflowPage>('/api/workflows', { params: compact(query) })),
     get: (id) => read(client.get<Workflow>('/api/workflows/' + encodeURIComponent(id))),
     approve: (id, note) => read(client.post<Workflow>('/api/workflows/' + encodeURIComponent(id) + '/approve', { note: note?.trim() || undefined })),

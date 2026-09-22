@@ -1,15 +1,15 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
-import { transactionsApi, type Offer, type Page, type TransactionHistoryEntry, type TransactionsApi } from '../features/transactions/transactionsApi';
+import { transactionsApi, type Page, type TransactionHistoryEntry, type TransactionsApi } from '../features/transactions/transactionsApi';
 import { RequirementBadge, RequirementError, requirementDate, requirementNumber, useRequirementResource } from '../features/requirements/requirementUi';
 
 export function OfferDetailsPage({ api = transactionsApi }: { api?: TransactionsApi }) {
   const { offerId = '' } = useParams(); const { user } = useAuth();
   const [historyPage, setHistoryPage] = useState(1);
-  const offers = useRequirementResource(useCallback(() => api.offers({ page: 1, pageSize: 100, sortBy: 'createdAt', sortDir: 'desc', userId: user?.id }), [api, user?.id]));
-  const offer = useMemo<Offer | undefined>(() => offers.data?.items.find(item => item.id === offerId), [offers.data, offerId]);
-  const transactions = useRequirementResource(useCallback(() => api.transactions({ page: 1, pageSize: 100, sortBy: 'createdAt', sortDir: 'desc', userId: user?.id }), [api, user?.id]));
+  const offers = useRequirementResource(useCallback(() => api.offer(offerId), [api, offerId]));
+  const offer = offers.data;
+  const transactions = useRequirementResource(useCallback(() => api.transactions({ offerId, page: 1, pageSize: 1, sortBy: 'createdAt', sortDir: 'desc' }), [api, offerId]));
   const transaction = transactions.data?.items.find(item => item.offerId === offerId);
   const history = useRequirementResource<Page<TransactionHistoryEntry>>(useCallback(() => transaction ? api.history(transaction.id, historyPage) : Promise.resolve({ items: [], total: 0, page: 1, pageSize: 20, totalPages: 0 }), [api, transaction?.id, historyPage]));
   return <div className="manager-page"><Link className="back-link" to="/app/offers">Back to My Offers</Link><header className="page-heading"><div><p className="eyebrow">Offer details</p><h1>{offer ? `Offer ${offer.id.slice(0, 8)}` : 'Offer details'}</h1></div></header>
