@@ -10,6 +10,31 @@ namespace SurplusLink.Tests;
 public sealed class TransactionQueryIntegrationTests(RequirementsDatabase fixture) : IClassFixture<RequirementsDatabase>
 {
     [PostgresFact]
+    public async Task Marketplace_roles_read_only_participant_records_and_cannot_decide()
+    {
+        var seeded = await Seed();
+        using var app = fixture.App();
+        foreach (var (id, roles) in new[] {
+            (fixture.Seller, new[] { "SELLER" }), (fixture.Buyer, new[] { "BUYER" }),
+            (fixture.Buyer, new[] { "SELLER", "BUYER" }), (fixture.Seller, new[] { "SELLER", "BUYER" }) })
+        {
+            using var participant = fixture.Client(app, id, roles[0], roles.Skip(1).ToArray());
+            var offers = await participant.GetFromJsonAsync<JsonElement>("/api/offers?userId=" + fixture.OtherBuyer);
+            Assert.Contains(offers.GetProperty("items").EnumerateArray(), row => row.GetProperty("id").GetGuid() == seeded.Offer.Id);
+            foreach (var path in new[] { $"offers/{seeded.Offer.Id}", $"transactions/{seeded.Pending.Id}", $"transactions/{seeded.Pending.Id}/history" })
+                Assert.Equal(HttpStatusCode.OK, (await participant.GetAsync("/api/" + path)).StatusCode);
+            foreach (var action in new[] { "approve", "reject", "revise" })
+                Assert.Equal(HttpStatusCode.Forbidden, (await participant.PostAsync($"/api/offers/{seeded.Offer.Id}/{action}", null)).StatusCode);
+            Assert.Equal(HttpStatusCode.Forbidden, (await participant.PostAsync($"/api/transactions/{seeded.Pending.Id}/complete", null)).StatusCode);
+        }
+        using var unrelated = fixture.Client(app, fixture.OtherBuyer, "SELLER", "BUYER");
+        var empty = await unrelated.GetFromJsonAsync<JsonElement>("/api/offers?userId=" + fixture.Buyer);
+        Assert.Equal(0, empty.GetProperty("total").GetInt32());
+        foreach (var path in new[] { $"offers/{seeded.Offer.Id}", $"transactions/{seeded.Pending.Id}", $"transactions/{seeded.Pending.Id}/history" })
+            Assert.Equal(HttpStatusCode.Forbidden, (await unrelated.GetAsync("/api/" + path)).StatusCode);
+    }
+
+    [PostgresFact]
     public async Task Manager_can_filter_sort_history_analytics_and_complete_transactions()
     {
         var seeded = await Seed();

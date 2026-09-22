@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile/requirements/requirement_gateway.dart';
@@ -25,6 +27,14 @@ class _RequirementStatusScreenState extends State<RequirementStatusScreen> {
   BuyerRequirement? _row;
   String? _error;
   bool _loading = true;
+  bool _fetching = false;
+  Timer? _poll;
+  @override
+  void dispose() {
+    _poll?.cancel();
+    super.dispose();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -32,8 +42,11 @@ class _RequirementStatusScreenState extends State<RequirementStatusScreen> {
   }
 
   Future<void> _load() async {
+    if (_fetching || !mounted) return;
+    _fetching = true;
+    _poll?.cancel();
     setState(() {
-      _loading = true;
+      _loading = _row == null;
       _error = null;
     });
     try {
@@ -43,11 +56,16 @@ class _RequirementStatusScreenState extends State<RequirementStatusScreen> {
       if (mounted) {
         setState(() {
           _error = requirementError(error);
-          _row = null;
         });
       }
     } finally {
-      if (mounted) setState(() => _loading = false);
+      _fetching = false;
+      if (mounted) {
+        setState(() => _loading = false);
+        if (_row?.status == 'MATCHING') {
+          _poll = Timer(const Duration(seconds: 4), _load);
+        }
+      }
     }
   }
 
@@ -72,8 +90,16 @@ class _RequirementStatusScreenState extends State<RequirementStatusScreen> {
                   if (_row case final row?) ...[
                     const Icon(Icons.track_changes, size: 56),
                     Center(child: RequirementStatusChip(row.status)),
-                    if (row.workflowStatus != null) Text('Workflow: ${row.workflowStatus!.replaceAll('_', ' ')}'),
-                    if (row.decisionNote?.isNotEmpty == true) Text('Manager note: ${row.decisionNote}'),
+                    if (row.workflowStatus != null)
+                      Text(
+                        'Workflow: ${row.workflowStatus!.replaceAll('_', ' ')}',
+                      ),
+                    if (row.workflowStatus == 'FAILED')
+                      const Text(
+                        'Matching could not complete. Return to requirement details to retry.',
+                      ),
+                    if (row.decisionNote?.isNotEmpty == true)
+                      Text('Manager note: ${row.decisionNote}'),
                     Text(_description(row.status), textAlign: TextAlign.center),
                     const SizedBox(height: 24),
                     const Text(
@@ -118,7 +144,7 @@ class _RequirementStatusScreenState extends State<RequirementStatusScreen> {
     'DRAFT' => 'Review and submit your draft before starting matching.',
     'OPEN' =>
       'Your requirement is open. You can request matching from its details.',
-    'MATCHING' => 'Matching has started. Check back for a status update.',
+    'MATCHING' => 'Matching is running. Status updates automatically.',
     'MATCH_FOUND' => 'A match has been found for your requirement.',
     'PENDING_APPROVAL' => 'Your match is waiting for approval.',
     'APPROVED' => 'Your match has been approved.',

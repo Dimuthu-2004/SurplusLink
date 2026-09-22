@@ -105,7 +105,9 @@ but keep the component boundaries and startup order unchanged.
   `AgentWorkflow__Enabled=true`; then configure the API's
   `AI_SERVICE_BASE_URL` and shared token.
 - **Rollback/fallback:** set API `AgentWorkflow__Enabled=false` and keep the
-  public read/auth API available if the AI service is unhealthy. Roll back to a
+  public read/auth API available if the AI service is unhealthy. New Start Matching
+  requests then return 503 and remain OPEN; queued work waits for re-enabling.
+  Roll back to a
   previous AI artifact only after checking workflow contract compatibility.
   The offline graph/demo is a presentation fallback, not a substitute for a
   failed production routing call.

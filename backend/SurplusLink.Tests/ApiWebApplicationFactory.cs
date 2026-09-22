@@ -16,6 +16,7 @@ public sealed class ApiWebApplicationFactory : WebApplicationFactory<Program>
         {
             configuration.AddInMemoryCollection(new Dictionary<string, string?>
             {
+                ["AgentWorkflow:Enabled"] = "false",
                 ["ConnectionStrings:SurplusLink"] =
                     "Host=localhost;Database=surpluslink_tests;Username=test;Password=test",
                 ["Jwt:Issuer"] = "SurplusLink.Api.Tests",

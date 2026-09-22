@@ -75,7 +75,9 @@ flutter run --dart-define=API_BASE_URL=http://10.0.2.2:5170
 Pop-Location
 ```
 
-The worker is disabled by default; queued matching requests require it to be enabled and the internal AI service reachable. Missing routing configuration fails safely rather than inventing a route. Use the explicitly labelled offline demo for an offline presentation:
+The worker is enabled by default and startup validates its internal URL/token. Explicitly disabling it makes Start Matching return 503 without changing the requirement. On Windows, `powershell -NoProfile -ExecutionPolicy RemoteSigned -File scripts/start-local.ps1` starts AI and API together with one generated session token, so they cannot silently use different credentials. The execution policy applies only to that process. Database/JWT user secrets and `Routing__*` environment settings are still required. `.env.example` documents names; ASP.NET does not automatically load a `.env` file.
+
+The durable worker processes queued requests, including requests left queued by an earlier stopped process. Flutter polls matching status every four seconds until it changes. Execution failure reopens the requirement for an explicit retry. Missing routing configuration fails safely rather than inventing a route. Use the explicitly labelled offline demo for an offline presentation:
 
 ```powershell
 Push-Location ai-service

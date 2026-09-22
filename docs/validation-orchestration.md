@@ -71,7 +71,10 @@ task. A worker crash rolls back its transaction and releases the claim for repla
 read-only, so replay does not reserve twice. The worker intentionally holds one transaction while
 calling the bounded internal service; this is a small-demo design, not a high-throughput queue.
 Old `RUNNING/MATCHING` scaffold rows are not automatically replayed; only `RUNNING/QUEUED`
-rows created by this starter are processed. The worker is disabled by default until explicitly enabled.
+rows created by this starter are processed. The worker is enabled by default and requires a valid
+internal service URL/token at startup. Explicitly disabling execution rejects new starts with 503
+without changing the requirement. Use `scripts/start-local.ps1` to start both local services with
+one session token. Flutter polls matching requirements every four seconds until their state changes.
 
 ## Validation contract and tools
 

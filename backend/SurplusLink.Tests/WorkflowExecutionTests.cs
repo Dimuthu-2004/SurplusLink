@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.DependencyInjection;
 using SurplusLink.Api.Models;
 using SurplusLink.Api.Requirements;
 using SurplusLink.Api.Routing;
@@ -97,6 +98,58 @@ public sealed class WorkflowExecutionTests
 
 public sealed class WorkflowPersistenceTests(RequirementsDatabase fixture) : IClassFixture<RequirementsDatabase>
 {
+    [PostgresFact]
+    public async Task Hosted_worker_failure_reopens_request_and_http_retry_creates_one_new_attempt()
+    {
+        var id = await Seed(start: false);
+        using var app = fixture.App().WithWebHostBuilder(builder => builder.ConfigureServices(services =>
+        {
+            services.PostConfigure<WorkflowExecutionOptions>(options => options.PollSeconds = 1);
+            services.AddSingleton<ITransportEstimateService, DemoTransport>();
+            services.AddSingleton<IAgentWorkflowClient>(new FakeClient(_ => throw new HttpRequestException("unavailable")));
+            services.AddHostedService<WorkflowExecutionWorker>();
+        }));
+        using var buyer = fixture.Client(app, fixture.Buyer);
+        for (var attempt = 1; attempt <= 2; attempt++)
+        {
+            var start = await buyer.PostAsync($"/api/requirements/{id}/start-matching", null);
+            start.EnsureSuccessStatusCode();
+            Assert.Equal(BuyerRequestStatus.MATCHING, (await start.Content.ReadFromJsonAsync<StartMatchingResponse>())!.Requirement.Status);
+            RequirementResponse? row = null;
+            for (var poll = 0; poll < 50; poll++)
+            {
+                row = await buyer.GetFromJsonAsync<RequirementResponse>($"/api/requirements/{id}");
+                if (row!.Status != BuyerRequestStatus.MATCHING) break;
+                await Task.Delay(100);
+            }
+            Assert.Equal(BuyerRequestStatus.OPEN, row!.Status);
+            Assert.Equal("FAILED", row.WorkflowStatus);
+            using var db = fixture.Context();
+            Assert.Equal(attempt, await db.AgentWorkflows.CountAsync(x => x.MaterialRequestId == id));
+            Assert.False(await db.Offers.AnyAsync(x => x.MaterialMatch.MaterialRequestId == id));
+        }
+    }
+
+    [PostgresFact]
+    public async Task Disabled_execution_rejects_start_without_queuing_or_changing_requirement()
+    {
+        using var db = fixture.Context();
+        var request = new BuyerRequest { Id = Guid.NewGuid(), BuyerId = fixture.Buyer,
+            CategoryId = (await db.Categories.FirstAsync()).Id, Title = "Disabled worker regression",
+            RequiredQuantity = 1, Unit = "kg", MaximumBudget = 1000, Deadline = DateTime.UtcNow.AddDays(5),
+            Status = BuyerRequestStatus.OPEN };
+        db.BuyerRequests.Add(request);
+        await db.SaveChangesAsync();
+        using var app = fixture.App().WithWebHostBuilder(builder => builder.ConfigureServices(services =>
+            services.PostConfigure<WorkflowExecutionOptions>(options => options.Enabled = false)));
+        using var buyer = fixture.Client(app, fixture.Buyer);
+        Assert.Equal(HttpStatusCode.ServiceUnavailable,
+            (await buyer.PostAsync($"/api/requirements/{request.Id}/start-matching", null)).StatusCode);
+        await db.Entry(request).ReloadAsync();
+        Assert.Equal(BuyerRequestStatus.OPEN, request.Status);
+        Assert.False(await db.AgentWorkflows.AnyAsync(x => x.MaterialRequestId == request.Id));
+    }
+
     [LiveWorkflowFact]
     public async Task Actual_FastApi_graph_maps_back_to_postgres_without_inventory_mutations()
     {
@@ -158,7 +211,7 @@ public sealed class WorkflowPersistenceTests(RequirementsDatabase fixture) : ICl
         Assert.Equal(409, approval.StatusCode);
         // Use a new context after the rejected decision transaction.
         using var retryDb = fixture.Context();
-        var starter = new PersistentRequirementWorkflowStarter(retryDb);
+        var starter = new PersistentRequirementWorkflowStarter(retryDb, Options.Create(new WorkflowExecutionOptions()));
         var retry = await new RequirementService(retryDb, starter).StartMatchingAsync(id, fixture.Buyer, default);
         Assert.NotEqual(row.Id, retry.WorkflowId);
         await new WorkflowQueueProcessor(retryDb, client, new DemoTransport(), Options.Create(new WorkflowExecutionOptions())).ProcessNextAsync(default);
@@ -221,7 +274,7 @@ public sealed class WorkflowPersistenceTests(RequirementsDatabase fixture) : ICl
         Assert.Equal(0, await db.Reservations.CountAsync(x => x.MaterialRequestId == id));
     }
 
-    private async Task<Guid> Seed()
+    private async Task<Guid> Seed(bool start = true)
     {
         using var db = fixture.Context();
         var category = new Category { Id = Guid.NewGuid(), Name = "Workflow demo " + Guid.NewGuid() };
@@ -232,7 +285,8 @@ public sealed class WorkflowPersistenceTests(RequirementsDatabase fixture) : ICl
             Title = "Demo material", Quantity = 20, UnitPrice = 100, Unit = "kg", Condition = MaterialCondition.GOOD,
             Status = ListingStatus.ACTIVE, AvailableUntil = DateTime.UtcNow.AddDays(30), Latitude = 6.8m, Longitude = 79.9m });
         await db.SaveChangesAsync();
-        await new RequirementService(db, new PersistentRequirementWorkflowStarter(db)).StartMatchingAsync(request.Id, fixture.Buyer, default);
+        if (start)
+            await new RequirementService(db, new PersistentRequirementWorkflowStarter(db, Options.Create(new WorkflowExecutionOptions()))).StartMatchingAsync(request.Id, fixture.Buyer, default);
         return request.Id;
     }
 
