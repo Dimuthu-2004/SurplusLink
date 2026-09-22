@@ -230,6 +230,25 @@ body { background:var(--sl-bg); color:var(--sl-slate-800); }.app-shell { backgro
 /* Landing content refinements retain the existing visual system. */
 .hero-proof span,.value-strip span { display:inline-flex; align-items:center; gap:.38rem; }.hero-proof svg,.value-strip svg { flex:0 0 auto; color:var(--sl-accent-dark); }.feature-icon svg,.tile-art svg,.material-visual svg,.impact-grid b svg,.role-grid span svg { display:block; }.bento-four .feature-card { grid-column:auto !important; min-height:230px; }.bento-four .feature-card:nth-child(1),.bento-four .feature-card:nth-child(4) { background:linear-gradient(135deg,#fff7ed,#fff); }.workflow-three { grid-template-columns:repeat(3,1fr); }.workflow-three::before { left:15%; right:15%; }.match-context { display:flex; align-items:flex-start; gap:1rem; max-width:760px; margin:2rem auto 0; padding:1.35rem; border:1px solid var(--sl-slate-200); border-radius:1rem; background:linear-gradient(135deg,#fff7ed,#fff); }.match-context h3 { margin:0 0 .45rem; color:var(--sl-slate-900); }.match-context p { margin:.3rem 0; color:var(--sl-slate-600); line-height:1.6; }.match-context small { color:var(--sl-slate-600); }.exchange { text-align:left; }.exchange-grid { grid-template-columns:repeat(2, minmax(0,1fr)); max-width:760px; }.clear-decisions { display:grid; grid-template-columns:auto minmax(0,1.3fr) minmax(12rem,.8fr); align-items:center; gap:1.2rem; padding:1.35rem 1.5rem; border:1px solid var(--sl-slate-200); border-radius:1rem; background:#fff; }.clear-decisions h3 { margin:0 0 .4rem; color:var(--sl-slate-900); }.clear-decisions p { margin:0; color:var(--sl-slate-600); line-height:1.55; }.clear-decisions ul { display:grid; gap:.45rem; margin:0; padding-left:1.1rem; color:var(--sl-slate-700); font-size:.85rem; font-weight:700; }.public-footer .section-shell>div:last-child { align-self:end; }.public-footer .section-shell>div:last-child p { margin-bottom:.35rem; }
 @media (max-width:800px) { .workflow-three { grid-template-columns:1fr; }.workflow-three::before { left:1.3rem; right:auto; }.exchange-grid { grid-template-columns:1fr; }.clear-decisions { grid-template-columns:auto 1fr; }.clear-decisions ul { grid-column:1 / -1; grid-template-columns:repeat(3,1fr); padding-left:0; list-style:none; } }
+
+/* Continuous three-step timeline geometry. */
+.workflow-three { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; margin-top: 2.5rem; }
+.workflow-three::before { top: 1.6rem; left: 16.6667%; right: 16.6667%; height: 2px; background: var(--sl-accent); transform-origin: left center; animation: timeline-draw .8s ease-out both; }
+.workflow-three .workflow-step { min-width: 0; padding: 0 1rem 1rem; text-align: center; }
+.workflow-three .workflow-step > span { margin: 0 auto 1.15rem; }
+.workflow-three .workflow-step h3, .workflow-three .workflow-step p { max-width: 22rem; margin-left: auto; margin-right: auto; }
+.workflow-three .workflow-step h3 { margin-bottom: .5rem; }
+.workflow-three .workflow-step p { text-align: left; }
+@keyframes timeline-draw { from { transform: scaleX(0); opacity: .35; } to { transform: scaleX(1); opacity: 1; } }
+@media (max-width: 800px) {
+  .workflow-three { grid-template-columns: 1fr; gap: .8rem; margin-top: 2.5rem; }
+  .workflow-three::before { top: 1.6rem; bottom: 1.6rem; left: 1.6rem; right: auto; width: 2px; height: auto; transform-origin: center top; animation: timeline-draw-vertical .8s ease-out both; }
+  .workflow-three .workflow-step { padding-left: 4rem; padding-right: 0; text-align: left; }
+  .workflow-three .workflow-step > span { position: absolute; left: 0; margin: 0; }
+  .workflow-three .workflow-step h3, .workflow-three .workflow-step p { max-width: none; margin-left: 0; margin-right: 0; }
+  .workflow-three .workflow-step p { text-align: left; }
+}
+@keyframes timeline-draw-vertical { from { transform: scaleY(0); opacity: .35; } to { transform: scaleY(1); opacity: 1; } }
 @media (max-width:520px) { .clear-decisions { grid-template-columns:1fr; }.clear-decisions ul { grid-column:auto; grid-template-columns:1fr; } }
 
 /* Decorative, image-like material texture: intentionally kept behind hero content. */
@@ -239,3 +258,7 @@ body { background:var(--sl-bg); color:var(--sl-slate-800); }.app-shell { backgro
 @media (max-width:800px) { .hero::after { right:-20rem; top:20rem; width:38rem; opacity:.22; } }
 @media (max-width:520px) { .hero::after { display:none; }.hero-visual::before { opacity:.55; right:-8rem; } }
 @media (prefers-reduced-motion:reduce) { .hero::after { animation:none; } }
+
+/* Keep the timeline section compact without changing shared section rhythm. */
+.workflow-section { padding-bottom: 5rem; }
+@media (max-width: 800px) { .workflow-section { padding-bottom: 4rem; } }
