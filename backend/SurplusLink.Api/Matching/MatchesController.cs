@@ -22,7 +22,8 @@ public sealed class MatchesController(MatchService service) : ControllerBase
     [HttpGet("analytics/summary")]
     [Authorize(Roles = "MANAGER")]
     [ProducesResponseType(typeof(MatchAnalyticsSummary), 200)]
-    public Task<IActionResult> Summary(CancellationToken ct) => Handle(async _ => Ok(await service.SummaryAsync(ct)));
+    public Task<IActionResult> Summary(CancellationToken ct, [FromQuery] Guid? requirementId = null) =>
+        Handle(async _ => Ok(await service.SummaryAsync(ct, requirementId)));
 
     private async Task<IActionResult> Handle(Func<Guid, Task<IActionResult>> action)
     {

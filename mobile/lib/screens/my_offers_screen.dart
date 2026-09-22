@@ -15,6 +15,8 @@ class _MyOffersScreenState extends State<MyOffersScreen> {
   TransactionPage? transactions;
   String? error;
   String? status;
+  String? transactionStatus;
+  int offerPage = 1, transactionPage = 1;
   String sort = 'createdAt';
   bool loading = true;
 
@@ -22,8 +24,9 @@ class _MyOffersScreenState extends State<MyOffersScreen> {
   Future<void> load() async {
     setState(() { loading = true; error = null; });
     try {
-      final query = OfferQuery(status: status, sortBy: sort);
-      final results = await Future.wait([widget.gateway.offers(query), widget.gateway.transactions(query)]);
+      final query = OfferQuery(status: status, sortBy: sort, page: offerPage);
+      final results = await Future.wait([widget.gateway.offers(query), widget.gateway.transactions(
+        OfferQuery(status: transactionStatus, sortBy: sort, page: transactionPage))]);
       if (mounted) setState(() { offers = results[0] as OfferPage; transactions = results[1] as TransactionPage; });
     } on Object { if (mounted) setState(() => error = 'Unable to load offers. Check your connection and retry.'); }
     finally { if (mounted) setState(() => loading = false); }
@@ -38,12 +41,12 @@ class _MyOffersScreenState extends State<MyOffersScreen> {
         DropdownButtonFormField<String>(
           initialValue: status ?? '', decoration: const InputDecoration(labelText: 'Filter by status'),
           items: [const DropdownMenuItem(value: '', child: Text('All statuses')), ...offerStatuses.map((value) => DropdownMenuItem(value: value, child: Text(offerStatusLabel(value))))],
-          onChanged: (value) { setState(() => status = value == '' ? null : value); load(); },
+          onChanged: (value) { setState(() { status = value == '' ? null : value; offerPage = 1; }); load(); },
         ),
         DropdownButtonFormField<String>(
           initialValue: sort, decoration: const InputDecoration(labelText: 'Sort by'),
           items: const [DropdownMenuItem(value: 'createdAt', child: Text('Created date')), DropdownMenuItem(value: 'value', child: Text('Value')), DropdownMenuItem(value: 'status', child: Text('Status'))],
-          onChanged: (value) { setState(() => sort = value!); load(); },
+          onChanged: (value) { setState(() { sort = value!; offerPage = 1; transactionPage = 1; }); load(); },
         ),
         if (error != null) TextButton(onPressed: load, child: Text(error!)),
         if (loading) const Center(child: CircularProgressIndicator()),
@@ -52,16 +55,46 @@ class _MyOffersScreenState extends State<MyOffersScreen> {
           title: Text('Offer ${offer.id.substring(0, 8)}'),
           subtitle: Text('${offer.buyerId == widget.user.id ? 'Buyer' : 'Seller'} participation · ${offerStatusLabel(offer.status)}\nValue ${offer.totalValue}'),
           isThreeLine: true, trailing: Text('${offer.quantity}'),
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => OfferDetailsScreen(offer: offer, user: widget.user))),
         ))),
+        if (offers != null) _pages(offerPage, offers!.totalPages, (page) { offerPage = page; load(); }),
+        DropdownButtonFormField<String>(
+          initialValue: transactionStatus ?? '', decoration: const InputDecoration(labelText: 'Transaction status'),
+          items: [const DropdownMenuItem(value: '', child: Text('All transaction statuses')), ...transactionStatuses.map((value) => DropdownMenuItem(value: value, child: Text(offerStatusLabel(value))))],
+          onChanged: (value) { setState(() { transactionStatus = value == '' ? null : value; transactionPage = 1; }); load(); },
+        ),
+        if (!loading && transactionRows.isEmpty) const Text('No transactions match these filters.'),
         if (transactionRows.isNotEmpty) const Padding(padding: EdgeInsets.only(top: 20), child: Text('Transaction status', style: TextStyle(fontWeight: FontWeight.bold))),
         ...transactionRows.map((transaction) => Card(child: ListTile(
           title: Text(offerStatusLabel(transaction.status)),
           subtitle: Text('Reserved ${transaction.reservedQuantity} · Updated ${transaction.updatedAt.toLocal()}'),
           onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => TransactionHistoryScreen(gateway: widget.gateway, transactionId: transaction.id)),),
         ))),
+        if (transactions != null) _pages(transactionPage, transactions!.totalPages, (page) { transactionPage = page; load(); }),
       ]),
     );
   }
+  Widget _pages(int page, int total, void Function(int) change) => Row(children: [
+    TextButton(onPressed: loading || page <= 1 ? null : () => change(page - 1), child: const Text('Previous')),
+    Expanded(child: Text('Page $page of ${total == 0 ? 1 : total}', textAlign: TextAlign.center)),
+    TextButton(onPressed: loading || page >= total ? null : () => change(page + 1), child: const Text('Next')),
+  ]);
+}
+
+class OfferDetailsScreen extends StatelessWidget {
+  const OfferDetailsScreen({required this.offer, required this.user, super.key});
+  final Offer offer;
+  final AppUser user;
+  @override Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Offer Details')),
+    body: ListView(padding: const EdgeInsets.all(20), children: [
+      Text(offerStatusLabel(offer.status), style: Theme.of(context).textTheme.headlineSmall),
+      Text('Your participation: ${offer.buyerId == user.id ? 'Buyer' : 'Seller'}'),
+      Text('Quantity: ${offer.quantity}'), Text('Material value: LKR ${offer.totalValue.toStringAsFixed(2)}'),
+      Text('Created: ${offer.createdAt.toLocal()}'),
+      const Text('Return to My Offers and refresh for the latest decision, reservation status and transaction history.'),
+    ]),
+  );
 }
 
 class TransactionHistoryScreen extends StatefulWidget {

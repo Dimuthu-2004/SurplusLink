@@ -34,15 +34,17 @@ class BuyerRequirement {
     required this.status,
     required this.createdAt,
     required this.updatedAt,
+    this.workflowId, this.workflowStatus, this.decisionNote,
     this.latitude,
     this.longitude,
     this.notes = '',
   });
   final String id, buyerId, categoryId, unit, status, notes;
+  final String? workflowId, workflowStatus, decisionNote;
   final num requiredQuantity, maximumBudget;
   final double? latitude, longitude;
   final DateTime deadline, createdAt, updatedAt;
-  bool get canEdit => status == 'DRAFT';
+  bool get canEdit => status == 'DRAFT' || (status == 'OPEN' && workflowStatus == 'REVISION_REQUESTED');
   bool get canSubmit => status == 'DRAFT' && deadline.isAfter(DateTime.now());
   bool get canStart => status == 'OPEN' && deadline.isAfter(DateTime.now());
   bool get canCancel => status == 'DRAFT' || status == 'OPEN';
@@ -55,7 +57,9 @@ class BuyerRequirement {
         unit: json['unit'] as String,
         maximumBudget: json['maximumBudget'] as num,
         deadline: DateTime.parse(json['deadline'] as String),
-        status: json['status'] as String,
+          status: json['status'] as String,
+          workflowId: json['workflowId'] as String?, workflowStatus: json['workflowStatus'] as String?,
+          decisionNote: json['decisionNote'] as String?,
         notes: json['notes'] as String? ?? '',
         latitude: (json['latitude'] as num?)?.toDouble(),
         longitude: (json['longitude'] as num?)?.toDouble(),

@@ -28,14 +28,17 @@ public sealed class MatchQuery : MatchPageQuery, IValidatableObject
 
 public sealed record MatchResponse(Guid Id, Guid RequirementId, Guid ListingId, decimal Score,
     decimal? Distance, decimal? EstimatedTransportCost, string Status, bool Valid, bool Rejected,
-    string? RejectionReason, DateTime CreatedAt);
+    string? RejectionReason, DateTime CreatedAt, decimal? DurationMinutes = null,
+    string? MaterialTitle = null, string? CategoryName = null, Guid? SellerId = null,
+    decimal? Quantity = null, string? Unit = null, decimal? UnitPrice = null);
 public sealed record MatchPage(IReadOnlyList<MatchResponse> Items, int Total, int TotalPages, int Page, int PageSize);
 public sealed record MatchHistoryEntry(Guid Id, Guid? ActorUserId, string Action, string? Outcome, DateTime CreatedAt);
 public sealed record MatchHistoryPage(IReadOnlyList<MatchHistoryEntry> Items, int Total, int TotalPages, int Page, int PageSize);
 public sealed record RejectionReasonCount(string Reason, int Count);
 public sealed record MatchAnalyticsSummary(int Total, decimal? AverageScore, decimal? AverageDistance,
     IReadOnlyList<RejectionReasonCount> TopRejectionReasons, int RouteSuccessCount, int RouteFailureCount,
-    double? RouteSuccessRate, double? RouteFailureRate);
+    double? RouteSuccessRate, double? RouteFailureRate, int ValidCount = 0, int RejectedCount = 0,
+    decimal? AverageCost = null);
 
 public sealed class MatchException(int statusCode, string message) : Exception(message)
 {

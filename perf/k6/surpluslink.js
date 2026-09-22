@@ -89,7 +89,7 @@ export function generateMatch() {
 
   const timeoutSeconds = Number(__ENV.WORKFLOW_TIMEOUT_SECONDS || 300);
   const pollSeconds = Number(__ENV.WORKFLOW_POLL_SECONDS || 2);
-  const terminalStatuses = ['PENDING_APPROVAL', 'APPROVED', 'REJECTED', 'FAILED', 'COMPLETED'];
+  const terminalStatuses = ['PENDING_APPROVAL', 'APPROVED', 'REJECTED', 'REVISION_REQUESTED', 'FAILED', 'COMPLETED'];
   let status = '';
   for (let elapsed = 0; elapsed < timeoutSeconds; elapsed += pollSeconds) {
     sleep(pollSeconds);

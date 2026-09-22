@@ -63,8 +63,8 @@ void main() {
       );
       if (roles.contains(AppRole.seller) && roles.contains(AppRole.buyer)) {
         expect(find.text('Marketplace Home'), findsOneWidget);
-        expect(find.text('Sell'), findsOneWidget);
-        expect(find.text('Buy'), findsOneWidget);
+        expect(find.text('SELL'), findsOneWidget);
+        expect(find.text('BUY'), findsOneWidget);
       }
       final router = GoRouter.of(
         tester.element(find.byKey(const Key('logout-button'))),

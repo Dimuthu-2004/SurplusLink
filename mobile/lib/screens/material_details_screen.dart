@@ -264,9 +264,9 @@ class _MaterialDetailsScreenState extends State<MaterialDetailsScreen> {
                     ),
                   ],
                   const SizedBox(height: 8),
-                  OutlinedButton.icon(
-                    key: const Key('delete-material'),
-                    onPressed: _isActionBusy ? null : _delete,
+                    OutlinedButton.icon(
+                      key: const Key('delete-material'),
+                      onPressed: _isActionBusy || listing.status != 'DRAFT' ? null : _delete,
                     icon: const Icon(Icons.delete_outline),
                     label: const Text('Delete material'),
                   ),

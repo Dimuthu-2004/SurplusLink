@@ -9,6 +9,42 @@ namespace SurplusLink.Tests;
 public sealed class AgentWorkflowIntegrationTests(RequirementsDatabase fixture) : IClassFixture<RequirementsDatabase>
 {
     [PostgresFact]
+    public async Task Concurrent_workflows_cannot_overreserve_shared_stock_and_expired_stock_is_blocked()
+    {
+        var first = await SeedWorkflow(AgentWorkflowStatus.PENDING_APPROVAL);
+        var second = await SeedWorkflow(AgentWorkflowStatus.PENDING_APPROVAL);
+        Guid listingId;
+        using (var db = fixture.Context())
+        {
+            var a = await db.Matches.Include(x => x.Listing).SingleAsync(x => x.Id == first.MaterialMatchId);
+            var b = await db.Matches.SingleAsync(x => x.Id == second.MaterialMatchId);
+            a.Listing.Quantity = 3;
+            b.ListingId = a.ListingId;
+            listingId = a.ListingId;
+            await db.SaveChangesAsync();
+        }
+        using var app = fixture.App();
+        using var manager = fixture.Client(app, fixture.Manager, "MANAGER");
+        var results = await Task.WhenAll(new[] { first, second }.Select(w =>
+            manager.PostAsJsonAsync($"/api/workflows/{w.Id}/approve", new { note = "Concurrent review" })));
+        Assert.Single(results, x => x.StatusCode == HttpStatusCode.OK);
+        Assert.Single(results, x => x.StatusCode == HttpStatusCode.Conflict);
+        using (var db = fixture.Context())
+        {
+            Assert.Equal(2m, (await db.Listings.FindAsync(listingId))!.ReservedQuantity);
+            Assert.Equal(1, await db.Reservations.CountAsync(x => x.ListingId == listingId));
+        }
+        var expired = await SeedWorkflow(AgentWorkflowStatus.PENDING_APPROVAL);
+        using (var db = fixture.Context())
+        {
+            var listing = await db.Matches.Where(x => x.Id == expired.MaterialMatchId).Select(x => x.Listing).SingleAsync();
+            listing.AvailableUntil = DateTime.UtcNow.AddSeconds(-1);
+            await db.SaveChangesAsync();
+        }
+        Assert.Equal(HttpStatusCode.Conflict, (await manager.PostAsJsonAsync($"/api/workflows/{expired.Id}/approve", new { note = "Stale" })).StatusCode);
+    }
+
+    [PostgresFact]
     public async Task Manager_approval_reserves_once_and_decisions_are_audited()
     {
         var workflow = await SeedWorkflow(AgentWorkflowStatus.PENDING_APPROVAL);

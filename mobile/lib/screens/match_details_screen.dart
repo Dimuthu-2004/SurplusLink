@@ -94,6 +94,10 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
               if (_error != null)
                 MatchErrorBox(_error!, onRetry: _load)
               else if (_match case final match?) ...[
+                Text(match.materialTitle ?? 'Material recommendation', style: Theme.of(context).textTheme.titleLarge),
+                Text('Quantity: ${match.quantity ?? 'Unavailable'} ${match.unit ?? ''}'),
+                Text('Unit price: ${match.unitPrice == null ? 'Unavailable' : 'LKR ${match.unitPrice!.toStringAsFixed(2)}'}'),
+                Text('Duration: ${match.durationMinutes == null ? 'Unavailable' : '${match.durationMinutes!.toStringAsFixed(1)} minutes'}'),
                 Text(
                   'Score ${(match.score * 100).toStringAsFixed(1)}%',
                   style: Theme.of(context).textTheme.headlineSmall,

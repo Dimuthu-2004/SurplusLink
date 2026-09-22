@@ -7,6 +7,14 @@ namespace SurplusLink.Api.Transactions;
 
 public sealed class TransactionService(SurplusLinkDbContext db)
 {
+    public async Task AuthorizeHistoryAsync(Guid id, Guid actor, bool manager, CancellationToken ct)
+    {
+        var row = await db.Transactions.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct)
+            ?? throw new TransactionOperationException(404, "Transaction was not found.");
+        if (!manager && row.BuyerId != actor && row.SellerId != actor)
+            throw new TransactionOperationException(403, "This transaction belongs to other participants.");
+    }
+
     public async Task<(IReadOnlyList<OfferResponse> Items, int Total)> ListOffersAsync(OfferQuery input, CancellationToken ct)
     {
         Validate(input);
@@ -64,54 +72,68 @@ public sealed class TransactionService(SurplusLinkDbContext db)
 
     public async Task<TransactionResponse> ApproveAsync(Guid id, Guid actor, CancellationToken ct)
     {
-        await using var tx = await db.Database.BeginTransactionAsync(ct);
         var transaction = await db.Transactions.Include(x => x.Offer).SingleOrDefaultAsync(x => x.Id == id, ct)
             ?? throw new TransactionOperationException(404, "Transaction was not found.");
-        if (transaction.Status != TransactionStatus.PENDING_APPROVAL) throw new TransactionOperationException(409, "Only pending transactions can be approved.");
-        if (transaction.BuyerId == transaction.SellerId) throw new TransactionOperationException(409, "Self-dealing transactions are not allowed.");
-        var listing = await db.Matches.Where(x => x.Id == transaction.Offer.MaterialMatchId).Select(x => x.Listing).SingleAsync(ct);
-        if (listing.ReservedQuantity + transaction.Quantity > listing.Quantity) throw new TransactionOperationException(409, "Insufficient available quantity.");
-        listing.ReservedQuantity += transaction.Quantity;
-        transaction.ReservedQuantity = transaction.Quantity;
-        transaction.Status = TransactionStatus.APPROVED;
-        db.AuditLogs.Add(Log(id, actor, "TRANSACTION_APPROVED"));
-        db.AuditLogs.Add(Log(id, actor, "RESERVATION_CREATED"));
-        await db.SaveChangesAsync(ct);
-        await tx.CommitAsync(ct);
+        if (transaction.Status is not (TransactionStatus.PENDING_APPROVAL or TransactionStatus.APPROVED))
+            throw new TransactionOperationException(409, "Only pending or already approved transactions can be approved.");
+        var workflow = await db.AgentWorkflows.Where(x => x.MaterialMatchId == transaction.Offer.MaterialMatchId &&
+            (x.Status == AgentWorkflowStatus.PENDING_APPROVAL || x.Status == AgentWorkflowStatus.APPROVED))
+            .OrderByDescending(x => x.StartedAtUtc).FirstOrDefaultAsync(ct)
+            ?? throw new TransactionOperationException(409, "A validated pending workflow is required before approval.");
+        try { await new Workflows.AgentWorkflowService(db).ApproveAsync(workflow.Id, actor, null, ct); }
+        catch (Workflows.AgentWorkflowException ex) { throw new TransactionOperationException(ex.StatusCode, ex.Message); }
+        await db.Entry(transaction).ReloadAsync(ct);
         return ToResponse(transaction);
     }
 
     public async Task<TransactionResponse> CompleteAsync(Guid id, Guid actor, CancellationToken ct)
     {
-        var transaction = await db.Transactions.SingleOrDefaultAsync(x => x.Id == id, ct)
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        var transaction = await db.Transactions.Include(x => x.Offer).ThenInclude(x => x.MaterialMatch)
+            .ThenInclude(x => x.MaterialRequest).SingleOrDefaultAsync(x => x.Id == id, ct)
             ?? throw new TransactionOperationException(404, "Transaction was not found.");
         if (transaction.Status != TransactionStatus.APPROVED) throw new TransactionOperationException(409, "Only approved transactions can be completed.");
         transaction.Status = TransactionStatus.COMPLETED;
         transaction.CompletedAtUtc = DateTime.UtcNow;
+        transaction.Offer.MaterialMatch.MaterialRequest.Status = BuyerRequestStatus.COMPLETED;
+        var match = transaction.Offer.MaterialMatch;
+        var reservations = await db.Reservations.Where(x => x.MaterialRequestId == match.MaterialRequestId &&
+            x.ListingId == match.ListingId && x.Status == ReservationStatus.ACTIVE).ToListAsync(ct);
+        foreach (var row in reservations) row.Status = ReservationStatus.CONFIRMED;
+        var workflows = await db.AgentWorkflows.Where(x => x.MaterialMatchId == match.Id && x.Status == AgentWorkflowStatus.APPROVED).ToListAsync(ct);
+        foreach (var row in workflows) { row.Status = AgentWorkflowStatus.COMPLETED; row.CurrentStage = "COMPLETED"; row.CompletedAtUtc = DateTime.UtcNow; }
         db.AuditLogs.Add(Log(id, actor, "TRANSACTION_COMPLETED"));
         await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
         return ToResponse(transaction);
     }
 
     public async Task<TransactionResponse> RejectAsync(Guid id, Guid actor, CancellationToken ct)
     {
-        var transaction = await db.Transactions.SingleOrDefaultAsync(x => x.Id == id, ct)
+        var transaction = await db.Transactions.Include(x => x.Offer).SingleOrDefaultAsync(x => x.Id == id, ct)
             ?? throw new TransactionOperationException(404, "Transaction was not found.");
         if (transaction.Status != TransactionStatus.PENDING_APPROVAL)
             throw new TransactionOperationException(409, "Only pending transactions can be rejected.");
-        transaction.Status = TransactionStatus.REJECTED;
-        db.AuditLogs.Add(Log(id, actor, "TRANSACTION_REJECTED"));
-        await db.SaveChangesAsync(ct);
+        await UpdateOfferAsync(transaction.OfferId, actor, OfferStatus.REJECTED, ct);
+        await db.Entry(transaction).ReloadAsync(ct);
         return ToResponse(transaction);
     }
 
     private async Task UpdateOfferAsync(Guid id, Guid actor, OfferStatus status, CancellationToken ct)
     {
         var offer = await db.Offers.SingleOrDefaultAsync(x => x.Id == id, ct) ?? throw new TransactionOperationException(404, "Offer was not found.");
-        offer.Status = status;
-        db.AuditLogs.Add(new AuditLog { Id = Guid.NewGuid(), ActorUserId = actor, EntityType = nameof(Offer), EntityId = id,
-            Action = status == OfferStatus.REVISION_REQUESTED ? "OFFER_REVISION_REQUESTED" : $"OFFER_{status}" });
-        await db.SaveChangesAsync(ct);
+        if (offer.Status != OfferStatus.PENDING) throw new TransactionOperationException(409, "Only pending offers can be decided.");
+        var workflow = await db.AgentWorkflows.Where(x => x.MaterialMatchId == offer.MaterialMatchId &&
+            x.Status == AgentWorkflowStatus.PENDING_APPROVAL).OrderByDescending(x => x.StartedAtUtc).FirstOrDefaultAsync(ct)
+            ?? throw new TransactionOperationException(409, "A validated pending workflow is required.");
+        var service = new Workflows.AgentWorkflowService(db);
+        try
+        {
+            if (status == OfferStatus.ACCEPTED) await service.ApproveAsync(workflow.Id, actor, null, ct);
+            else if (status == OfferStatus.REJECTED) await service.RejectAsync(workflow.Id, actor, "Manager rejected the offer.", ct);
+            else await service.ReviseAsync(workflow.Id, actor, "Manager requested an offer revision.", ct);
+        }
+        catch (Workflows.AgentWorkflowException ex) { throw new TransactionOperationException(ex.StatusCode, ex.Message); }
     }
 
     private static IQueryable<T> Filter<T>(IQueryable<T> query, string? status, DateTimeOffset? from, DateTimeOffset? to, Guid? user)

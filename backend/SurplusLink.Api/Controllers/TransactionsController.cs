@@ -8,13 +8,14 @@ namespace SurplusLink.Api.Controllers;
 
 [ApiController]
 [Route("api")]
-[Authorize(Roles = "MANAGER")]
+[Authorize(Roles = "SELLER,BUYER,MANAGER")]
 public sealed class TransactionsController(TransactionService service) : ControllerBase
 {
     [HttpGet("offers")]
     public Task<ActionResult<object>> Offers([FromQuery] OfferQuery query, CancellationToken ct) =>
         Execute(async () =>
         {
+            if (!User.IsInRole("MANAGER")) query.UserId = Actor();
             var result = await service.ListOffersAsync(query, ct);
             return (object)new { items = result.Items, total = result.Total, page = query.Page, pageSize = query.PageSize,
                 totalPages = (int)Math.Ceiling(result.Total / (double)query.PageSize) };
@@ -24,6 +25,7 @@ public sealed class TransactionsController(TransactionService service) : Control
     public Task<ActionResult<object>> Transactions([FromQuery] TransactionQuery query, CancellationToken ct) =>
         Execute(async () =>
         {
+            if (!User.IsInRole("MANAGER")) query.UserId = Actor();
             var result = await service.ListTransactionsAsync(query, ct);
             return (object)new { items = result.Items, total = result.Total, page = query.Page, pageSize = query.PageSize,
                 totalPages = (int)Math.Ceiling(result.Total / (double)query.PageSize) };
@@ -31,30 +33,41 @@ public sealed class TransactionsController(TransactionService service) : Control
 
     [HttpGet("transactions/{id:guid}/history")]
     public Task<ActionResult<TransactionHistoryPage>> History(Guid id, [FromQuery] TransactionQuery query, CancellationToken ct) =>
-        Execute(() => service.HistoryAsync(id, query, ct));
+        Execute(async () =>
+        {
+            await service.AuthorizeHistoryAsync(id, Actor(), User.IsInRole("MANAGER"), ct);
+            return await service.HistoryAsync(id, query, ct);
+        });
 
     [HttpGet("transactions/analytics/summary")]
+    [Authorize(Roles = "MANAGER")]
     public Task<ActionResult<TransactionAnalyticsSummary>> Analytics(CancellationToken ct) =>
         Execute(() => service.AnalyticsAsync(ct));
 
     [HttpPost("offers/{id:guid}/approve")]
+    [Authorize(Roles = "MANAGER")]
     public Task<IActionResult> ApproveOffer(Guid id, CancellationToken ct) => DecideOffer(id, OfferStatus.ACCEPTED, ct);
 
     [HttpPost("offers/{id:guid}/reject")]
+    [Authorize(Roles = "MANAGER")]
     public Task<IActionResult> RejectOffer(Guid id, CancellationToken ct) => DecideOffer(id, OfferStatus.REJECTED, ct);
 
     [HttpPost("offers/{id:guid}/revise")]
+    [Authorize(Roles = "MANAGER")]
     public Task<IActionResult> ReviseOffer(Guid id, CancellationToken ct) => DecideOffer(id, OfferStatus.REVISION_REQUESTED, ct);
 
     [HttpPost("transactions/{id:guid}/approve")]
+    [Authorize(Roles = "MANAGER")]
     public Task<ActionResult<TransactionResponse>> Approve(Guid id, CancellationToken ct) =>
         Execute(() => service.ApproveAsync(id, Actor(), ct));
 
     [HttpPost("transactions/{id:guid}/complete")]
+    [Authorize(Roles = "MANAGER")]
     public Task<ActionResult<TransactionResponse>> Complete(Guid id, CancellationToken ct) =>
         Execute(() => service.CompleteAsync(id, Actor(), ct));
 
     [HttpPost("transactions/{id:guid}/reject")]
+    [Authorize(Roles = "MANAGER")]
     public Task<ActionResult<TransactionResponse>> Reject(Guid id, CancellationToken ct) =>
         Execute(() => service.RejectAsync(id, Actor(), ct));
 

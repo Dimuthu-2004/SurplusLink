@@ -55,6 +55,7 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db)
         var workflow = await LockAsync(id, ct) ?? throw NotFound();
         EnsurePendingApproval(workflow);
         var cleanNote = NormalizeNote(note);
+        if (cleanNote.Length == 0) throw new AgentWorkflowException(400, "A revision note is required.");
         workflow.Status = AgentWorkflowStatus.REVISION_REQUESTED;
         workflow.CurrentStage = "REVISION";
         workflow.Decision = cleanNote;
@@ -86,6 +87,7 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db)
             Note = cleanNote, DecidedAtUtc = DateTime.UtcNow
         });
         Audit(workflow.Id, managerId, "WORKFLOW_REVISION_REQUESTED");
+        await UpdateParticipationAsync(workflow, managerId, OfferStatus.REVISION_REQUESTED, TransactionStatus.REJECTED, ct);
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
         return ToResponse(await LoadAsync(id, ct) ?? workflow);
@@ -103,6 +105,8 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db)
         }
         EnsurePendingApproval(workflow);
         var cleanNote = NormalizeNote(note);
+        if (decision == ApprovalDecision.REJECTED && cleanNote.Length == 0)
+            throw new AgentWorkflowException(400, "A rejection note is required.");
 
         if (decision == ApprovalDecision.APPROVED)
         {
@@ -123,9 +127,19 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db)
             var match = await db.Matches.Include(x => x.Listing).Include(x => x.MaterialRequest)
                 .SingleOrDefaultAsync(x => x.Id == matchId, ct)
                 ?? throw new AgentWorkflowException(409, "The workflow match was not found.");
+            // Serialize stock changes across different workflows targeting the same listing.
+            await db.Database.ExecuteSqlInterpolatedAsync(
+                $"SELECT 1 FROM \"Listings\" WHERE \"Id\" = {match.ListingId} FOR UPDATE", ct);
+            await db.Entry(match.Listing).ReloadAsync(ct);
+            await db.Entry(match.MaterialRequest).ReloadAsync(ct);
+            if (workflow.MaterialRequestId != match.MaterialRequestId || match.Status == MatchStatus.REJECTED ||
+                match.Listing.AvailableUntil <= DateTime.UtcNow || match.MaterialRequest.Deadline <= DateTime.UtcNow ||
+                !string.Equals(match.Listing.Unit, match.MaterialRequest.Unit, StringComparison.OrdinalIgnoreCase) ||
+                match.Listing.UnitPrice * match.MaterialRequest.RequiredQuantity > match.MaterialRequest.MaximumBudget)
+                throw new AgentWorkflowException(409, "The recommendation is no longer eligible. Request a revision.");
             if (MarketplaceMatchPolicy.RejectionReason(match.MaterialRequest.BuyerId, match.Listing.SellerId) is not null)
                 throw new AgentWorkflowException(409, "A workflow cannot approve a self-dealing match.");
-            if (match.Listing.Status is not ListingStatus.ACTIVE and not ListingStatus.AVAILABLE and not ListingStatus.RESERVED)
+            if (match.Listing.Status != ListingStatus.ACTIVE)
                 throw new AgentWorkflowException(409, "The listing is not available for reservation.");
             if (match.MaterialRequest.Status is not BuyerRequestStatus.OPEN and not BuyerRequestStatus.MATCH_FOUND)
                 throw new AgentWorkflowException(409, "The material request is not open for reservation.");
@@ -148,7 +162,10 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db)
                     Id = Guid.NewGuid(), ListingId = match.ListingId, MaterialRequestId = match.MaterialRequestId,
                     Quantity = quantity, Status = ReservationStatus.ACTIVE
                 });
+                db.AuditLogs.Add(new AuditLog { Id = Guid.NewGuid(), ActorUserId = managerId,
+                    EntityType = nameof(Listing), EntityId = match.ListingId, Action = "QUANTITY_RESERVED" });
             }
+            match.MaterialRequest.Status = BuyerRequestStatus.APPROVED;
             workflow.Status = AgentWorkflowStatus.APPROVED;
             workflow.CurrentStage = "APPROVED";
             workflow.CompletedAtUtc = DateTime.UtcNow;
@@ -158,7 +175,16 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db)
             workflow.Status = AgentWorkflowStatus.REJECTED;
             workflow.CurrentStage = "REJECTED";
             workflow.CompletedAtUtc = DateTime.UtcNow;
+            if (workflow.MaterialRequestId is Guid requestId)
+            {
+                var request = await db.BuyerRequests.SingleAsync(x => x.Id == requestId, ct);
+                request.Status = BuyerRequestStatus.REJECTED;
+            }
         }
+
+        await UpdateParticipationAsync(workflow, managerId,
+            decision == ApprovalDecision.APPROVED ? OfferStatus.ACCEPTED : OfferStatus.REJECTED,
+            decision == ApprovalDecision.APPROVED ? TransactionStatus.APPROVED : TransactionStatus.REJECTED, ct);
 
         workflow.Decision = cleanNote;
         db.Approvals.Add(new Approval
@@ -175,6 +201,23 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db)
     private async Task<AgentWorkflow?> LoadAsync(Guid id, CancellationToken ct) =>
         await db.AgentWorkflows.AsNoTracking().Include(x => x.Steps).ThenInclude(x => x.ToolCalls)
             .Include(x => x.Approvals).SingleOrDefaultAsync(x => x.Id == id, ct);
+
+    private async Task UpdateParticipationAsync(AgentWorkflow workflow, Guid actor, OfferStatus offerStatus,
+        TransactionStatus status, CancellationToken ct)
+    {
+        var transactions = await db.Transactions.Include(x => x.Offer).Where(x =>
+            x.Offer.MaterialMatchId == workflow.MaterialMatchId && x.Status == TransactionStatus.PENDING_APPROVAL).ToListAsync(ct);
+        foreach (var row in transactions)
+        {
+            row.Status = status;
+            row.Offer.Status = offerStatus;
+            db.AuditLogs.Add(new AuditLog { Id = Guid.NewGuid(), ActorUserId = actor,
+                EntityType = nameof(Offer), EntityId = row.OfferId, Action = "OFFER_" + offerStatus });
+            row.ReservedQuantity = status == TransactionStatus.APPROVED ? row.Quantity : 0;
+            db.AuditLogs.Add(new AuditLog { Id = Guid.NewGuid(), ActorUserId = actor,
+                EntityType = nameof(Transaction), EntityId = row.Id, Action = "WORKFLOW_" + workflow.Status });
+        }
+    }
 
     private async Task<AgentWorkflow?> LockAsync(Guid id, CancellationToken ct)
     {

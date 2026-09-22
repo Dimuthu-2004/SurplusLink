@@ -102,6 +102,18 @@ class ValidationTests(unittest.IsolatedAsyncioTestCase):
 
 
 class WorkflowTests(unittest.IsolatedAsyncioTestCase):
+    async def test_next_ranked_candidate_is_selected_when_first_route_is_unavailable(self):
+        from uuid import uuid4
+        raw = demo_request().model_dump(mode="json")
+        first = raw["listings"][0]
+        second = dict(first, matchId=str(uuid4()), listingId=str(uuid4()), unitPrice="110")
+        first["distanceKm"] = None
+        raw["listings"] = [first, second]
+        result = await WorkflowOrchestrator().run(WorkflowRequest.model_validate(raw))
+        self.assertEqual(result.status, "PENDING_APPROVAL", result.model_dump_json())
+        self.assertEqual(str(result.recommendation.listingId), second["listingId"])
+        self.assertEqual(len(result.steps[-1].output["candidates"]), 2)
+
     async def test_real_agents_run_in_order_and_stop_at_manager_gate(self):
         request = demo_request()
         before = request.model_dump_json()

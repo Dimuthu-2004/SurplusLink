@@ -9,7 +9,7 @@ public sealed class TransactionQuery : IValidatableObject
     public string? Status { get; init; }
     public DateTimeOffset? CreatedFrom { get; init; }
     public DateTimeOffset? CreatedTo { get; init; }
-    public Guid? UserId { get; init; }
+    public Guid? UserId { get; set; }
     [Required, RegularExpression("(?i)^(createdAt|value|status)$")] public string SortBy { get; init; } = "createdAt";
     [Required, RegularExpression("(?i)^(asc|desc)$")] public string SortDir { get; init; } = "desc";
     [Range(1, 1_000_000)] public int Page { get; init; } = 1;
@@ -30,7 +30,7 @@ public sealed class OfferQuery : IValidatableObject
     public string? Status { get; init; }
     public DateTimeOffset? CreatedFrom { get; init; }
     public DateTimeOffset? CreatedTo { get; init; }
-    public Guid? UserId { get; init; }
+    public Guid? UserId { get; set; }
     [Required, RegularExpression("(?i)^(createdAt|value|status)$")] public string SortBy { get; init; } = "createdAt";
     [Required, RegularExpression("(?i)^(asc|desc)$")] public string SortDir { get; init; } = "desc";
     [Range(1, 1_000_000)] public int Page { get; init; } = 1;
