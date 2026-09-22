@@ -27,7 +27,9 @@ export function ManagerRequirementDetailsPage({ api = managerRequirementsApi, wo
         <p>{workflowDescription(row.status)}</p>
         <p className="muted">Last updated {requirementDate(row.updatedAt)}.</p>
         <h3>Workflow and recommendations</h3>
-        <p>Detailed workflow information and recommendations are not available yet.</p>
+        {row.workflowId ? <><RequirementBadge status={row.workflowStatus ?? row.status} /><Link className="button button-secondary" to={'/app/manager/workflows/' + row.workflowId}>Inspect agent workflow</Link></> : <p>No workflow has been started for this requirement.</p>}
+        <Link className="button button-secondary" to={base + '/matches'}>View match comparison</Link>
+        {row.decisionNote && <p>Manager note: {row.decisionNote}</p>}
         <p>The status above reflects the latest saved requirement. Refresh to check for updates.</p>
       </> : <>
         {categories.error && <RequirementError message={'Category name unavailable. ' + categories.error} retry={categories.reload} label="Retry category name" />}

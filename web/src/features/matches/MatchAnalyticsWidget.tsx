@@ -1,16 +1,15 @@
-import { useCallback, useState } from 'react';
+import { useCallback } from 'react';
 import { managerMatchesApi, type ManagerMatchesApi } from './managerMatchesApi';
 import { RequirementError, requirementNumber, useRequirementResource } from '../requirements/requirementUi';
 
 export function MatchAnalyticsWidget({ api = managerMatchesApi, requirementId }: { api?: ManagerMatchesApi; requirementId?: string }) {
-  const [windowSize] = useState(30);
   const load = useCallback(() => api.summary(requirementId ?? 'all'), [api, requirementId]);
   const { data, error, loading, reload } = useRequirementResource(load);
 
   return <section className="manager-panel" aria-labelledby="match-analytics-heading">
     <div className="section-heading">
       <div><p className="eyebrow">Comparison analytics</p><h2 id="match-analytics-heading">Match analytics</h2></div>
-      <small className="muted">Last {windowSize} days</small>
+      <small className="muted">All recorded candidates</small>
     </div>
     {loading && <p role="status">Loading match analytics…</p>}
     {error && <RequirementError message={error} retry={reload} label="Retry" />}

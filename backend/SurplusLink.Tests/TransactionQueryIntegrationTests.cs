@@ -17,7 +17,12 @@ public sealed class TransactionQueryIntegrationTests(RequirementsDatabase fixtur
         using var manager = fixture.Client(app, fixture.Manager, "MANAGER");
         using var buyer = fixture.Client(app, fixture.Buyer, "BUYER");
 
-        Assert.Equal(HttpStatusCode.Forbidden, (await buyer.GetAsync("/api/transactions")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await buyer.GetAsync("/api/transactions")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await buyer.PostAsync($"/api/transactions/{seeded.Pending.Id}/approve", null)).StatusCode);
+        using var otherBuyer = fixture.Client(app, fixture.OtherBuyer, "BUYER");
+        var privatePage = await otherBuyer.GetFromJsonAsync<JsonElement>("/api/transactions?userId=" + fixture.Buyer);
+        Assert.Equal(0, privatePage.GetProperty("total").GetInt32());
+        Assert.Equal(HttpStatusCode.Forbidden, (await otherBuyer.GetAsync($"/api/transactions/{seeded.Pending.Id}/history")).StatusCode);
         var page = await manager.GetFromJsonAsync<JsonElement>(
             "/api/transactions?status=pending_approval&userId=" + fixture.Buyer + "&sortBy=value&sortDir=asc&pageSize=1");
         Assert.Equal(1, page.GetProperty("total").GetInt32());
@@ -30,7 +35,7 @@ public sealed class TransactionQueryIntegrationTests(RequirementsDatabase fixtur
 
         var history = await manager.GetFromJsonAsync<TransactionHistoryPage>(
             $"/api/transactions/{seeded.Pending.Id}/history?pageSize=10");
-        Assert.Equal(new[] { "RESERVATION_CREATED", "TRANSACTION_APPROVED", "TRANSACTION_COMPLETED" },
+        Assert.Equal(new[] { "TRANSACTION_COMPLETED", "WORKFLOW_APPROVED" },
             history!.Items.Select(x => x.Action).OrderBy(x => x));
 
         var summary = await manager.GetFromJsonAsync<TransactionAnalyticsSummary>("/api/transactions/analytics/summary");
@@ -47,8 +52,8 @@ public sealed class TransactionQueryIntegrationTests(RequirementsDatabase fixtur
         using var manager = fixture.Client(app, fixture.Manager, "MANAGER");
 
         Assert.Equal(HttpStatusCode.OK, (await manager.PostAsync($"/api/offers/{seeded.Offer.Id}/revise", null)).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await manager.PostAsync($"/api/offers/{seeded.Offer.Id}/reject", null)).StatusCode);
-        var offers = await manager.GetFromJsonAsync<JsonElement>("/api/offers?status=rejected&sortBy=status&sortDir=desc");
+        Assert.Equal(HttpStatusCode.Conflict, (await manager.PostAsync($"/api/offers/{seeded.Offer.Id}/reject", null)).StatusCode);
+        var offers = await manager.GetFromJsonAsync<JsonElement>("/api/offers?status=revision_requested&sortBy=status&sortDir=desc");
         Assert.Contains(offers.GetProperty("items").EnumerateArray(), item => item.GetProperty("id").GetGuid() == seeded.Offer.Id);
         Assert.Equal(HttpStatusCode.BadRequest, (await manager.GetAsync("/api/transactions?sortBy=bad")).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await manager.GetAsync("/api/offers?createdFrom=2030-01-02&createdTo=2030-01-01")).StatusCode);
@@ -56,7 +61,7 @@ public sealed class TransactionQueryIntegrationTests(RequirementsDatabase fixtur
         using var db = fixture.Context();
         var actions = await db.AuditLogs.Where(x => x.EntityId == seeded.Offer.Id).Select(x => x.Action).ToListAsync();
         Assert.Contains("OFFER_REVISION_REQUESTED", actions);
-        Assert.Contains("OFFER_REJECTED", actions);
+        Assert.DoesNotContain("OFFER_REJECTED", actions);
     }
 
     private async Task<(Offer Offer, Transaction Pending)> Seed()
@@ -86,7 +91,10 @@ public sealed class TransactionQueryIntegrationTests(RequirementsDatabase fixtur
             Id = Guid.NewGuid(), OfferId = offer.Id, BuyerId = fixture.Buyer, SellerId = fixture.Seller,
             Quantity = 3, TotalValue = 30, Status = TransactionStatus.PENDING_APPROVAL
         };
-        db.AddRange(request, listing, match, offer, pending);
+        var workflow = new AgentWorkflow { Id = Guid.NewGuid(), MaterialRequestId = request.Id,
+            MaterialMatchId = match.Id, Status = AgentWorkflowStatus.PENDING_APPROVAL, CurrentStage = "PENDING_APPROVAL",
+            ValidationJson = "{\"valid\":true}", StartedAtUtc = DateTime.UtcNow };
+        db.AddRange(request, listing, match, offer, pending, workflow);
         await db.SaveChangesAsync();
         return (offer, pending);
     }

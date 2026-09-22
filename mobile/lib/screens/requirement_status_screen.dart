@@ -72,6 +72,8 @@ class _RequirementStatusScreenState extends State<RequirementStatusScreen> {
                   if (_row case final row?) ...[
                     const Icon(Icons.track_changes, size: 56),
                     Center(child: RequirementStatusChip(row.status)),
+                    if (row.workflowStatus != null) Text('Workflow: ${row.workflowStatus!.replaceAll('_', ' ')}'),
+                    if (row.decisionNote?.isNotEmpty == true) Text('Manager note: ${row.decisionNote}'),
                     Text(_description(row.status), textAlign: TextAlign.center),
                     const SizedBox(height: 24),
                     const Text(
@@ -79,9 +81,9 @@ class _RequirementStatusScreenState extends State<RequirementStatusScreen> {
                       style: TextStyle(fontWeight: FontWeight.bold),
                     ),
                     Text(
-                      widget.workflowId == null
+                      (row.workflowId ?? widget.workflowId) == null
                           ? 'Workflow details are not available.'
-                          : 'Workflow ID: ${widget.workflowId!}',
+                          : 'Workflow ID: ${row.workflowId ?? widget.workflowId}',
                     ),
                     const SizedBox(height: 24),
                     const Text(

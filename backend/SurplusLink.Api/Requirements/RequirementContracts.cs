@@ -43,6 +43,9 @@ public sealed record RequirementResponse(
     [property: JsonConverter(typeof(JsonStringEnumConverter))] BuyerRequestStatus Status,
     DateTime CreatedAt, DateTime UpdatedAt, string Notes)
 {
+    public Guid? WorkflowId { get; init; }
+    public string? WorkflowStatus { get; init; }
+    public string? DecisionNote { get; init; }
     public static RequirementResponse From(BuyerRequest request) => new(
         request.Id, request.BuyerId, request.CategoryId, request.RequiredQuantity, request.Unit,
         request.MaximumBudget, request.Deadline, request.Latitude, request.Longitude,

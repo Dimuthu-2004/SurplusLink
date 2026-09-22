@@ -168,6 +168,8 @@ public sealed class MaterialInventoryService(SurplusLinkDbContext dbContext) : I
     public async Task DeleteListingAsync(Guid sellerId, Guid listingId, CancellationToken cancellationToken)
     {
         var listing = await GetOwnedListingAsync(sellerId, listingId, cancellationToken);
+        if (listing.Status != ListingStatus.DRAFT)
+            throw new MaterialOperationException(MaterialOperationError.Conflict, "Only draft listings can be deleted.");
         var hasDependents = await dbContext.Reservations.AnyAsync(item => item.ListingId == listing.Id, cancellationToken)
             || await dbContext.Matches.AnyAsync(item => item.ListingId == listing.Id, cancellationToken);
         if (hasDependents)
@@ -219,6 +221,9 @@ public sealed class MaterialInventoryService(SurplusLinkDbContext dbContext) : I
                 MaterialOperationError.Conflict,
                 "Only PENDING_VERIFICATION listings can be verified or rejected.");
         }
+
+        if (request.Approved && listing.AvailableUntil <= DateTime.UtcNow)
+            throw new MaterialOperationException(MaterialOperationError.Validation, "An expired listing cannot be verified.");
 
         listing.Status = request.Approved ? ListingStatus.ACTIVE : ListingStatus.REJECTED;
         AddAudit(managerId, listing.Id, request.Approved ? "LISTING_VERIFIED" : "LISTING_REJECTED");

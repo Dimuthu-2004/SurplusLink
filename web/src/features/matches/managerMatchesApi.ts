@@ -15,6 +15,7 @@ export interface MatchCandidate {
   status: MatchStatus;
   score: number;
   routeDistanceKm: number | null;
+  durationMinutes?: number | null;
   estimatedCost: number | null;
   rejectionReason: string | null;
   createdAt: string;
@@ -55,12 +56,25 @@ export interface ManagerMatchesApi {
 export function createManagerMatchesApi(
   client: Pick<AxiosInstance, 'get'> = apiClient,
 ): ManagerMatchesApi {
+  const list = async (requirementId: string, query: MatchComparisonQuery): Promise<MatchComparisonPage> => {
+    const data = await read(client.get<ApiMatchPage>(`/api/matches/requirement/${encodeURIComponent(requirementId)}`, {
+      params: { page: query.page, pageSize: query.pageSize, sortDir: query.sortDir,
+        sortBy: query.sort === 'cost' ? 'estimatedTransportCost' : query.sort,
+        ...(query.status === 'VALID' ? { valid: true } : query.status === 'REJECTED' ? { rejected: true } : {}) },
+    }));
+    return { ...data, items: data.items.map(toCandidate) };
+  };
   return {
-    list: (requirementId, query) => read(client.get<MatchComparisonPage>(`/api/requirements/${encodeURIComponent(requirementId)}/matches`, {
-      params: compact(query),
-    })),
+    list,
     requirement: (requirementId) => read(client.get<BuyerRequirement>(`/api/requirements/${encodeURIComponent(requirementId)}`)),
-    summary: (requirementId) => read(client.get<MatchSummary>(`/api/requirements/${encodeURIComponent(requirementId)}/matches/analytics`)),
+    summary: async (requirementId) => {
+      const data = await read(client.get<{ total: number; validCount: number; rejectedCount: number;
+        averageScore: number | null; averageDistance: number | null; averageCost: number | null }>(
+        '/api/matches/analytics/summary', { params: requirementId === 'all' ? {} : { requirementId } }));
+      const top = requirementId === 'all' ? null : await list(requirementId, { status: 'VALID', sort: 'score', sortDir: 'desc', page: 1, pageSize: 1 });
+      return { ...data, averageScore: data.averageScore === null ? null : data.averageScore * 100,
+        averageRouteKm: data.averageDistance, topCandidate: top?.items[0] ?? null };
+    },
   };
 }
 
@@ -74,8 +88,13 @@ async function read<T>(operation: Promise<{ data: T }>): Promise<T> {
   }
 }
 
-function compact(query: MatchComparisonQuery): Record<string, string | number> {
-  return Object.fromEntries(
-    Object.entries(query).filter(([, value]) => value !== '' && value !== undefined && value !== 'ALL'),
-  ) as Record<string, string | number>;
+interface ApiMatch { id: string; requirementId: string; listingId: string; sellerId: string;
+  materialTitle: string; categoryName: string; score: number; distance: number | null;
+  durationMinutes: number | null; estimatedTransportCost: number | null; status: string;
+  rejected: boolean; rejectionReason: string | null; createdAt: string }
+interface ApiMatchPage { items: ApiMatch[]; total: number; page: number; pageSize: number }
+function toCandidate(row: ApiMatch): MatchCandidate {
+  return { ...row, materialListingId: row.listingId, score: row.score * 100,
+    status: row.rejected ? 'REJECTED' : 'VALID', routeDistanceKm: row.distance,
+    estimatedCost: row.estimatedTransportCost, updatedAt: row.createdAt };
 }

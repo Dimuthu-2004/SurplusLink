@@ -104,7 +104,7 @@ export function ManagerMatchComparisonPage({ api = managerMatchesApi }: { api?: 
                   <th scope="col">Candidate</th>
                   <th scope="col">Score</th>
                   <th scope="col">Route</th>
-                  <th scope="col">Estimated cost</th>
+                  <th scope="col">Transport cost (LKR)</th>
                   <th scope="col">Status</th>
                   <th scope="col">Rejection reason</th>
                   <th scope="col">Links</th>
@@ -129,7 +129,7 @@ function MatchCandidateRow({ candidate, requirementId }: { candidate: MatchCandi
       <small>{candidate.categoryName}</small>
     </td>
     <td>{candidate.score}</td>
-    <td>{candidate.routeDistanceKm === null ? '—' : `${requirementNumber(candidate.routeDistanceKm, 1)} km`}</td>
+    <td>{candidate.routeDistanceKm === null ? '—' : `${requirementNumber(candidate.routeDistanceKm, 1)} km`}<br />{candidate.durationMinutes == null ? 'Duration unavailable' : `${requirementNumber(candidate.durationMinutes, 1)} min`}</td>
     <td>{candidate.estimatedCost === null ? '—' : `$${requirementNumber(candidate.estimatedCost, 2)}`}</td>
     <td><span className="status-badge">{candidate.status}</span></td>
     <td>{candidate.rejectionReason || '—'}</td>

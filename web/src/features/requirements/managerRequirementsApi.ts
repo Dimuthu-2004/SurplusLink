@@ -6,6 +6,7 @@ export const requirementStatuses = ['DRAFT', 'OPEN', 'MATCHING', 'MATCH_FOUND',
   'PENDING_APPROVAL', 'APPROVED', 'REJECTED', 'COMPLETED', 'CANCELLED'] as const;
 export type RequirementStatus = typeof requirementStatuses[number];
 export interface BuyerRequirement {
+  workflowId?: string | null; workflowStatus?: string | null; decisionNote?: string | null;
   id: string; buyerId: string; categoryId: string; requiredQuantity: number; unit: string;
   maximumBudget: number; deadline: string; latitude: number | null; longitude: number | null;
   status: RequirementStatus; notes: string; createdAt: string; updatedAt: string;

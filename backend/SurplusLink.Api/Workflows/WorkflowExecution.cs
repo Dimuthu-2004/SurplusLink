@@ -112,7 +112,7 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
                 if (!StillEligible(request, listing, recommendation.TransportCost))
                     throw new InvalidOperationException("Snapshot changed.");
             }
-            await PersistAsync(workflow, request, result, retries, budget.Token);
+            await PersistAsync(workflow, request, result, retries, snapshot, budget.Token);
         }
         catch (OperationCanceledException) when (stop.IsCancellationRequested) { throw; }
         catch (Exception error)
@@ -136,10 +136,11 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
     private async Task<WorkflowRunRequest> SnapshotAsync(AgentWorkflow workflow, BuyerRequest request, CancellationToken ct)
     {
         var listings = await db.Listings.AsNoTracking().Where(x => x.CategoryId == request.CategoryId &&
-            x.SellerId != request.BuyerId && x.Status == ListingStatus.ACTIVE && x.AvailableUntil >= request.Deadline &&
-            x.Quantity - x.ReservedQuantity >= request.RequiredQuantity && x.Unit == request.Unit &&
-            x.UnitPrice * request.RequiredQuantity <= request.MaximumBudget)
-            .OrderBy(x => x.UnitPrice).ThenBy(x => x.Id).Take(settings.Value.MaxCandidates).ToListAsync(ct);
+            x.SellerId != request.BuyerId && x.Status == ListingStatus.ACTIVE)
+            .OrderByDescending(x => x.AvailableUntil >= request.Deadline &&
+                x.Quantity - x.ReservedQuantity >= request.RequiredQuantity && x.Unit.ToLower() == request.Unit.ToLower() &&
+                x.UnitPrice * request.RequiredQuantity <= request.MaximumBudget)
+            .ThenBy(x => x.UnitPrice).ThenBy(x => x.Id).Take(settings.Value.MaxCandidates).ToListAsync(ct);
         var existing = await db.Matches.AsNoTracking().Where(x => x.MaterialRequestId == request.Id)
             .ToDictionaryAsync(x => x.ListingId, x => x.Id, ct);
         var rows = new List<WorkflowListingSnapshot>();
@@ -165,7 +166,8 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
     internal static bool StillEligible(BuyerRequest request, Listing listing, decimal transportCost) =>
         request.Status == BuyerRequestStatus.MATCHING && request.Deadline > DateTime.UtcNow &&
         listing.Status == ListingStatus.ACTIVE && listing.AvailableUntil >= request.Deadline &&
-        listing.SellerId != request.BuyerId && listing.CategoryId == request.CategoryId && listing.Unit == request.Unit &&
+        listing.SellerId != request.BuyerId && listing.CategoryId == request.CategoryId &&
+        string.Equals(listing.Unit, request.Unit, StringComparison.OrdinalIgnoreCase) &&
         listing.Quantity - listing.ReservedQuantity >= request.RequiredQuantity && transportCost >= 0 &&
         listing.UnitPrice * request.RequiredQuantity + transportCost <= request.MaximumBudget;
 
@@ -219,11 +221,41 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
             throw new JsonException("Recommendation must reference the trusted snapshot.");
     }
 
-    private async Task PersistAsync(AgentWorkflow workflow, BuyerRequest request, WorkflowRunResult result, int retries, CancellationToken ct)
+    private async Task PersistAsync(AgentWorkflow workflow, BuyerRequest request, WorkflowRunResult result, int retries,
+        WorkflowRunRequest snapshot, CancellationToken ct)
     {
         // Complete potentially failing reads before modifying tracked entities.
         var existingMatch = result.Recommendation is { } selected
             ? await db.Matches.SingleOrDefaultAsync(x => x.Id == selected.MatchId, ct) : null;
+        var listing = result.Recommendation is { } chosen
+            ? await db.Listings.AsNoTracking().SingleAsync(x => x.Id == chosen.ListingId, ct) : null;
+        var persisted = await db.Matches.Where(x => x.MaterialRequestId == request.Id).ToDictionaryAsync(x => x.Id, ct);
+        foreach (var row in snapshot.Listings)
+        {
+            var reason = row.AvailableUntil < request.Deadline ? "LISTING_EXPIRES_BEFORE_DELIVERY"
+                : !string.Equals(row.Unit, request.Unit, StringComparison.OrdinalIgnoreCase) ? "UNIT_MISMATCH"
+                : row.AvailableQuantity < request.RequiredQuantity ? "INSUFFICIENT_QUANTITY"
+                : row.UnitPrice * request.RequiredQuantity > request.MaximumBudget ? "BUDGET_EXCEEDED"
+                : row.DistanceKm is null || row.DurationMinutes is null || row.TransportCost is null ? "ROUTING_UNAVAILABLE"
+                : row.UnitPrice * request.RequiredQuantity + row.TransportCost > request.MaximumBudget ? "TOTAL_COST_EXCEEDS_BUDGET"
+                : null;
+            if (!persisted.TryGetValue(row.MatchId, out var candidate))
+            {
+                candidate = new MaterialMatch { Id = row.MatchId, MaterialRequestId = request.Id, ListingId = row.ListingId };
+                db.Matches.Add(candidate);
+                persisted.Add(candidate.Id, candidate);
+            }
+            candidate.Status = reason is null ? MatchStatus.ROUTED : MatchStatus.REJECTED;
+            candidate.RejectionReason = reason;
+            candidate.Distance = row.DistanceKm;
+            candidate.DurationMinutes = row.DurationMinutes;
+            candidate.EstimatedTransportCost = row.TransportCost;
+            candidate.Score = Math.Round((50m + 30m * (request.MaximumBudget - row.UnitPrice * request.RequiredQuantity) /
+                request.MaximumBudget + 20m * Math.Min((row.AvailableQuantity - request.RequiredQuantity) / request.RequiredQuantity, 1m)) / 100m, 4);
+            candidate.Score = Math.Clamp(candidate.Score, 0m, 1m);
+            db.AuditLogs.Add(new AuditLog { Id = Guid.NewGuid(), EntityType = nameof(MaterialMatch), EntityId = candidate.Id,
+                Action = reason is null ? "ROUTE_SUCCEEDED" : "REJECT" });
+        }
         workflow.Status = Enum.Parse<AgentWorkflowStatus>(result.Status);
         workflow.CurrentStage = result.Status;
         workflow.CompletedAtUtc = DateTime.UtcNow;
@@ -233,7 +265,7 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
         workflow.RetryCount = retries + result.Steps.Sum(x => x.RetryCount + x.ToolCalls.Sum(t => t.RetryCount));
         if (result.Recommendation is { } rec)
         {
-            var match = existingMatch;
+            var match = persisted.GetValueOrDefault(rec.MatchId) ?? existingMatch;
             if (match is null)
             {
                 match = new MaterialMatch { Id = rec.MatchId, ListingId = rec.ListingId, MaterialRequestId = request.Id };
@@ -242,6 +274,21 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
             match.Score = rec.Score; match.Distance = rec.DistanceKm; match.EstimatedTransportCost = rec.TransportCost;
             match.Status = MatchStatus.ROUTED; match.RejectionReason = null;
             workflow.MaterialMatchId = match.Id;
+            var offer = new Offer
+            {
+                Id = Guid.NewGuid(), MaterialMatchId = match.Id, BuyerId = request.BuyerId,
+                SellerId = listing!.SellerId, Quantity = request.RequiredQuantity, UnitValue = listing.UnitPrice,
+                TotalValue = request.RequiredQuantity * listing.UnitPrice, Status = OfferStatus.PENDING
+            };
+            var transaction = new Transaction
+            {
+                Id = Guid.NewGuid(), OfferId = offer.Id, BuyerId = offer.BuyerId, SellerId = offer.SellerId,
+                Quantity = offer.Quantity, TotalValue = offer.TotalValue, Status = TransactionStatus.PENDING_APPROVAL
+            };
+            db.Offers.Add(offer);
+            db.Transactions.Add(transaction);
+            db.AuditLogs.Add(new AuditLog { Id = Guid.NewGuid(), EntityType = nameof(Transaction),
+                EntityId = transaction.Id, Action = "PENDING_APPROVAL" });
         }
         // Existing manager approval requires an OPEN/MATCH_FOUND requirement.
         request.Status = result.Status == "PENDING_APPROVAL" ? BuyerRequestStatus.MATCH_FOUND : BuyerRequestStatus.OPEN;

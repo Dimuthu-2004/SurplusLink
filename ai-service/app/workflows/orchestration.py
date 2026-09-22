@@ -274,7 +274,15 @@ class WorkflowOrchestrator:
         return dict(logistics=result), result.model_dump(mode="json"), tuple(tools.traces)
 
     async def _validation(self, state):
-        candidate = state["matching"].candidates[0]  # Matching order, stable input order breaks ties.
+        evaluations = []
+        for candidate in state["matching"].candidates:
+            result, output, calls = await self._validate_candidate(state, candidate)
+            evaluations.append(dict(listingId=candidate.listingId, **output))
+            if result["validation"].valid or result["status"] == "FAILED":
+                return result, dict(**output, candidates=evaluations), calls
+        return result, dict(**output, candidates=evaluations), calls
+
+    async def _validate_candidate(self, state, candidate):
         row = next(x for x in state["request"].listings if str(x.listingId) == candidate.listingId)
         route = next((x for x in state["logistics"].candidates if x.listingId == row.listingId), None)
         criteria = state["planner"].normalizedCriteria

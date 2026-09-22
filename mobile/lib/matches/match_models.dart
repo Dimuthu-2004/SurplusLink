@@ -9,10 +9,13 @@ class RecommendedMatch {
     this.distance,
     this.estimatedTransportCost,
     this.rejectionReason,
+    this.durationMinutes, this.materialTitle, this.quantity, this.unit, this.unitPrice,
   });
   final String id, requirementId, listingId, status;
   final double score;
   final double? distance, estimatedTransportCost;
+  final double? durationMinutes, quantity, unitPrice;
+  final String? materialTitle, unit;
   final String? rejectionReason;
   final DateTime createdAt;
   factory RecommendedMatch.fromJson(Map<String, dynamic> json) =>
@@ -30,6 +33,10 @@ class RecommendedMatch {
           optional: true,
         ),
         rejectionReason: json['rejectionReason'] as String?,
+        durationMinutes: _number(json, 'durationMinutes', optional: true),
+        quantity: _number(json, 'quantity', optional: true),
+        unitPrice: _number(json, 'unitPrice', optional: true),
+        materialTitle: json['materialTitle'] as String?, unit: json['unit'] as String?,
       );
 }
 

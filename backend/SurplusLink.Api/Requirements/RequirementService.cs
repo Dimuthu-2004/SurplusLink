@@ -25,7 +25,10 @@ public sealed class RequirementService(SurplusLinkDbContext db, IRequirementWork
         var request = await db.BuyerRequests.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct)
             ?? throw new RequirementException(404, "Requirement was not found.");
         if (!manager) Own(request, actorId);
-        return RequirementResponse.From(request);
+        var workflow = await db.AgentWorkflows.AsNoTracking().Where(x => x.MaterialRequestId == id)
+            .OrderByDescending(x => x.StartedAtUtc).FirstOrDefaultAsync(ct);
+        return RequirementResponse.From(request) with { WorkflowId = workflow?.Id,
+            WorkflowStatus = workflow?.Status.ToString(), DecisionNote = workflow?.Decision };
     }
 
     public async Task<RequirementPage> ListAsync(Guid? buyerId, RequirementQuery input, CancellationToken ct)
@@ -85,7 +88,10 @@ public sealed class RequirementService(SurplusLinkDbContext db, IRequirementWork
     {
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         var request = await LockOwnedAsync(id, buyerId, ct);
-        RequireState(request, BuyerRequestStatus.DRAFT);
+        var revision = request.Status == BuyerRequestStatus.OPEN &&
+            await db.AgentWorkflows.Where(x => x.MaterialRequestId == id).OrderByDescending(x => x.StartedAtUtc)
+                .Select(x => x.Status == AgentWorkflowStatus.REVISION_REQUESTED).FirstOrDefaultAsync(ct);
+        if (!revision) RequireState(request, BuyerRequestStatus.DRAFT);
         await ValidateAsync(input, ct);
         Apply(request, input);
         Audit(request, "UPDATED");

@@ -13,6 +13,7 @@ public sealed class MaterialMatch : AuditableEntity
     public MatchStatus Status { get; set; } = MatchStatus.GENERATED;
 
     public decimal? Distance { get; set; }
+    public decimal? DurationMinutes { get; set; }
 
     public decimal? EstimatedTransportCost { get; set; }
 

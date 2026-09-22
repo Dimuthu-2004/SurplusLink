@@ -93,6 +93,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ],
             if (_step == 1) ...[
               DropdownButtonFormField<String>(
+                isExpanded: true,
                 key: const Key('register-usage'),
                 initialValue: _usage,
                 decoration: const InputDecoration(

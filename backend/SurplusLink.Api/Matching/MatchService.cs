@@ -17,7 +17,9 @@ public sealed class MatchService(SurplusLinkDbContext db)
         var items = await MatchQueryBuilder.Sort(rows, query).Skip((query.Page - 1) * query.PageSize)
             .Take(query.PageSize).Select(x => new MatchResponse(x.Id, x.MaterialRequestId, x.ListingId,
                 x.Score, x.Distance, x.EstimatedTransportCost, x.Status.ToString(), x.Status != MatchStatus.REJECTED,
-                x.Status == MatchStatus.REJECTED, x.RejectionReason, x.CreatedAtUtc)).ToListAsync(ct);
+                x.Status == MatchStatus.REJECTED, x.RejectionReason, x.CreatedAtUtc, x.DurationMinutes,
+                x.Listing.Title, x.Listing.Category.Name, x.Listing.SellerId,
+                x.MaterialRequest.RequiredQuantity, x.Listing.Unit, x.Listing.UnitPrice)).ToListAsync(ct);
         return new(items, total, Pages(total, query.PageSize), query.Page, query.PageSize);
     }
 
@@ -37,9 +39,10 @@ public sealed class MatchService(SurplusLinkDbContext db)
             total, Pages(total, query.PageSize), query.Page, query.PageSize);
     }
 
-    public async Task<MatchAnalyticsSummary> SummaryAsync(CancellationToken ct)
+    public async Task<MatchAnalyticsSummary> SummaryAsync(CancellationToken ct, Guid? requirementId = null)
     {
         var rows = db.Matches.AsNoTracking();
+        if (requirementId.HasValue) rows = rows.Where(x => x.MaterialRequestId == requirementId.Value);
         var total = await rows.CountAsync(ct);
         var score = await rows.Select(x => (decimal?)x.Score).AverageAsync(ct);
         var distance = await rows.Select(x => x.Distance).AverageAsync(ct);
@@ -47,11 +50,15 @@ public sealed class MatchService(SurplusLinkDbContext db)
             .GroupBy(x => x.RejectionReason).Select(x => new { Reason = x.Key!, Count = x.Count() })
             .OrderByDescending(x => x.Count).ThenBy(x => x.Reason).Take(10).ToListAsync(ct);
         var attempts = db.AuditLogs.AsNoTracking().Where(x => x.EntityType == nameof(MaterialMatch));
+        if (requirementId.HasValue) attempts = attempts.Where(x => rows.Any(m => m.Id == x.EntityId));
         var success = await attempts.CountAsync(x => x.Action == "ROUTE_SUCCEEDED", ct);
         var failure = await attempts.CountAsync(x => x.Action == "ROUTE_FAILED", ct);
         var count = success + failure;
         return new(total, score, distance, reasons.Select(x => new RejectionReasonCount(x.Reason, x.Count)).ToArray(), success, failure,
-            count == 0 ? null : (double)success / count, count == 0 ? null : (double)failure / count);
+            count == 0 ? null : (double)success / count, count == 0 ? null : (double)failure / count,
+            await rows.CountAsync(x => x.Status != MatchStatus.REJECTED, ct),
+            await rows.CountAsync(x => x.Status == MatchStatus.REJECTED, ct),
+            await rows.AverageAsync(x => x.EstimatedTransportCost, ct));
     }
 
     // Trusted workflow integration boundary: scores and route results are computed by callers,
