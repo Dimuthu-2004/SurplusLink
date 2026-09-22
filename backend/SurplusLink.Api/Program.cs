@@ -195,6 +195,12 @@ builder.Services.AddHealthChecks();
 
 var app = builder.Build();
 
+var routing = app.Services.GetRequiredService<RoutingOptions>();
+if (!routing.CanRoute)
+    app.Logger.LogWarning("Routing provider configuration is missing: Routing__Endpoint and/or Routing__ApiKey (OpenRouteService).");
+else if (!routing.CanEstimate)
+    app.Logger.LogWarning("Routing transport pricing is missing: Routing__BaseFee, Routing__CostPerKm, and Routing__CostPerMinute.");
+
 if (!app.Environment.IsEnvironment("Testing"))
 {
     using var scope = app.Services.CreateScope();

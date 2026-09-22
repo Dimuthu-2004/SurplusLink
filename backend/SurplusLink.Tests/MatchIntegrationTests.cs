@@ -272,6 +272,28 @@ public sealed class MatchIntegrationTests(RequirementsDatabase fixture) : IClass
         Assert.Equal(1, await verify.AgentWorkflows.CountAsync(x => x.MaterialRequestId == request.Id));
     }
 
+    [PostgresFact]
+    public async Task Delivery_date_uses_persisted_utc_calendar_days_for_before_same_and_after_deadline()
+    {
+        foreach (var (availableUntil, expectedReason) in new[]
+        {
+            (new DateTime(2026, 10, 14, 23, 59, 59, DateTimeKind.Utc), "LISTING_EXPIRES_BEFORE_DELIVERY"),
+            (new DateTime(2026, 10, 15, 0, 0, 0, DateTimeKind.Utc), (string?)null),
+            (new DateTime(2026, 10, 31, 23, 59, 59, DateTimeKind.Utc), (string?)null),
+        })
+        {
+            var (request, listing) = await Seed();
+            using var db = fixture.Context();
+            (await db.BuyerRequests.SingleAsync(x => x.Id == request.Id)).Deadline =
+                new DateTime(2026, 10, 15, 23, 59, 59, DateTimeKind.Utc);
+            (await db.Listings.SingleAsync(x => x.Id == listing.Id)).AvailableUntil = availableUntil;
+            await db.SaveChangesAsync();
+
+            var match = await new MatchService(db).GenerateAsync(request.Id, listing.Id, fixture.Manager, default);
+            Assert.Equal(expectedReason, match.RejectionReason);
+            Assert.Equal(expectedReason is null ? MatchStatus.GENERATED : MatchStatus.REJECTED, match.Status);
+        }
+    }
     private sealed class ControlledTransport : ITransportEstimateService
     {
         public bool Fail;
