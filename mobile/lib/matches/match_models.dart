@@ -6,18 +6,41 @@ class RecommendedMatch {
     required this.score,
     required this.status,
     required this.createdAt,
+    this.valid,
+    this.rejected,
     this.distance,
     this.estimatedTransportCost,
     this.rejectionReason,
-    this.durationMinutes, this.materialTitle, this.quantity, this.unit, this.unitPrice,
+    this.durationMinutes,
+    this.materialTitle,
+    this.categoryName,
+    this.sellerId,
+    this.quantity,
+    this.unit,
+    this.unitPrice,
+    this.availableUntil,
+    this.requiredBy,
+    this.availableQuantity,
+    this.maximumBudget,
+    this.requirementStatus,
   });
   final String id, requirementId, listingId, status;
   final double score;
+  final bool? valid, rejected;
   final double? distance, estimatedTransportCost;
   final double? durationMinutes, quantity, unitPrice;
-  final String? materialTitle, unit;
+  final String? materialTitle, categoryName, sellerId, unit;
   final String? rejectionReason;
   final DateTime createdAt;
+  final DateTime? availableUntil, requiredBy;
+  final double? availableQuantity, maximumBudget;
+  final String? requirementStatus;
+
+  bool get isRejected =>
+      rejected == true || status == 'REJECTED' || rejectionReason != null;
+  double? get estimatedMaterialCost =>
+      (quantity != null && unitPrice != null) ? quantity! * unitPrice! : null;
+
   factory RecommendedMatch.fromJson(Map<String, dynamic> json) =>
       RecommendedMatch(
         id: matchString(json, 'id'),
@@ -26,18 +49,38 @@ class RecommendedMatch {
         score: _number(json, 'score')!,
         status: matchString(json, 'status'),
         createdAt: DateTime.parse(matchString(json, 'createdAt')),
+        valid: _boolean(json, 'valid'),
+        rejected: _boolean(json, 'rejected'),
         distance: _number(json, 'distance', optional: true),
         estimatedTransportCost: _number(
           json,
           'estimatedTransportCost',
           optional: true,
         ),
-        rejectionReason: json['rejectionReason'] as String?,
+        rejectionReason: _optionalString(json, 'rejectionReason'),
         durationMinutes: _number(json, 'durationMinutes', optional: true),
         quantity: _number(json, 'quantity', optional: true),
         unitPrice: _number(json, 'unitPrice', optional: true),
-        materialTitle: json['materialTitle'] as String?, unit: json['unit'] as String?,
+        materialTitle: _optionalString(json, 'materialTitle'),
+        categoryName: _optionalString(json, 'categoryName'),
+        sellerId: _optionalString(json, 'sellerId'),
+        unit: _optionalString(json, 'unit'),
+        availableUntil: _date(json, 'availableUntil'),
+        requiredBy: _date(json, 'requiredBy'),
+        availableQuantity: _number(json, 'availableQuantity', optional: true),
+        maximumBudget: _number(json, 'maximumBudget', optional: true),
+        requirementStatus: _optionalString(json, 'requirementStatus'),
       );
+}
+
+DateTime? _date(Map<String, dynamic> json, String key) {
+  final value = json[key];
+  if (value == null) return null;
+  if (value is String) {
+    final parsed = DateTime.tryParse(value);
+    if (parsed != null) return parsed;
+  }
+  throw FormatException('Invalid $key.');
 }
 
 class MatchQuery {
@@ -115,7 +158,7 @@ class MatchHistoryEntry {
       MatchHistoryEntry(
         id: matchString(json, 'id'),
         action: matchString(json, 'action'),
-        outcome: json['outcome'] as String?,
+        outcome: _optionalString(json, 'outcome'),
         createdAt: DateTime.parse(matchString(json, 'createdAt')),
       );
 }
@@ -140,4 +183,16 @@ double? _number(
     throw FormatException('Invalid $key.');
   }
   return value.toDouble();
+}
+
+String? _optionalString(Map<String, dynamic> json, String key) {
+  final value = json[key];
+  if (value == null || value is String) return value as String?;
+  throw FormatException('Invalid $key.');
+}
+
+bool? _boolean(Map<String, dynamic> json, String key) {
+  final value = json[key];
+  if (value == null || value is bool) return value as bool?;
+  throw FormatException('Invalid $key.');
 }

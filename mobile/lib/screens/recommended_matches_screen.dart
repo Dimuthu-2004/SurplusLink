@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:mobile/matches/match_formatters.dart';
 import 'package:mobile/matches/match_gateway.dart';
 import 'package:mobile/matches/match_models.dart';
 import 'package:mobile/matches/match_widgets.dart';
@@ -122,9 +123,10 @@ class _RecommendedMatchesScreenState extends State<RecommendedMatchesScreen> {
                     'Score ${(match.score * 100).toStringAsFixed(1)}%',
                   ),
                   subtitle: Text(
-                    '${match.status.replaceAll('_', ' ')}\n'
-                    '${match.distance == null ? 'Distance unavailable' : '${match.distance!.toStringAsFixed(2)} km'} · '
-                    '${match.estimatedTransportCost == null ? 'Transport estimate unavailable' : 'LKR ${match.estimatedTransportCost!.toStringAsFixed(2)}'}',
+                    '${readableMatchStatus(match.status)}\n'
+                    '${match.quantity == null ? '' : '${formatQuantity(match.quantity)} ${formatUnit(match.unit)} ? '}'
+                    '${routingSummary(match)}\n'
+                    'Transport estimate: ${formatCurrency(match.estimatedTransportCost)}',
                   ),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => context.push(
