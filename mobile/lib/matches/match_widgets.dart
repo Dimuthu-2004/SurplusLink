@@ -13,6 +13,24 @@ String matchError(Object error) => switch (error) {
   _ => 'Unable to load matches. Please retry.',
 };
 
+String matchDetailsError(Object error) {
+  if (error is ApiException) {
+    if (error.statusCode == 403) return 'You do not have access to this match.';
+    if (error.statusCode == 404) return 'Match not found.';
+    if (error.statusCode == 401) {
+      return 'Your session has expired. Please sign in again.';
+    }
+    if (error.statusCode == 429) {
+      return 'Too many requests. Please wait and retry.';
+    }
+    return 'Unable to load match details.';
+  }
+  if (error is FormatException) {
+    return 'The server returned invalid match data. Please retry.';
+  }
+  return 'Unable to load match details.';
+}
+
 class MatchErrorBox extends StatelessWidget {
   const MatchErrorBox(this.message, {required this.onRetry, super.key});
   final String message;

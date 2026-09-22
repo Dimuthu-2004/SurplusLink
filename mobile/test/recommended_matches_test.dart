@@ -110,7 +110,8 @@ void main() {
       await tester.tap(find.byKey(const Key('match-m1')));
       await tester.pumpAndSettle();
       expect(find.text('Match Details'), findsOneWidget);
-      expect(find.text('Transport estimate: LKR 1000.00'), findsOneWidget);
+      expect(find.text('Transport estimate'), findsOneWidget);
+      expect(find.text('LKR 1,000.00'), findsWidgets);
       expect(find.text('Approve'), findsNothing);
       expect(find.text('Reserve'), findsNothing);
       await tester.tap(find.byType(BackButton));
@@ -206,12 +207,13 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text('Score 80.0%'), findsOneWidget);
+      await tester.scrollUntilVisible(find.text('History unavailable'), 300);
       expect(find.text('History unavailable'), findsOneWidget);
       gateway.historyError = null;
       await tester.ensureVisible(find.text('Retry'));
       await tester.tap(find.text('Retry'));
       await tester.pumpAndSettle();
-      expect(find.text('No history entries yet.'), findsOneWidget);
+      expect(find.text('No match history yet.'), findsOneWidget);
     },
   );
 }
