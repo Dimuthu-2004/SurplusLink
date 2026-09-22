@@ -20,5 +20,5 @@ public sealed class DeferredRequirementWorkflowStarter : IRequirementWorkflowSta
 public sealed class RequirementWorkflowUnavailableException : Exception
 {
     public RequirementWorkflowUnavailableException()
-        : base("Matching is not available yet. Your requirement remains open.") { }
+        : base("Matching is currently unavailable. Please retry later. Your requirement remains open.") { }
 }

@@ -167,7 +167,16 @@ final class ApiClient {
         _ => throw ArgumentError.value(method, 'method', 'Unsupported method'),
       };
 
-      final json = _decodeBody(response.body);
+      Object? json;
+      try {
+        json = _decodeBody(response.body);
+      } on FormatException {
+        // Gateways may return plain text/HTML errors; preserve HTTP auth semantics.
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          throw _exceptionFrom(response.statusCode, <String, dynamic>{});
+        }
+        rethrow;
+      }
       if (response.statusCode < 200 || response.statusCode >= 300) {
         throw _exceptionFrom(
           response.statusCode,

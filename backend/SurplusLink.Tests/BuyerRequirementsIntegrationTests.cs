@@ -432,11 +432,18 @@ public sealed class RequirementsDatabase : IAsyncLifetime
             builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["ConnectionStrings:SurplusLink"] = connection,
+                ["AgentWorkflow:Enabled"] = "true",
+                ["AgentWorkflow:SharedToken"] = "workflow-tests-only-token-at-least-32-characters",
                 ["Jwt:Issuer"] = "requirements-tests", ["Jwt:Audience"] = "requirements-tests", ["Jwt:Secret"] = Secret,
                 ["Jwt:ExpirationMinutes"] = "60", ["Cors:AllowedOrigins:0"] = "http://localhost:5173",
                 ["Logging:LogLevel:Default"] = "Error"
             }));
-            if (starter is not null) builder.ConfigureServices(services => services.AddSingleton(starter));
+            builder.ConfigureServices(services =>
+            {
+                var worker = services.Single(x => x.ImplementationType == typeof(WorkflowExecutionWorker));
+                services.Remove(worker); // Queue tests explicitly control execution; live worker tests restore it.
+                if (starter is not null) services.AddSingleton(starter);
+            });
         });
 
     public HttpClient Client(WebApplicationFactory<Program> app, Guid id, string role = "BUYER", params string[] additionalRoles)

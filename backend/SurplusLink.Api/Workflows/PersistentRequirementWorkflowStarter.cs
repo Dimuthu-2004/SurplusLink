@@ -5,10 +5,12 @@ using SurplusLink.Api.Models;
 
 namespace SurplusLink.Api.Workflows;
 
-public sealed class PersistentRequirementWorkflowStarter(SurplusLinkDbContext db) : IRequirementWorkflowStarter
+public sealed class PersistentRequirementWorkflowStarter(SurplusLinkDbContext db,
+    Microsoft.Extensions.Options.IOptions<WorkflowExecutionOptions> options) : IRequirementWorkflowStarter
 {
     public async Task<Guid> StartAsync(Guid requirementId, Guid buyerId, CancellationToken cancellationToken)
     {
+        if (!options.Value.Enabled) throw new RequirementWorkflowUnavailableException();
         var request = await db.BuyerRequests.AsNoTracking().SingleOrDefaultAsync(
             x => x.Id == requirementId && x.BuyerId == buyerId, cancellationToken)
             ?? throw new RequirementWorkflowUnavailableException();

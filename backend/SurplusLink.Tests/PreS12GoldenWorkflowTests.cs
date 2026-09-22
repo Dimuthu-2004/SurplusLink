@@ -1,7 +1,9 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.DependencyInjection;
 using SurplusLink.Api.Materials;
 using SurplusLink.Api.Matching;
 using SurplusLink.Api.Models;
@@ -17,7 +19,18 @@ public sealed class PreS12GoldenWorkflowTests(RequirementsDatabase fixture) : IC
     [LiveWorkflowFact]
     public async Task Golden_http_lifecycle_runs_real_graph_and_persists_participant_outcomes()
     {
-        using var app = fixture.App();
+        using var app = fixture.App().WithWebHostBuilder(builder => builder.ConfigureServices(services =>
+        {
+            services.PostConfigure<WorkflowExecutionOptions>(options =>
+            {
+                options.Enabled = true;
+                options.PollSeconds = 1;
+                options.BaseUrl = Environment.GetEnvironmentVariable("SURPLUSLINK_AI_TEST_URL")!;
+                options.SharedToken = Environment.GetEnvironmentVariable("AI_SERVICE_SHARED_TOKEN")!;
+            });
+            services.AddSingleton<ITransportEstimateService, TestTransport>();
+            services.AddHostedService<WorkflowExecutionWorker>();
+        }));
         using var seller = fixture.Client(app, fixture.Seller, "SELLER");
         using var buyer = fixture.Client(app, fixture.Buyer, "BUYER", "SELLER");
         using var manager = fixture.Client(app, fixture.Manager, "MANAGER");
@@ -47,13 +60,12 @@ public sealed class PreS12GoldenWorkflowTests(RequirementsDatabase fixture) : IC
             var started = await buyer.PostAsync($"/api/requirements/{request.Id}/start-matching", null);
             started.EnsureSuccessStatusCode();
             var start = (await started.Content.ReadFromJsonAsync<StartMatchingResponse>())!;
+            Assert.Equal(BuyerRequestStatus.MATCHING, start.Requirement.Status);
+            await WaitForMatch(buyer, request.Id);
             using (var db = fixture.Context())
             {
-                var options = Options.Create(new WorkflowExecutionOptions { BaseUrl = Environment.GetEnvironmentVariable("SURPLUSLINK_AI_TEST_URL")!,
-                    SharedToken = Environment.GetEnvironmentVariable("AI_SERVICE_SHARED_TOKEN")! });
-                using var http = new HttpClient();
-                Assert.True(await new WorkflowQueueProcessor(db, new AgentWorkflowClient(http, options), new TestTransport(), options).ProcessNextAsync(default));
                 var workflow = await db.AgentWorkflows.SingleAsync(x => x.Id == start.WorkflowId);
+                Assert.Equal(1, await db.AgentWorkflows.CountAsync(x => x.MaterialRequestId == request.Id));
                 Assert.True(workflow.Status == AgentWorkflowStatus.PENDING_APPROVAL, workflow.ErrorJson ?? workflow.ValidationJson);
                 Assert.Equal(0, await db.Reservations.CountAsync(x => x.MaterialRequestId == request.Id));
                 Assert.Equal(0, await db.Listings.Where(x => listingIds.Contains(x.Id)).SumAsync(x => x.ReservedQuantity));
@@ -62,6 +74,8 @@ public sealed class PreS12GoldenWorkflowTests(RequirementsDatabase fixture) : IC
             Assert.Equal(2, matches!.Total);
             Assert.Contains(matches.Items, x => x.ListingId == listingIds[1] && x.RejectionReason == "INSUFFICIENT_QUANTITY");
             Assert.Contains(matches.Items, x => x.ListingId == listingIds[0] && x.DurationMinutes == 30);
+            var pending = await manager.GetFromJsonAsync<JsonElement>("/api/workflows?status=PENDING_APPROVAL");
+            Assert.Contains(pending.GetProperty("items").EnumerateArray(), x => x.GetProperty("id").GetGuid() == start.WorkflowId);
             (await manager.PostAsJsonAsync($"/api/workflows/{start.WorkflowId}/{decision}", new { note = "Golden audit " + decision })).EnsureSuccessStatusCode();
             using (var db = fixture.Context())
             {
@@ -86,11 +100,8 @@ public sealed class PreS12GoldenWorkflowTests(RequirementsDatabase fixture) : IC
                 restart.EnsureSuccessStatusCode();
                 var resumed = (await restart.Content.ReadFromJsonAsync<StartMatchingResponse>())!;
                 Assert.NotEqual(start.WorkflowId, resumed.WorkflowId);
+                await WaitForMatch(buyer, request.Id);
                 using var db = fixture.Context();
-                using var http = new HttpClient();
-                var options = Options.Create(new WorkflowExecutionOptions { BaseUrl = Environment.GetEnvironmentVariable("SURPLUSLINK_AI_TEST_URL")!,
-                    SharedToken = Environment.GetEnvironmentVariable("AI_SERVICE_SHARED_TOKEN")! });
-                Assert.True(await new WorkflowQueueProcessor(db, new AgentWorkflowClient(http, options), new TestTransport(), options).ProcessNextAsync(default));
                 Assert.Equal(AgentWorkflowStatus.PENDING_APPROVAL, (await db.AgentWorkflows.FindAsync(resumed.WorkflowId))!.Status);
                 Assert.Equal(0m, (await db.Listings.FindAsync(listingIds[0]))!.ReservedQuantity);
                 (await manager.PostAsJsonAsync($"/api/workflows/{resumed.WorkflowId}/approve", new { note = "Revised review" })).EnsureSuccessStatusCode();
@@ -106,6 +117,21 @@ public sealed class PreS12GoldenWorkflowTests(RequirementsDatabase fixture) : IC
                 Assert.Equal(1, await db.Reservations.CountAsync(x => x.MaterialRequestId == request.Id));
             }
         }
+    }
+
+    private static async Task WaitForMatch(HttpClient buyer, Guid id)
+    {
+        for (var attempt = 0; attempt < 100; attempt++)
+        {
+            var row = await buyer.GetFromJsonAsync<RequirementResponse>($"/api/requirements/{id}");
+            if (row!.Status != BuyerRequestStatus.MATCHING)
+            {
+                Assert.Equal(BuyerRequestStatus.MATCH_FOUND, row.Status);
+                return;
+            }
+            await Task.Delay(200);
+        }
+        Assert.Fail("Hosted worker did not finish the queued workflow.");
     }
 
     private sealed class TestTransport : ITransportEstimateService

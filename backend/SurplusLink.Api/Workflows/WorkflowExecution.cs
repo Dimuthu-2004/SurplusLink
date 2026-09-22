@@ -12,7 +12,7 @@ namespace SurplusLink.Api.Workflows;
 
 public sealed class WorkflowExecutionOptions
 {
-    public bool Enabled { get; set; }
+    public bool Enabled { get; set; } = true;
     public string BaseUrl { get; set; } = "http://127.0.0.1:8000";
     public string SharedToken { get; set; } = "";
     public int PollSeconds { get; set; } = 2;
@@ -86,7 +86,8 @@ public sealed class AgentWorkflowClient(HttpClient client, IOptions<WorkflowExec
 /// failure, so another worker can replay the read-only graph. Only this API writes.
 /// </summary>
 public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkflowClient client,
-    ITransportEstimateService transport, IOptions<WorkflowExecutionOptions> settings)
+    ITransportEstimateService transport, IOptions<WorkflowExecutionOptions> settings,
+    ILogger<WorkflowQueueProcessor>? logger = null)
 {
     public async Task<bool> ProcessNextAsync(CancellationToken stop)
     {
@@ -118,6 +119,8 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
         catch (Exception error)
         {
             // Never persist provider messages, credentials, URLs or raw exception bodies.
+            logger?.LogWarning("Workflow {WorkflowId} failed ({FailureType}); reopening requirement for retry.",
+                workflow.Id, error.GetType().Name);
             workflow.Status = AgentWorkflowStatus.FAILED;
             workflow.CurrentStage = "FAILED";
             workflow.CompletedAtUtc = DateTime.UtcNow;
@@ -328,7 +331,12 @@ public sealed class WorkflowExecutionWorker(IServiceScopeFactory scopes, IOption
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        if (!options.Value.Enabled) return;
+        if (!options.Value.Enabled)
+        {
+            logger.LogWarning("Workflow execution is disabled; Start Matching is unavailable.");
+            return;
+        }
+        logger.LogInformation("Workflow execution worker started.");
         while (!stoppingToken.IsCancellationRequested)
         {
             try
