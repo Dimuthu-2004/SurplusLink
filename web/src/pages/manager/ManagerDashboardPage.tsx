@@ -46,12 +46,12 @@ export function ManagerDashboardPage() {
               <AnalyticsMetric label="Pending requirements" detail="Pending approval" value={
                 requirementNumber(data.countsByStatus.find((item) => item.status === 'PENDING_APPROVAL')?.count ?? 0)
               } />
-              <AnalyticsMetric label="Upcoming deadlines" value={requirementNumber(data.upcomingDeadlineCount)} detail="Next 7 days" />
+              <AnalyticsMetric label="Upcoming requirement deadlines" value={requirementNumber(data.upcomingDeadlineCount)} detail="Next 7 days" />
             </div>
             {data.total === 0 && <p className="empty-state">No buyer requirements yet.</p>}
-            <h3>Upcoming deadlines</h3>
+            <h3>Upcoming requirement deadlines</h3>
             <p className="muted">{requirementDate(data.asOf)} to {requirementDate(data.upcomingUntil)}. Times are local.</p>
-            {data.upcomingDeadlines.length === 0 ? <p className="empty-state">No upcoming deadlines in the next 7 days.</p> : <>
+            {data.upcomingDeadlines.length === 0 ? <p className="empty-state">No upcoming requirement deadlines in the next 7 days.</p> : <>
               <p className="muted">Showing {data.upcomingDeadlines.length} of {requirementNumber(data.upcomingDeadlineCount)} upcoming requirements (up to 10).</p>
               <div className="table-scroll" role="region" aria-label="Upcoming requirement deadlines" tabIndex={0}>
                 <table>

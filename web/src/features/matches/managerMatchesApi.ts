@@ -2,7 +2,7 @@ import type { AxiosInstance } from 'axios';
 import { apiClient, normalizeApiError } from '../../api/apiClient';
 import type { BuyerRequirement } from '../requirements/managerRequirementsApi';
 
-export type MatchStatus = 'VALID' | 'REJECTED';
+export type MatchStatus = 'GENERATED' | 'RANKED' | 'ROUTED' | 'ROUTE_FAILED' | 'REJECTED';
 export type MatchSort = 'score' | 'distance' | 'cost';
 
 export interface MatchCandidate {
@@ -13,6 +13,12 @@ export interface MatchCandidate {
   materialTitle: string;
   categoryName: string;
   status: MatchStatus;
+  valid?: boolean;
+  rejected?: boolean;
+  quantity?: number | null;
+  availableQuantity?: number | null;
+  unit?: string | null;
+  unitPrice?: number | null;
   score: number;
   routeDistanceKm: number | null;
   durationMinutes?: number | null;
@@ -23,7 +29,8 @@ export interface MatchCandidate {
 }
 
 export interface MatchComparisonQuery {
-  status?: 'ALL' | MatchStatus;
+  status?: 'ALL' | 'VALID' | 'REJECTED';
+  matchStatus?: MatchStatus;
   sort: MatchSort;
   sortDir: 'asc' | 'desc';
   page: number;
@@ -60,6 +67,7 @@ export function createManagerMatchesApi(
     const data = await read(client.get<ApiMatchPage>(`/api/matches/requirement/${encodeURIComponent(requirementId)}`, {
       params: { page: query.page, pageSize: query.pageSize, sortDir: query.sortDir,
         sortBy: query.sort === 'cost' ? 'estimatedTransportCost' : query.sort,
+        ...(query.matchStatus ? { status: query.matchStatus } : {}),
         ...(query.status === 'VALID' ? { valid: true } : query.status === 'REJECTED' ? { rejected: true } : {}) },
     }));
     return { ...data, items: data.items.map(toCandidate) };
@@ -90,11 +98,14 @@ async function read<T>(operation: Promise<{ data: T }>): Promise<T> {
 
 interface ApiMatch { id: string; requirementId: string; listingId: string; sellerId: string;
   materialTitle: string; categoryName: string; score: number; distance: number | null;
-  durationMinutes: number | null; estimatedTransportCost: number | null; status: string;
+  durationMinutes: number | null; estimatedTransportCost: number | null; status: MatchStatus;
+  quantity?: number | null; availableQuantity?: number | null; unit?: string | null; unitPrice?: number | null;
+  valid: boolean;
   rejected: boolean; rejectionReason: string | null; createdAt: string }
 interface ApiMatchPage { items: ApiMatch[]; total: number; page: number; pageSize: number }
 function toCandidate(row: ApiMatch): MatchCandidate {
   return { ...row, materialListingId: row.listingId, score: row.score * 100,
-    status: row.rejected ? 'REJECTED' : 'VALID', routeDistanceKm: row.distance,
-    estimatedCost: row.estimatedTransportCost, updatedAt: row.createdAt };
+    materialTitle: row.materialTitle || 'Material candidate', categoryName: row.categoryName || 'Not available',
+    status: row.status, routeDistanceKm: row.distance ?? null,
+    estimatedCost: row.estimatedTransportCost ?? null, updatedAt: row.createdAt };
 }

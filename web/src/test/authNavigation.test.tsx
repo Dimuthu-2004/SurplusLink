@@ -31,7 +31,7 @@ describe('authentication navigation', () => {
     expect(screen.queryByText('Buyer home')).not.toBeInTheDocument();
   });
 
-  it.each(['/app/manager', '/app/manager/categories', '/app/manager/requirements'])('blocks dual-role manager navigation at %s', async path => {
+  it.each(['/app/manager', '/app/manager/categories', '/app/manager/requirements', '/app/manager/requirements/r1/matches', '/app/manager/matches'])('blocks dual-role manager navigation at %s', async path => {
     const client = fakeClient();
     client.get.mockResolvedValue({ data: { ...seller, roles: ['SELLER', 'BUYER'] } });
     renderApp(path, client, memoryStorage('dual-token'));

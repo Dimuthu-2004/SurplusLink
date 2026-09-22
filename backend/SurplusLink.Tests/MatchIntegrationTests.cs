@@ -117,7 +117,7 @@ public sealed class MatchIntegrationTests(RequirementsDatabase fixture) : IClass
         // A supplied score or successful route cannot revive a deterministic rejection.
         Assert.Equal(409, (await Assert.ThrowsAsync<MatchException>(() => service.RankAsync(match.Id, 1, fixture.Manager, default))).StatusCode);
         Assert.Equal(409, (await Assert.ThrowsAsync<MatchException>(() => service.RecordRouteAsync(match.Id, true, 0, 0, fixture.Manager, default))).StatusCode);
-        Assert.Equal(409, (await Assert.ThrowsAsync<MatchException>(() => service.GenerateAsync(request.Id, listing.Id, fixture.Manager, default))).StatusCode);
+        Assert.Equal(match.Id, (await service.GenerateAsync(request.Id, listing.Id, fixture.Manager, default)).Id);
         Assert.Equal(400, (await Assert.ThrowsAsync<MatchException>(() => service.RecordRouteAsync(match.Id, true, -1, 0, fixture.Manager, default))).StatusCode);
         Assert.Equal(2, await db.AuditLogs.CountAsync(x => x.EntityId == match.Id));
 

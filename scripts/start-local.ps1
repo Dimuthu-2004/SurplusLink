@@ -1,6 +1,8 @@
-param([int]$AiPort = 8000)
+param([int]$AiPort = 8000, [string]$RoutingEnvFile = '')
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path $PSScriptRoot -Parent
+if (!$RoutingEnvFile) { $RoutingEnvFile = Join-Path $projectRoot '.env.local' }
+. (Join-Path $PSScriptRoot 'import-routing-env.ps1') -Path $RoutingEnvFile
 $python = Join-Path $projectRoot 'ai-service/.venv/Scripts/python.exe'
 if (!(Test-Path $python)) { throw 'Create ai-service/.venv and install requirements.txt first.' }
 if (!$env:AI_SERVICE_SHARED_TOKEN) {
@@ -13,7 +15,7 @@ if (!$env:AI_SERVICE_SHARED_TOKEN) {
 $env:AI_SERVICE_BASE_URL = "http://127.0.0.1:$AiPort"
 $env:AgentWorkflow__Enabled = 'true'
 $routingRequired = 'Routing__Endpoint', 'Routing__ApiKey', 'Routing__BaseFee', 'Routing__CostPerKm', 'Routing__CostPerMinute'
-$missingRouting = $routingRequired | Where-Object { [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($_)) }
+$missingRouting = $routingRequired | Where-Object { [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($_)) -or [Environment]::GetEnvironmentVariable($_) -like 'replace-with-*' }
 if ($missingRouting) { Write-Warning ("Routing provider configuration is missing: " + ($missingRouting -join ', ')) }
 $logs = Join-Path $projectRoot '.runtime'
 New-Item -ItemType Directory -Force $logs | Out-Null
@@ -29,7 +31,7 @@ try {
     }
     if (!$ready) { throw 'AI service did not become ready.' }
     Write-Host 'AI ready; starting API with the same internal token and workflow worker enabled.'
-    Write-Host 'Routing__* environment settings are still required for valid transport recommendations.'
+    Write-Host 'Routing settings are inherited by the API. Configure .env.local or Routing__* environment variables for real routes.'
     dotnet run --project (Join-Path $projectRoot 'backend/SurplusLink.Api') --launch-profile http
 } finally {
     if (!$ai.HasExited) { Stop-Process -Id $ai.Id }

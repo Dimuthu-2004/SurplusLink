@@ -91,7 +91,7 @@ it('loads the manager dashboard from authenticated summaries, isolates errors, r
   expect(within(screen.getByRole('table', { name: 'Listing totals by category' })).getByRole('row', { name: 'Steel 19' })).toBeInTheDocument();
   metric('Open requirements', '17');
   metric('Pending requirements', '7');
-  metric('Upcoming deadlines', '12');
+  metric('Upcoming requirement deadlines', '12');
   expect(screen.getByText('Showing 1 of 12 upcoming requirements (up to 10).')).toBeInTheDocument();
   expect(screen.getByRole('link', { name: 'Steel requirement-1' })).toHaveAttribute('href', '/app/manager/requirements/requirement-1');
   metric('Pending approvals', '8');
@@ -117,7 +117,7 @@ it('loads the manager dashboard from authenticated summaries, isolates errors, r
   expect(await screen.findByText('No transactions yet.')).toBeInTheDocument();
   expect(screen.getByText('No listings yet.')).toBeInTheDocument();
   expect(screen.getByText('No buyer requirements yet.')).toBeInTheDocument();
-  expect(screen.getByText('No upcoming deadlines in the next 7 days.')).toBeInTheDocument();
+  expect(screen.getByText('No upcoming requirement deadlines in the next 7 days.')).toBeInTheDocument();
   expect(screen.getByText('No matches yet.')).toBeInTheDocument();
   expect(screen.getByText('No rejection reasons recorded.')).toBeInTheDocument();
   metric('Active listings', '0');

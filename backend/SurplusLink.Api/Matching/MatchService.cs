@@ -218,6 +218,12 @@ public sealed partial class MatchService(SurplusLinkDbContext db)
         Guid? actor,
         CancellationToken ct)
     {
+        // Serialize explicit generation with requirement lifecycle transitions and
+        // concurrent generation of the same unique requirement/listing pair.
+        await using var ownedTransaction = db.Database.CurrentTransaction is null
+            ? await db.Database.BeginTransactionAsync(ct) : null;
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"SELECT 1 FROM \"MaterialRequests\" WHERE \"Id\" = {requirementId} FOR UPDATE", ct);
         var request = await db.BuyerRequests
             .AsNoTracking()
             .SingleOrDefaultAsync(
@@ -251,20 +257,43 @@ public sealed partial class MatchService(SurplusLinkDbContext db)
                 "The requirement has expired.");
         }
 
-        if (await db.Matches.AnyAsync(
-                x =>
-                    x.MaterialRequestId == requirementId &&
-                    x.ListingId == listingId,
-                ct))
-        {
-            throw new MatchException(
-                409,
-                "This candidate has already been generated.");
-        }
+        if (await db.Reservations.AnyAsync(x => x.MaterialRequestId == requirementId, ct) ||
+            await db.AgentWorkflows.AnyAsync(x => x.MaterialRequestId == requirementId &&
+                (x.Status == AgentWorkflowStatus.RUNNING || x.Status == AgentWorkflowStatus.PENDING_APPROVAL ||
+                 x.Status == AgentWorkflowStatus.APPROVED || x.Status == AgentWorkflowStatus.COMPLETED), ct))
+            throw new MatchException(409, "A workflow or reservation protects this requirement's candidates.");
 
+        var existing = await db.Matches.SingleOrDefaultAsync(x =>
+            x.MaterialRequestId == requirementId && x.ListingId == listingId, ct);
         var reason = EligibilityReason(
             request,
             listing);
+
+        if (existing is not null)
+        {
+            if (await db.Offers.AnyAsync(x => x.MaterialMatchId == existing.Id && x.Status == OfferStatus.ACCEPTED, ct) ||
+                await db.Transactions.AnyAsync(x => x.Offer.MaterialMatchId == existing.Id &&
+                    (x.Status == TransactionStatus.PENDING_APPROVAL || x.Status == TransactionStatus.APPROVED ||
+                     x.Status == TransactionStatus.COMPLETED), ct))
+                throw new MatchException(409, "A business outcome protects this candidate.");
+
+            // No fabricated route survives a new evaluation. Ranking and routing
+            // are separate deterministic operations after generation.
+            if (existing.Status != MatchStatus.REJECTED || existing.RejectionReason != reason ||
+                existing.Score != 0 || existing.Distance is not null || existing.DurationMinutes is not null ||
+                existing.EstimatedTransportCost is not null)
+            {
+                existing.Status = reason is null ? MatchStatus.GENERATED : MatchStatus.REJECTED;
+                existing.RejectionReason = reason;
+                existing.Score = 0;
+                existing.Distance = existing.DurationMinutes = existing.EstimatedTransportCost = null;
+                Audit(existing, actor, "REEVALUATE");
+                if (reason is not null) Audit(existing, actor, "REJECT");
+                await Save(ct);
+            }
+            if (ownedTransaction is not null) await ownedTransaction.CommitAsync(ct);
+            return existing;
+        }
 
         var match = new MaterialMatch
         {
@@ -294,6 +323,7 @@ public sealed partial class MatchService(SurplusLinkDbContext db)
 
         await Save(ct);
 
+        if (ownedTransaction is not null) await ownedTransaction.CommitAsync(ct);
         return match;
     }
 

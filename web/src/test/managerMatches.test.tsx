@@ -31,7 +31,7 @@ const candidates: MatchCandidate[] = [
     sellerId: 'seller-1',
     materialTitle: 'Cement Blend 42.5',
     categoryName: 'Cement',
-    status: 'VALID',
+    status: 'ROUTED',
     score: 92,
     routeDistanceKm: 14.5,
     estimatedCost: 960,
@@ -98,7 +98,7 @@ describe('manager match comparison page', () => {
     await userEvent.click(screen.getByRole('button', { name: /rejected/i }));
     await waitFor(() => expect(api.list).toHaveBeenLastCalledWith(expect.any(String), expect.objectContaining({ status: 'REJECTED' })));
 
-    expect(screen.getByText('SELF_MATCH_NOT_ALLOWED')).toBeInTheDocument();
+    expect(screen.getByText('You cannot match your own material listing.')).toBeInTheDocument();
     expect(screen.getAllByRole('link', { name: /view material/i })).toHaveLength(2);
     expect(screen.getAllByRole('link', { name: /view requirement/i })).toHaveLength(3);
   });

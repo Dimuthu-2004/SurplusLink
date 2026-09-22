@@ -69,3 +69,21 @@ Set `SURPLUSLINK_TEST_CONNECTION` to a PostgreSQL account permitted to create
 temporary test databases to also run HTTP, migration, history, analytics,
 self-match, and concurrency tests. The integration fixture creates and removes
 only its own uniquely named test databases.
+
+## Verification order and explicit re-evaluation
+
+Verification records `STALE_LISTING_VERIFIED` audit events for non-final
+OPEN/MATCHING candidates. It does not run a background match or mutate approved
+reservations. The next explicit generate operation evaluates authoritative
+listing/request fields again, reuses the unique pair's existing ID, clears stale
+score/distance/duration/cost, and records `REEVALUATE` when state changes.
+Unchanged deterministic rejections remain rejected. Request-row locking serializes
+concurrent generation and lifecycle transitions. Active workflows, reservations,
+approval recommendations, accepted offers and finalized transactions protect
+candidates from standalone reset.
+
+The workflow retry takes a fresh snapshot, includes deterministic rejections in
+its bounded candidate set (eligible inventory first), and routes only eligible
+listings. It records re-evaluation when updating an existing candidate. Self-owned
+inventory remains excluded before the cap. Manager comparison keeps failed routes
+visible and displays eligibility separately from the actual match status.
