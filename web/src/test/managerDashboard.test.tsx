@@ -89,11 +89,12 @@ it('loads the manager dashboard from authenticated summaries, isolates errors, r
   ].sort());
   metric('Active listings', '11');
   expect(within(screen.getByRole('table', { name: 'Listing totals by category' })).getByRole('row', { name: 'Steel 19' })).toBeInTheDocument();
+  metric('Expiring soon', '0');
   metric('Open requirements', '17');
   metric('Pending requirements', '7');
   metric('Upcoming requirement deadlines', '12');
-  expect(screen.getByText('Showing 1 of 12 upcoming requirements (up to 10).')).toBeInTheDocument();
-  expect(screen.getByRole('link', { name: 'Steel requirement-1' })).toHaveAttribute('href', '/app/manager/requirements/requirement-1');
+  expect(screen.getByRole('link', { name: 'View buyer requirements' })).toHaveAttribute('href', '/app/manager/requirements');
+  expect(screen.queryByRole('table', { name: 'Upcoming requirement deadlines' })).not.toBeInTheDocument();
   metric('Pending approvals', '8');
   metric('Approved transactions', '13');
   metric('Rejected transactions', '3');
@@ -104,8 +105,8 @@ it('loads the manager dashboard from authenticated summaries, isolates errors, r
   await visitor.click(screen.getByRole('button', { name: 'Retry matches' }));
   await screen.findByRole('table', { name: 'Top rejection reasons' });
   metric('Average match score', '0.81');
-  metric('Average distance (km)', '14.25');
-  expect(screen.getByRole('row', { name: 'BUDGET_EXCEEDED 6' })).toBeInTheDocument();
+  metric('Route failures', '2');
+  expect(screen.getByRole('row', { name: 'Budget Exceeded 6' })).toBeInTheDocument();
   expect(calls).toHaveLength(5);
   expect(calls[4]).toBe('/api/matches/analytics/summary');
   expect(screen.queryByRole('alert')).not.toBeInTheDocument();
@@ -117,13 +118,12 @@ it('loads the manager dashboard from authenticated summaries, isolates errors, r
   expect(await screen.findByText('No transactions yet.')).toBeInTheDocument();
   expect(screen.getByText('No listings yet.')).toBeInTheDocument();
   expect(screen.getByText('No buyer requirements yet.')).toBeInTheDocument();
-  expect(screen.getByText('No upcoming requirement deadlines in the next 7 days.')).toBeInTheDocument();
   expect(screen.getByText('No matches yet.')).toBeInTheDocument();
   expect(screen.getByText('No rejection reasons recorded.')).toBeInTheDocument();
   metric('Active listings', '0');
   metric('Pending requirements', '0');
   metric('Average match score', 'Not available');
-  metric('Average distance (km)', 'Not available');
+  metric('Route failures', '2');
   expect(screen.queryByText('BUDGET_EXCEEDED')).not.toBeInTheDocument();
 });
 

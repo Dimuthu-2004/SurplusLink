@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { normalizeApiError } from '../../api/apiClient';
 import { AnalyticsMetric } from '../../components/AnalyticsChart';
 import { managerDashboardApi } from '../../features/dashboard/managerDashboardApi';
-import { requirementDate, requirementNumber, statusLabel } from '../../features/requirements/requirementUi';
+import { requirementNumber } from '../../features/requirements/requirementUi';
 
 export function ManagerDashboardPage() {
   return (
@@ -22,6 +22,7 @@ export function ManagerDashboardPage() {
             <div className="analytics-metrics">
               <AnalyticsMetric label="Active listings" value={requirementNumber(data.activeCount)} />
             </div>
+              <AnalyticsMetric label="Expiring soon" value={requirementNumber(data.expiringListings.length)} />
             <h3>Category totals</h3>
             <p className="muted">Listing counts across all statuses.</p>
             {data.listingsByCategory.length === 0 ? <p className="empty-state">No listings yet.</p> : (
@@ -49,27 +50,6 @@ export function ManagerDashboardPage() {
               <AnalyticsMetric label="Upcoming requirement deadlines" value={requirementNumber(data.upcomingDeadlineCount)} detail="Next 7 days" />
             </div>
             {data.total === 0 && <p className="empty-state">No buyer requirements yet.</p>}
-            <h3>Upcoming requirement deadlines</h3>
-            <p className="muted">{requirementDate(data.asOf)} to {requirementDate(data.upcomingUntil)}. Times are local.</p>
-            {data.upcomingDeadlines.length === 0 ? <p className="empty-state">No upcoming requirement deadlines in the next 7 days.</p> : <>
-              <p className="muted">Showing {data.upcomingDeadlines.length} of {requirementNumber(data.upcomingDeadlineCount)} upcoming requirements (up to 10).</p>
-              <div className="table-scroll" role="region" aria-label="Upcoming requirement deadlines" tabIndex={0}>
-                <table>
-                  <caption className="sr-only">Upcoming requirement deadlines</caption>
-                  <thead><tr><th scope="col">Requirement</th><th scope="col">Status</th><th scope="col">Deadline</th></tr></thead>
-                  <tbody>{data.upcomingDeadlines.map((item) => (
-                    <tr key={item.id}>
-                      <td><Link to={'/app/manager/requirements/' + encodeURIComponent(item.id)}>
-                        {data.countsByCategory.find((category) => category.categoryId === item.categoryId)?.categoryName ?? item.categoryId}{' '}
-                        <small className="requirement-id">{item.id}</small>
-                      </Link></td>
-                      <td>{statusLabel(item.status)}</td>
-                      <td><time dateTime={item.deadline}>{requirementDate(item.deadline)}</time></td>
-                    </tr>
-                  ))}</tbody>
-                </table>
-              </div>
-            </>}
             <Link className="back-link" to="/app/manager/requirements">View buyer requirements</Link>
           </>}
         </AnalyticsPanel>
@@ -78,7 +58,7 @@ export function ManagerDashboardPage() {
           {(data) => <>
             <div className="analytics-metrics">
               <AnalyticsMetric label="Average match score" value={average(data.averageScore)} />
-              <AnalyticsMetric label="Average distance (km)" value={average(data.averageDistance)} />
+              <AnalyticsMetric label="Route failures" value={requirementNumber(data.routeFailureCount)} />
             </div>
             {data.total === 0 && <p className="empty-state">No matches yet.</p>}
             <h3>Top rejection reasons</h3>
@@ -88,7 +68,7 @@ export function ManagerDashboardPage() {
                   <caption className="sr-only">Top rejection reasons</caption>
                   <thead><tr><th scope="col">Reason</th><th scope="col">Rejected matches</th></tr></thead>
                   <tbody>{data.topRejectionReasons.map((item) => (
-                    <tr key={item.reason}><th scope="row">{item.reason}</th><td>{requirementNumber(item.count)}</td></tr>
+                    <tr key={item.reason}><th scope="row">{rejectionReasonLabel(item.reason)}</th><td>{requirementNumber(item.count)}</td></tr>
                   ))}</tbody>
                 </table>
               </div>
@@ -116,6 +96,14 @@ export function ManagerDashboardPage() {
 
 function average(value: number | null) {
   return value === null ? 'Not available' : requirementNumber(value, 2);
+}
+
+function rejectionReasonLabel(reason: string) {
+  return reason
+    .toLowerCase()
+    .split('_')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
 }
 
 function AnalyticsPanel<T>({ title, load, children }: {
