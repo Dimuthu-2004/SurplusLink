@@ -74,8 +74,8 @@ export function ManagerRequirementsPage({ api = managerRequirementsApi }: { api?
               <thead><tr><th scope="col">Request / Buyer</th><th scope="col">Category</th><th scope="col">Status</th>
                 <th scope="col">Quantity</th><th scope="col">Maximum budget</th><th scope="col">Deadline</th><th scope="col">Created</th><th scope="col">Details</th></tr></thead>
               <tbody>{list.data.items.map((row) => <tr key={row.id}>
-                <td><span title={row.id}>{row.id.slice(0, 8)}</span><small className="requirement-id" title={row.buyerId}>Buyer {row.buyerId.slice(0, 8)}</small></td>
-                <td>{names.get(row.categoryId) ?? row.categoryId}</td><td><RequirementBadge status={row.status} /></td>
+                <td><strong>{names.get(row.categoryId) ?? 'Material'} request</strong><small className="requirement-id" title={row.id}>Reference: {row.id.slice(0, 8)}</small><small className="requirement-id" title={row.buyerId}>Buyer {row.buyerId.slice(0, 8)}</small></td>
+                <td>{names.get(row.categoryId) ?? 'Category unavailable'}</td><td><RequirementBadge status={row.status} /></td>
                 <td>{requirementNumber(row.requiredQuantity)} {row.unit}</td><td>{requirementNumber(row.maximumBudget, 2)}</td>
                 <td>{requirementDate(row.deadline)}</td><td>{requirementDate(row.createdAt)}</td>
                 <td><Link className="text-button" aria-label={'View requirement ' + row.id} to={'/app/manager/requirements/' + row.id}>View</Link></td>

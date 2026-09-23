@@ -1,3 +1,4 @@
+import '../pages/manager/managerLayout.css';
 import { type ReactNode } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
@@ -20,7 +21,7 @@ export function AppLayout() {
   );
 
   return (
-    <div className="app-shell">
+    <div className={manager ? 'app-shell manager-shell' : 'app-shell'}>
       <header className="app-header">
         <Link className="brand" to={roleHomePath(user.roles)}>
           <span className="brand-mark" aria-hidden="true">S</span>
@@ -51,7 +52,7 @@ export function AppLayout() {
           </nav>
         </aside>
         <main className="page-content">
-          {location.pathname !== roleHomePath(user.roles) && <Link className="back-link dashboard-back" to={roleHomePath(user.roles)}>? Back to dashboard</Link>}
+          {location.pathname !== roleHomePath(user.roles) && <Link className="back-link dashboard-back" to={roleHomePath(user.roles)}><AppIcon name="back" /> Back to dashboard</Link>}
           <Outlet />
         </main>
       </div>
@@ -59,7 +60,7 @@ export function AppLayout() {
   );
 }
 
-function AppIcon({ name }: { name: 'grid' | 'offers' | 'materials' | 'categories' | 'requirements' | 'approvals' | 'logout' }) {
+function AppIcon({ name }: { name: 'grid' | 'offers' | 'materials' | 'categories' | 'requirements' | 'approvals' | 'logout' | 'back' }) {
   const paths: Record<string, ReactNode> = {
     grid: <><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></>,
     offers: <><path d="M4 7h16v12H4z" /><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M4 12h16" /></>,
@@ -67,6 +68,7 @@ function AppIcon({ name }: { name: 'grid' | 'offers' | 'materials' | 'categories
     categories: <><circle cx="8" cy="8" r="3" /><circle cx="17" cy="8" r="3" /><circle cx="12.5" cy="17" r="3" /></>,
     requirements: <><path d="M6 3h9l4 4v14H6z" /><path d="M15 3v5h5M9 13h6M9 17h6" /></>,
     approvals: <><circle cx="12" cy="12" r="9" /><path d="m8 12 2.5 2.5L16 9" /></>,
+    back: <path d="m12 5-7 7 7 7M5 12h15" />,
     logout: <><path d="M10 5H5v14h5M14 8l4 4-4 4M8 12h10" /></>,
   };
   return <svg className="app-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg>;

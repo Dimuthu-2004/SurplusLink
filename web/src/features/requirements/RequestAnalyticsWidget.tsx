@@ -24,7 +24,6 @@ export function RequestAnalyticsWidget({ api = managerRequirementsApi }: { api?:
         <AnalyticsMetric label="Total requests" value={requirementNumber(data.total)} />
         <AnalyticsMetric label="Open requests" value={requirementNumber(data.openCount)} />
         <AnalyticsMetric label="Upcoming deadlines" value={requirementNumber(data.upcomingDeadlineCount)} />
-        <AnalyticsMetric label="Average maximum budget" value={data.averageMaximumBudget === null ? '—' : requirementNumber(data.averageMaximumBudget, 2)} />
       </div>
       {data.total === 0 && <p className="empty-state">No buyer requirements yet.</p>}
       <div className="analytics-grid">
@@ -48,7 +47,7 @@ export function RequestAnalyticsWidget({ api = managerRequirementsApi }: { api?:
         <p className="muted">Active requests due by {requirementDate(data.upcomingUntil)}. Showing up to 10.</p>
         {data.upcomingDeadlines.length === 0 ? <p>No active requests are due in this window.</p> :
           <ul className="summary-list">{data.upcomingDeadlines.map((item) => <li key={item.id}>
-            <Link to={'/app/manager/requirements/' + item.id}>Request {item.id.slice(0, 8)}</Link>
+            <Link to={'/app/manager/requirements/' + item.id}>{data.countsByCategory.find(category => category.categoryId === item.categoryId)?.categoryName ?? 'Material'} request: {requirementNumber(item.requiredQuantity)} {item.unit}</Link>
             {' — '}{requirementDate(item.deadline)} · {statusLabel(item.status)}
           </li>)}</ul>}
       </details>

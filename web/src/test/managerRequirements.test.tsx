@@ -114,6 +114,7 @@ describe('manager requirement components', () => {
     render(<MemoryRouter><ManagerRequirementsPage api={api} /></MemoryRouter>);
     expect(await screen.findByText('Network unavailable')).toBeInTheDocument();
     expect(screen.getByText('Total requests')).toBeInTheDocument();
+    expect(screen.queryByText('Average maximum budget')).not.toBeInTheDocument();
     const visitor = userEvent.setup();
     await visitor.click(screen.getByRole('button', { name: 'Retry' }));
     expect(await screen.findByText('No requirements match these filters.')).toBeInTheDocument();
