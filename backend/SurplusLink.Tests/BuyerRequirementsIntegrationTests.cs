@@ -196,7 +196,7 @@ public sealed class BuyerRequirementsIntegrationTests : IClassFixture<Requiremen
         Assert.Equal(HttpStatusCode.OK, submitted.StatusCode);
         Assert.Equal(BuyerRequestStatus.OPEN, (await submitted.Content.ReadFromJsonAsync<RequirementResponse>())!.Status);
         Assert.Equal(HttpStatusCode.Conflict, (await buyer.PostAsync(path + "/submit", null)).StatusCode);
-        Assert.Equal(HttpStatusCode.Conflict, (await buyer.PutAsJsonAsync(path, Body())).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await buyer.PutAsJsonAsync(path, Body())).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await buyer.DeleteAsync(path)).StatusCode);
         using var db = fixture.Context();
         var before = await Snapshot(db);

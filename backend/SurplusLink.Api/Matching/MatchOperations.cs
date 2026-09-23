@@ -9,6 +9,7 @@ public sealed partial class MatchService
     public async Task<MatchResponse> GetAsync(Guid id, Guid actor, bool manager, CancellationToken ct)
     {
         var match = await db.Matches.AsNoTracking().Include(x => x.Listing).ThenInclude(x => x.Category)
+            .Include(x => x.Listing).ThenInclude(x => x.Seller)
             .Include(x => x.MaterialRequest).SingleOrDefaultAsync(x => x.Id == id, ct)
             ?? throw new MatchException(404, "Match not found.");
         await AuthorizeRequirement(match.MaterialRequestId, actor, manager, ct);
