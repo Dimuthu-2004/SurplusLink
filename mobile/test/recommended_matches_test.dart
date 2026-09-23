@@ -111,6 +111,7 @@ void main() {
       await tester.tap(find.byKey(const Key('match-m1')));
       await tester.pumpAndSettle();
       expect(find.text('Match Details'), findsOneWidget);
+      await tester.scrollUntilVisible(find.text('Transport estimate'), 300);
       expect(find.text('Transport estimate'), findsOneWidget);
       expect(find.text('LKR 1,000.00'), findsWidgets);
       expect(find.text('Approve'), findsNothing);
@@ -179,7 +180,7 @@ void main() {
     await tester.tap(find.text('Retry'));
     await tester.pumpAndSettle();
     expect(gateway.queries.last.rejected, isTrue);
-    await tester.ensureVisible(find.text('Next'));
+    await tester.scrollUntilVisible(find.text('Next'), 300);
     await tester.tap(find.text('Next'));
     await tester.pumpAndSettle();
     expect(gateway.queries.last.page, 2);
