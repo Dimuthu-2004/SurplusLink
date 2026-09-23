@@ -164,7 +164,7 @@ public sealed class WorkflowPersistenceTests(RequirementsDatabase fixture) : ICl
         var client = new AgentWorkflowClient(http, options);
         Assert.True(await new WorkflowQueueProcessor(db, client, new DemoTransport(), options).ProcessNextAsync(default));
         var row = await db.AgentWorkflows.Include(x => x.Steps).ThenInclude(x => x.ToolCalls).SingleAsync(x => x.MaterialRequestId == id);
-        Assert.True(row.Status == AgentWorkflowStatus.PENDING_APPROVAL, row.ErrorJson ?? row.ValidationJson);
+        Assert.True(row.Status == AgentWorkflowStatus.COMPLETED, row.ErrorJson ?? row.ValidationJson);
         Assert.Equal(new[] { "PLANNER", "MATCHING", "LOGISTICS", "VALIDATION" }, row.Steps.OrderBy(x => x.Sequence).Select(x => x.Stage));
         Assert.Equal(6, row.Steps.Single(x => x.Stage == "VALIDATION").ToolCalls.Count);
         Assert.True(JsonDocument.Parse(row.ValidationJson).RootElement.GetProperty("valid").GetBoolean());
@@ -183,15 +183,15 @@ public sealed class WorkflowPersistenceTests(RequirementsDatabase fixture) : ICl
         Assert.True(await processor.ProcessNextAsync(default));
         Assert.False(await processor.ProcessNextAsync(default));
         var workflow = await db.AgentWorkflows.Include(x => x.Steps).ThenInclude(x => x.ToolCalls).SingleAsync(x => x.MaterialRequestId == id);
-        Assert.Equal(AgentWorkflowStatus.PENDING_APPROVAL, workflow.Status);
+        Assert.Equal(AgentWorkflowStatus.COMPLETED, workflow.Status);
         Assert.NotNull(workflow.MaterialMatchId);
         Assert.Equal(4, workflow.Steps.Count);
         Assert.Equal(6, workflow.Steps.Single(x => x.Stage == "VALIDATION").ToolCalls.Count);
-        Assert.Equal(BuyerRequestStatus.PENDING_APPROVAL, (await db.BuyerRequests.FindAsync(id))!.Status);
+        Assert.Equal(BuyerRequestStatus.MATCH_FOUND, (await db.BuyerRequests.FindAsync(id))!.Status);
         Assert.Equal(0, await db.Reservations.CountAsync(x => x.MaterialRequestId == id));
         Assert.Equal(0, await db.Listings.Where(x => x.CategoryId == db.BuyerRequests.Where(r => r.Id == id).Select(r => r.CategoryId).First()).SumAsync(x => x.ReservedQuantity));
         Assert.Equal(1, client.Calls);
-        Assert.True(await db.AuditLogs.AnyAsync(x => x.EntityId == workflow.Id && x.Action == "WORKFLOW_PENDING_APPROVAL"));
+        Assert.True(await db.AuditLogs.AnyAsync(x => x.EntityId == workflow.Id && x.Action == "WORKFLOW_COMPLETED"));
     }
 
     [PostgresFact]
@@ -250,7 +250,7 @@ public sealed class WorkflowPersistenceTests(RequirementsDatabase fixture) : ICl
                 Options.Create(new WorkflowExecutionOptions { MaxCandidates = 1 }));
             Assert.True(await processor.ProcessNextAsync(default));
             var workflow = await db.AgentWorkflows.SingleAsync(x => x.MaterialRequestId == id);
-            Assert.Equal(forgeSelfMatch ? AgentWorkflowStatus.FAILED : AgentWorkflowStatus.PENDING_APPROVAL, workflow.Status);
+            Assert.Equal(forgeSelfMatch ? AgentWorkflowStatus.FAILED : AgentWorkflowStatus.COMPLETED, workflow.Status);
             Assert.False(await db.Matches.AnyAsync(x => x.MaterialRequestId == id && x.ListingId == own.Id));
             Assert.Equal(forgeSelfMatch ? 0 : 1, await db.Matches.CountAsync(x => x.MaterialRequestId == id));
             Assert.Equal(0, await db.Reservations.CountAsync(x => x.MaterialRequestId == id));

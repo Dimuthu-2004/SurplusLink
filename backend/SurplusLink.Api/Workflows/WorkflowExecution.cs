@@ -278,8 +278,13 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
             db.AuditLogs.Add(new AuditLog { Id = Guid.NewGuid(), EntityType = nameof(MaterialMatch), EntityId = candidate.Id,
                 Action = reason is null ? "RANK" : "REJECT" });
         }
-        workflow.Status = AgentWorkflowStatus.COMPLETED;
-        workflow.CurrentStage = "AWAITING_BUYER_SELECTION";
+        var awaitingBuyerSelection = result.Recommendation is not null;
+        workflow.Status = awaitingBuyerSelection
+            ? AgentWorkflowStatus.COMPLETED
+            : Enum.Parse<AgentWorkflowStatus>(result.Status);
+        workflow.CurrentStage = awaitingBuyerSelection
+            ? "AWAITING_BUYER_SELECTION"
+            : result.Status;
         workflow.CompletedAtUtc = DateTime.UtcNow;
         workflow.OutputJson = JsonSerializer.Serialize(result, AgentWorkflowClient.Json);
         workflow.ValidationJson = JsonSerializer.Serialize(result.Validation, AgentWorkflowClient.Json);
@@ -317,7 +322,9 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
             db.AuditLogs.Add(new AuditLog { Id = Guid.NewGuid(), EntityType = nameof(Transaction),
                 EntityId = transaction.Id, Action = "PENDING_APPROVAL" });
         }
-        request.Status = BuyerRequestStatus.MATCH_FOUND;
+        request.Status = awaitingBuyerSelection
+            ? BuyerRequestStatus.MATCH_FOUND
+            : BuyerRequestStatus.OPEN;
         foreach (var trace in result.Steps)
         {
             var step = new AgentStep { Id = Guid.NewGuid(), Sequence = trace.Sequence, Stage = trace.Stage,

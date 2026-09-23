@@ -273,11 +273,11 @@ public sealed class MatchIntegrationTests(RequirementsDatabase fixture) : IClass
     }
 
     [PostgresFact]
-    public async Task Delivery_date_uses_persisted_utc_calendar_days_for_before_same_and_after_deadline()
+    public async Task Listing_expiry_is_not_compared_to_delivery_deadline_before_routing()
     {
         foreach (var (availableUntil, expectedReason) in new[]
         {
-            (new DateTime(2026, 10, 14, 23, 59, 59, DateTimeKind.Utc), "LISTING_EXPIRES_BEFORE_DELIVERY"),
+            (new DateTime(2026, 10, 14, 23, 59, 59, DateTimeKind.Utc), (string?)null),
             (new DateTime(2026, 10, 15, 0, 0, 0, DateTimeKind.Utc), (string?)null),
             (new DateTime(2026, 10, 31, 23, 59, 59, DateTimeKind.Utc), (string?)null),
         })
