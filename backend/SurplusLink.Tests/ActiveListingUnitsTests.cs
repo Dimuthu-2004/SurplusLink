@@ -11,12 +11,11 @@ public sealed class ActiveListingUnitsTests(RequirementsDatabase fixture) : ICla
     [PostgresFact]
     public async Task Buyer_receives_distinct_normalized_units_from_active_listings_in_the_selected_category()
     {
-        Guid categoryId;
+        var categoryId = Guid.NewGuid();
         using (var db = fixture.Context())
         {
-            categoryId = await db.Categories.Select(category => category.Id).FirstAsync();
-            var otherCategory = Guid.NewGuid();
-            db.Categories.Add(new Category { Id = otherCategory, Name = "Other units " + Guid.NewGuid() });
+            var otherCategory = await db.Categories.Select(category => category.Id).FirstAsync();
+            db.Categories.Add(new Category { Id = categoryId, Name = "Units " + Guid.NewGuid() });
             db.Listings.AddRange(
                 Listing(categoryId, " PCS ", ListingStatus.ACTIVE),
                 Listing(categoryId, "pcs", ListingStatus.ACTIVE),
