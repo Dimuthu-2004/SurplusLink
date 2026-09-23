@@ -67,6 +67,18 @@ class MatchRepository implements MatchGateway {
   }
 
   @override
+  Future<void> select(String requirementId, String matchId) => _guard(
+    () => _api.postJson('/api/requirements/$requirementId/select-match', {
+      'matchId': matchId,
+    }, authenticated: true),
+  );
+
+  @override
+  Future<void> cancelPendingApproval(String requirementId) => _guard(
+    () => _api.postJson('/api/requirements/$requirementId/cancel-pending-approval', {}, authenticated: true),
+  );
+
+  @override
   Future<MatchPage<MatchHistoryEntry>> history(
     String matchId, {
     int page = 1,

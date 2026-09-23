@@ -1,7 +1,9 @@
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using SurplusLink.Api.Data;
+using SurplusLink.Api.Matching;
 using SurplusLink.Api.Models;
 using SurplusLink.Api.Workflows;
 
@@ -88,12 +90,15 @@ public sealed class RequirementService(SurplusLinkDbContext db, IRequirementWork
     {
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         var request = await LockOwnedAsync(id, buyerId, ct);
-        var revision = request.Status == BuyerRequestStatus.OPEN &&
-            await db.AgentWorkflows.Where(x => x.MaterialRequestId == id).OrderByDescending(x => x.StartedAtUtc)
-                .Select(x => x.Status == AgentWorkflowStatus.REVISION_REQUESTED).FirstOrDefaultAsync(ct);
-        if (!revision) RequireState(request, BuyerRequestStatus.DRAFT);
+        if (request.Status is not (BuyerRequestStatus.DRAFT or BuyerRequestStatus.OPEN or BuyerRequestStatus.MATCH_FOUND))
+            throw new RequirementException(409, "Only a non-approved draft, open, or match-found requirement can be edited.");
         await ValidateAsync(input, ct);
         Apply(request, input);
+        if (request.Status != BuyerRequestStatus.DRAFT)
+        {
+            await InvalidateCandidatesAsync(request, ct);
+            request.Status = BuyerRequestStatus.OPEN;
+        }
         Audit(request, "UPDATED");
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
@@ -135,7 +140,8 @@ public sealed class RequirementService(SurplusLinkDbContext db, IRequirementWork
     {
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         var request = await LockOwnedAsync(id, buyerId, ct);
-        RequireState(request, BuyerRequestStatus.OPEN);
+        if (request.Status is not (BuyerRequestStatus.OPEN or BuyerRequestStatus.MATCH_FOUND))
+            throw new RequirementException(409, "Matching requires an open or match-found requirement.");
         FutureDeadline(request.Deadline);
         // No reservation dependency: M4-2 must create/reuse the real workflow inside this transaction.
         var workflowId = await workflowStarter.StartAsync(id, buyerId, ct);
@@ -158,6 +164,76 @@ public sealed class RequirementService(SurplusLinkDbContext db, IRequirementWork
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
         return RequirementResponse.From(request);
+    }
+
+    public async Task<RequirementResponse> SelectMatchAsync(Guid id, Guid buyerId, Guid matchId, CancellationToken ct)
+    {
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        var request = await LockOwnedAsync(id, buyerId, ct);
+        RequireState(request, BuyerRequestStatus.MATCH_FOUND);
+        if (await db.Reservations.AnyAsync(x => x.MaterialRequestId == id && x.Status != ReservationStatus.RELEASED && x.Status != ReservationStatus.CANCELLED, ct))
+            throw new RequirementException(409, "A reservation already protects this requirement.");
+        var match = await db.Matches.Include(x => x.Listing).SingleOrDefaultAsync(x => x.Id == matchId && x.MaterialRequestId == id, ct)
+            ?? throw new RequirementException(404, "Match was not found for this requirement.");
+        if (match.Status != MatchStatus.ROUTED || match.Distance is null || match.DurationMinutes is null || match.EstimatedTransportCost is null ||
+            MatchService.EligibilityReason(request, match.Listing) is not null ||
+            match.DurationMinutes > (decimal)(request.Deadline - DateTime.UtcNow).TotalMinutes ||
+            match.Listing.UnitPrice * request.RequiredQuantity + match.EstimatedTransportCost > request.MaximumBudget)
+            throw new RequirementException(409, "Choose one currently valid routed match.");
+        var workflow = new AgentWorkflow
+        {
+            Id = Guid.NewGuid(), MaterialRequestId = id, MaterialMatchId = match.Id,
+            Status = AgentWorkflowStatus.PENDING_APPROVAL, CurrentStage = "PENDING_APPROVAL",
+            StartedAtUtc = DateTime.UtcNow, CompletedAtUtc = DateTime.UtcNow,
+            InputJson = JsonSerializer.Serialize(new { requirementId = id, selectedMatchId = match.Id, buyerConfirmed = true }),
+            OutputJson = JsonSerializer.Serialize(new { selectedMatchId = match.Id, buyerConfirmed = true }),
+            ValidationJson = JsonSerializer.Serialize(new { valid = true, requiresApproval = true, recommendedMatchId = match.Id })
+        };
+        var offer = new Offer { Id = Guid.NewGuid(), MaterialMatchId = match.Id, BuyerId = request.BuyerId,
+            SellerId = match.Listing.SellerId, Quantity = request.RequiredQuantity, UnitValue = match.Listing.UnitPrice,
+            TotalValue = request.RequiredQuantity * match.Listing.UnitPrice, Status = OfferStatus.PENDING };
+        db.AgentWorkflows.Add(workflow);
+        db.Offers.Add(offer);
+        db.Transactions.Add(new Transaction { Id = Guid.NewGuid(), OfferId = offer.Id, BuyerId = offer.BuyerId,
+            SellerId = offer.SellerId, Quantity = offer.Quantity, TotalValue = offer.TotalValue,
+            Status = TransactionStatus.PENDING_APPROVAL });
+        request.Status = BuyerRequestStatus.PENDING_APPROVAL;
+        Audit(request, "MATCH_SELECTED_BY_BUYER");
+        await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
+        return RequirementResponse.From(request) with { WorkflowId = workflow.Id, WorkflowStatus = workflow.Status.ToString() };
+    }
+
+    public async Task<RequirementResponse> CancelPendingApprovalAsync(Guid id, Guid buyerId, CancellationToken ct)
+    {
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        var request = await LockOwnedAsync(id, buyerId, ct);
+        RequireState(request, BuyerRequestStatus.PENDING_APPROVAL);
+        if (await db.Reservations.AnyAsync(x => x.MaterialRequestId == id && x.Status != ReservationStatus.RELEASED && x.Status != ReservationStatus.CANCELLED, ct))
+            throw new RequirementException(409, "An approved or reserved requirement cannot change selection.");
+        var workflows = await db.AgentWorkflows.Where(x => x.MaterialRequestId == id && x.Status == AgentWorkflowStatus.PENDING_APPROVAL).ToListAsync(ct);
+        foreach (var workflow in workflows) { workflow.Status = AgentWorkflowStatus.REJECTED; workflow.CurrentStage = "CANCELLED_BY_BUYER"; workflow.CompletedAtUtc = DateTime.UtcNow; }
+        var transactions = await db.Transactions.Include(x => x.Offer).Where(x => x.Status == TransactionStatus.PENDING_APPROVAL && x.Offer.MaterialMatch.MaterialRequestId == id).ToListAsync(ct);
+        foreach (var transaction in transactions) { transaction.Status = TransactionStatus.REJECTED; transaction.Offer.Status = OfferStatus.REJECTED; }
+        request.Status = BuyerRequestStatus.MATCH_FOUND;
+        Audit(request, "PENDING_APPROVAL_CANCELLED_BY_BUYER");
+        await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
+        return RequirementResponse.From(request);
+    }
+
+    private async Task InvalidateCandidatesAsync(BuyerRequest request, CancellationToken ct)
+    {
+        var candidates = await db.Matches.Where(x => x.MaterialRequestId == request.Id).ToListAsync(ct);
+        foreach (var candidate in candidates)
+        {
+            candidate.Status = MatchStatus.GENERATED;
+            candidate.RejectionReason = null;
+            candidate.Score = 0;
+            candidate.Distance = candidate.DurationMinutes = candidate.EstimatedTransportCost = null;
+            db.AuditLogs.Add(new AuditLog { Id = Guid.NewGuid(), ActorUserId = request.BuyerId,
+                EntityType = nameof(MaterialMatch), EntityId = candidate.Id, Action = "INVALIDATED_BY_REQUIREMENT_EDIT" });
+        }
     }
 
     private async Task<BuyerRequest> LockOwnedAsync(Guid id, Guid buyerId, CancellationToken ct)

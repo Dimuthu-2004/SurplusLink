@@ -85,6 +85,7 @@ void main() {
         );
       final auth = AuthController(authGateway);
       final requirements = FakeRequirements();
+      requirements.row = testRequirement(status: 'OPEN');
       final gateway = FakeMatches();
       await tester.pumpWidget(
         SurplusLinkApp(
@@ -247,6 +248,12 @@ class FakeMatches implements MatchGateway {
     if (error != null) throw error!;
     return match;
   }
+
+  @override
+  Future<void> select(String requirementId, String matchId) async {}
+
+  @override
+  Future<void> cancelPendingApproval(String requirementId) async {}
 
   @override
   Future<MatchPage<MatchHistoryEntry>> history(

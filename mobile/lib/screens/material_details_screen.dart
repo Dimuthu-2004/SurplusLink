@@ -142,7 +142,7 @@ class _MaterialDetailsScreenState extends State<MaterialDetailsScreen> {
     return Scaffold(
       appBar: AppBar(
         leading: const DashboardBackButton(fallback: '/materials'),
-        title: const Text('Material Details'),
+        title: Text(_listing?.status == 'DRAFT' ? 'Draft Preview' : 'Material Details'),
         actions: [
           IconButton(
             tooltip: 'Refresh',
@@ -260,13 +260,13 @@ class _MaterialDetailsScreenState extends State<MaterialDetailsScreen> {
                       key: const Key('publish-material'),
                       onPressed: _isActionBusy ? null : _publish,
                       icon: const Icon(Icons.publish_outlined),
-                      label: const Text('Publish for verification'),
+                      label: const Text('Submit for verification'),
                     ),
                   ],
                   const SizedBox(height: 8),
                     OutlinedButton.icon(
                       key: const Key('delete-material'),
-                      onPressed: _isActionBusy || listing.status != 'DRAFT' ? null : _delete,
+                      onPressed: _isActionBusy || listing.status == 'CLOSED' ? null : _delete,
                     icon: const Icon(Icons.delete_outline),
                     label: const Text('Delete material'),
                   ),

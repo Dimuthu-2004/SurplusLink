@@ -23,6 +23,13 @@ class RecommendedMatch {
     this.availableQuantity,
     this.maximumBudget,
     this.requirementStatus,
+    this.sellerName,
+    this.sellerBusinessName,
+    this.condition,
+    this.latitude,
+    this.longitude,
+    this.sellerAddress,
+    this.aiRecommended = false,
   });
   final String id, requirementId, listingId, status;
   final double score;
@@ -35,6 +42,9 @@ class RecommendedMatch {
   final DateTime? availableUntil, requiredBy;
   final double? availableQuantity, maximumBudget;
   final String? requirementStatus;
+  final String? sellerName, sellerBusinessName, condition, sellerAddress;
+  final double? latitude, longitude;
+  final bool aiRecommended;
 
   bool get isRejected =>
       rejected == true || status == 'REJECTED' || rejectionReason != null;
@@ -70,6 +80,13 @@ class RecommendedMatch {
         availableQuantity: _number(json, 'availableQuantity', optional: true),
         maximumBudget: _number(json, 'maximumBudget', optional: true),
         requirementStatus: _optionalString(json, 'requirementStatus'),
+        sellerName: _optionalString(json, 'sellerName'),
+        sellerBusinessName: _optionalString(json, 'sellerBusinessName'),
+        condition: _optionalString(json, 'condition'),
+        latitude: _number(json, 'latitude', optional: true),
+        longitude: _number(json, 'longitude', optional: true),
+        sellerAddress: _optionalString(json, 'sellerAddress'),
+        aiRecommended: _boolean(json, 'aiRecommended') ?? false,
       );
 }
 

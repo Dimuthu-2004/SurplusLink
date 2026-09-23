@@ -119,9 +119,19 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
                   Text(
                     'Estimated material cost: ${formatCurrency(match.estimatedMaterialCost)}',
                   ),
+                  Text('Condition: ${match.condition ?? 'Not recorded'}'),
+                ]),
+                _card('Seller and material location', [
+                  Text('Seller: ${match.sellerName ?? match.sellerId ?? 'Not recorded'}'),
+                  Text('Business: ${match.sellerBusinessName ?? 'Not recorded'}'),
+                  Text('Address: ${match.sellerAddress ?? 'Not recorded'}'),
+                  Text(match.latitude != null && match.longitude != null
+                      ? 'Material location: ${match.latitude!.toStringAsFixed(5)}, ${match.longitude!.toStringAsFixed(5)}'
+                      : 'Material location: Not recorded'),
                 ]),
                 _card('Match Status', [
                   Text('Score ${(match.score * 100).toStringAsFixed(1)}%'),
+                  if (match.aiRecommended) const Text('AI recommendation — review it, then choose one valid match.'),
                   Text('Status: ${readableMatchStatus(match.status)}'),
                   if (match.isRejected) ...[
                     const Text(
@@ -172,9 +182,10 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
                 ]),
                 _card('Delivery', [
                   Text(routingSummary(match)),
-                  if (getRoutingState(match) == RoutingUiState.available) ...[
+                  if (match.estimatedTransportCost != null) ...[
                     const Text('Transport estimate'),
                     Text(formatCurrency(match.estimatedTransportCost)),
+                    Text('Total cost: ${formatCurrency((match.estimatedMaterialCost ?? 0) + (match.estimatedTransportCost ?? 0))}'),
                   ],
                 ]),
                 ExpansionTile(

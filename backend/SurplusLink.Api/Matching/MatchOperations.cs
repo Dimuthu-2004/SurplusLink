@@ -116,7 +116,6 @@ public sealed partial class MatchService
         MarketplaceMatchPolicy.RejectionReason(request.BuyerId, listing.SellerId)
         ?? (listing.Status != ListingStatus.ACTIVE ? "LISTING_NOT_ACTIVE" : null)
         ?? (listing.AvailableUntil <= DateTime.UtcNow ? "LISTING_EXPIRED" : null)
-        ?? (!DeliveryAvailabilityPolicy.IsAvailableThrough(listing.AvailableUntil, request.Deadline) ? "LISTING_EXPIRES_BEFORE_DELIVERY" : null)
         ?? (listing.CategoryId != request.CategoryId ? "CATEGORY_MISMATCH" : null)
         ?? (!string.Equals(listing.Unit, request.Unit, StringComparison.OrdinalIgnoreCase) ? "UNIT_MISMATCH" : null)
         ?? (listing.Quantity - listing.ReservedQuantity < request.RequiredQuantity ? "INSUFFICIENT_QUANTITY" : null)
@@ -127,5 +126,7 @@ public sealed partial class MatchService
         x.Status == MatchStatus.REJECTED, x.RejectionReason, x.CreatedAtUtc, x.DurationMinutes,
         x.Listing.Title, x.Listing.Category.Name, x.Listing.SellerId, x.MaterialRequest.RequiredQuantity, x.Listing.Unit, x.Listing.UnitPrice,
         x.Listing.AvailableUntil, x.MaterialRequest.Deadline, x.Listing.Quantity - x.Listing.ReservedQuantity,
-        x.MaterialRequest.MaximumBudget, x.MaterialRequest.Status.ToString());
+        x.MaterialRequest.MaximumBudget, x.MaterialRequest.Status.ToString(),
+        x.Listing.Seller.FullName, x.Listing.Seller.BusinessName, x.Listing.Condition.ToString(),
+        x.Listing.Latitude, x.Listing.Longitude, x.Listing.Seller.Address, false);
 }

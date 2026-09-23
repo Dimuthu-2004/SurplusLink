@@ -203,6 +203,14 @@ class _RequirementDetailsScreenState extends State<RequirementDetailsScreen> {
                       alignment: Alignment.centerLeft,
                       child: RequirementStatusChip(row.status),
                     ),
+                    if (row.workflowStatus == 'REVISION_REQUESTED')
+                      Card(
+                        color: Theme.of(context).colorScheme.errorContainer,
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Text('Manager requested changes${row.decisionNote == null || row.decisionNote!.isEmpty ? '.' : ': ${row.decisionNote}'}'),
+                        ),
+                      ),
                     _value(
                       'Required quantity',
                       '${row.requiredQuantity} ${row.unit}',
@@ -255,25 +263,20 @@ class _RequirementDetailsScreenState extends State<RequirementDetailsScreen> {
                             onPressed: _busy || !row.canStart
                                 ? null
                                 : () => _action('start'),
-                            child: const Text('Start matching'),
+                            child: Text(row.status == 'MATCH_FOUND' ? 'Refresh matches' : 'Start matching'),
                           ),
-                        if (row.canCancel)
+                        if (row.canCancel && row.status != 'DRAFT')
                           OutlinedButton(
                             key: const Key('requirement-cancel'),
                             onPressed: _busy ? null : () => _action('cancel'),
                             child: const Text('Cancel requirement'),
                           ),
-                        if (row.canEdit)
-                          TextButton(
-                            key: const Key('requirement-delete'),
-                            onPressed: _busy ? null : () => _action('delete'),
-                            child: const Text('Delete draft'),
-                          ),
                       ],
                     ),
-                    const SizedBox(height: 16),
-                    if (widget.showMatches)
-                      OutlinedButton.icon(
+                    if (row.status != 'DRAFT') ...[
+                      const SizedBox(height: 16),
+                      if (widget.showMatches)
+                        OutlinedButton.icon(
                         key: const Key('open-recommended-matches'),
                         onPressed: _busy
                             ? null
@@ -282,8 +285,8 @@ class _RequirementDetailsScreenState extends State<RequirementDetailsScreen> {
                               ),
                         icon: const Icon(Icons.recommend_outlined),
                         label: const Text('Recommended Matches'),
-                      ),
-                    OutlinedButton.icon(
+                        ),
+                      OutlinedButton.icon(
                       onPressed: _busy
                           ? null
                           : () async {
@@ -295,15 +298,16 @@ class _RequirementDetailsScreenState extends State<RequirementDetailsScreen> {
                             },
                       icon: const Icon(Icons.track_changes),
                       label: const Text('Workflow / recommendation status'),
-                    ),
-                    OutlinedButton.icon(
+                      ),
+                      OutlinedButton.icon(
                       onPressed: _busy
                           ? null
                           : () =>
                                 context.push('/requirements/${row.id}/history'),
                       icon: const Icon(Icons.history),
                       label: const Text('History'),
-                    ),
+                      ),
+                    ],
                   ],
                 ],
               ),

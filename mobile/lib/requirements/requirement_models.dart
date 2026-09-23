@@ -44,9 +44,9 @@ class BuyerRequirement {
   final num requiredQuantity, maximumBudget;
   final double? latitude, longitude;
   final DateTime deadline, createdAt, updatedAt;
-  bool get canEdit => status == 'DRAFT' || (status == 'OPEN' && workflowStatus == 'REVISION_REQUESTED');
+  bool get canEdit => status == 'DRAFT' || status == 'OPEN' || status == 'MATCH_FOUND';
   bool get canSubmit => status == 'DRAFT' && deadline.isAfter(DateTime.now());
-  bool get canStart => status == 'OPEN' && deadline.isAfter(DateTime.now());
+  bool get canStart => (status == 'OPEN' || status == 'MATCH_FOUND') && deadline.isAfter(DateTime.now());
   bool get canCancel => status == 'DRAFT' || status == 'OPEN';
   factory BuyerRequirement.fromJson(Map<String, dynamic> json) =>
       BuyerRequirement(

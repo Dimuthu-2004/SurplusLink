@@ -266,16 +266,14 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
           ..._selectedPhotos.map((photo) => photo.uploadedUrl!),
         ],
       );
-      if (widget.isEditing) {
-        await widget.gateway.update(widget.listingId!, draft);
-      } else {
-        await widget.gateway.create(draft);
-      }
+      final saved = widget.isEditing
+          ? await widget.gateway.update(widget.listingId!, draft)
+          : await widget.gateway.create(draft);
       if (mounted) {
-        if (context.canPop()) {
+        if (widget.isEditing && context.canPop()) {
           context.pop(true);
         } else {
-          context.go('/materials');
+          context.go('/materials/${saved.id}');
         }
       }
     } on ApiException catch (error) {
@@ -543,7 +541,7 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                           )
                         : const Icon(Icons.save),
                     label: Text(
-                      widget.isEditing ? 'Save changes' : 'Create material',
+                      widget.isEditing ? 'Save draft changes' : 'Save draft',
                     ),
                   ),
                 ],

@@ -67,7 +67,14 @@ public sealed record MatchResponse(
     DateTime? RequiredBy = null,
     decimal? AvailableQuantity = null,
     decimal? MaximumBudget = null,
-    string? RequirementStatus = null
+    string? RequirementStatus = null,
+    string? SellerName = null,
+    string? SellerBusinessName = null,
+    string? Condition = null,
+    decimal? Latitude = null,
+    decimal? Longitude = null,
+    string? SellerAddress = null,
+    bool AiRecommended = false
 );
 
 public sealed record MatchPage(

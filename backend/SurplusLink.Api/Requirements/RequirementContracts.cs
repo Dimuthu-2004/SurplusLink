@@ -54,6 +54,7 @@ public sealed record RequirementResponse(
 
 public sealed record RequirementPage(IReadOnlyList<RequirementResponse> Items, int Total, int Page, int PageSize);
 public sealed record StartMatchingResponse(RequirementResponse Requirement, Guid WorkflowId);
+public sealed record SelectMatchRequest(Guid MatchId);
 public sealed class RequirementException(int statusCode, string message) : Exception(message)
 {
     public int StatusCode { get; } = statusCode;

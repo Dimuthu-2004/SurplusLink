@@ -168,20 +168,22 @@ public sealed class MaterialInventoryService(SurplusLinkDbContext dbContext) : I
     public async Task DeleteListingAsync(Guid sellerId, Guid listingId, CancellationToken cancellationToken)
     {
         var listing = await GetOwnedListingAsync(sellerId, listingId, cancellationToken);
-        if (listing.Status != ListingStatus.DRAFT)
-            throw new MaterialOperationException(MaterialOperationError.Conflict, "Only draft listings can be deleted.");
-        var hasDependents = await dbContext.Reservations.AnyAsync(item => item.ListingId == listing.Id, cancellationToken)
-            || await dbContext.Matches.AnyAsync(item => item.ListingId == listing.Id, cancellationToken);
-        if (hasDependents)
-        {
-            throw new MaterialOperationException(
-                MaterialOperationError.Conflict,
-                "A listing with reservations or matches cannot be deleted.");
-        }
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await dbContext.Database.ExecuteSqlInterpolatedAsync($"SELECT 1 FROM \"Listings\" WHERE \"Id\" = {listingId} FOR UPDATE", cancellationToken);
+        await dbContext.Entry(listing).ReloadAsync(cancellationToken);
+        var protectedStock = await dbContext.Reservations.AnyAsync(item => item.ListingId == listing.Id &&
+                item.Status != ReservationStatus.RELEASED && item.Status != ReservationStatus.CANCELLED, cancellationToken)
+            || await dbContext.Transactions.AnyAsync(item => item.Offer.MaterialMatch.ListingId == listing.Id &&
+                (item.Status == TransactionStatus.APPROVED || item.Status == TransactionStatus.HANDED_OVER || item.Status == TransactionStatus.COMPLETED), cancellationToken);
+        if (protectedStock)
+            throw new MaterialOperationException(MaterialOperationError.Conflict, "Approved, reserved, or completed stock cannot be deleted.");
 
-        dbContext.Listings.Remove(listing);
+        // Keep candidate/audit references durable while making the material unavailable
+        // everywhere. This is a seller-visible deletion, not a destructive cascade.
+        listing.Status = ListingStatus.CLOSED;
         AddAudit(sellerId, listing.Id, "LISTING_DELETED");
         await dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
     }
 
     public async Task<MaterialListingResponse> PublishListingAsync(
