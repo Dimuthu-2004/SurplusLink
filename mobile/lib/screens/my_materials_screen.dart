@@ -8,6 +8,7 @@ import 'package:mobile/core/api_exception.dart';
 import 'package:mobile/materials/material_inventory_gateway.dart';
 import 'package:mobile/materials/material_models.dart';
 import 'package:mobile/routing/app_router.dart';
+import 'package:mobile/widgets/role_navigation.dart';
 
 class MyMaterialsScreen extends StatefulWidget {
   const MyMaterialsScreen({
@@ -161,7 +162,7 @@ class _MyMaterialsScreenState extends State<MyMaterialsScreen> {
                     title: Text(listing.title),
                     subtitle: Text(
                       '${listing.categoryName} · ${listing.quantity.toStringAsFixed(2)} ${listing.unit}\n'
-                      '${listing.status} · Rs. ${listing.unitPrice.toStringAsFixed(2)}',
+                      '${listing.status} · LKR ${listing.unitPrice.toStringAsFixed(2)}',
                     ),
                     isThreeLine: true,
                     trailing: const Icon(Icons.chevron_right),
@@ -198,6 +199,7 @@ class _MyMaterialsScreenState extends State<MyMaterialsScreen> {
           ],
         ),
       ),
+      bottomNavigationBar: RoleNavigation(user: widget.user, current: '/materials'),
     );
   }
 }

@@ -1,27 +1,27 @@
 import 'package:flutter/material.dart';
 
-/// Shared Slate + Amber presentation system used by every Flutter screen.
+/// Shared navy + orange presentation system used by every Flutter screen.
 abstract final class SurplusLinkTheme {
-  static const background = Color(0xFFF1F5F9);
+  static const background = Color(0xFFF4F7FB);
   static const surface = Color(0xFFFFFFFF);
   static const surfaceSoft = Color(0xFFF8FAFC);
-  static const slate900 = Color(0xFF0F172A);
+  static const slate900 = Color(0xFF0B1F3A);
   static const slate800 = Color(0xFF1E293B);
   static const slate700 = Color(0xFF334155);
   static const slate600 = Color(0xFF475569);
   static const slate300 = Color(0xFFCBD5E1);
   static const slate200 = Color(0xFFE2E8F0);
-  static const amber = Color(0xFFF97316);
-  static const amberDark = Color(0xFFC2410C);
+  static const amber = Color(0xFFF47B20);
+  static const amberDark = Color(0xFFD65F0C);
   static const amberSoft = Color(0xFFFFF0E4);
 
   static ThemeData get light {
     final scheme = ColorScheme.fromSeed(
-      seedColor: amber,
+      seedColor: slate900,
       brightness: Brightness.light,
-      primary: amber,
+      primary: slate900,
       onPrimary: Colors.white,
-      secondary: slate800,
+      secondary: amber,
       onSecondary: Colors.white,
       surface: surface,
       onSurface: slate800,
@@ -71,7 +71,7 @@ abstract final class SurplusLinkTheme {
         enabledBorder: outline,
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.all(Radius.circular(12)),
-          borderSide: BorderSide(color: amber, width: 2),
+          borderSide: BorderSide(color: slate900, width: 2),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.all(Radius.circular(12)),
@@ -84,7 +84,7 @@ abstract final class SurplusLinkTheme {
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          backgroundColor: amber,
+          backgroundColor: slate900,
           foregroundColor: Colors.white,
           minimumSize: const Size(48, 48),
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),

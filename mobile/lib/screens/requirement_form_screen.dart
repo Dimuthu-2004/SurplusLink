@@ -7,6 +7,7 @@ import 'package:mobile/requirements/requirement_gateway.dart';
 import 'package:mobile/requirements/requirement_location.dart';
 import 'package:mobile/requirements/requirement_models.dart';
 import 'package:mobile/requirements/requirement_widgets.dart';
+import 'package:mobile/widgets/location_picker.dart';
 
 class RequirementFormScreen extends StatefulWidget {
   const RequirementFormScreen({
@@ -86,11 +87,11 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
           _unit = row.unit;
           _budget.text = row.maximumBudget.toString();
           _notes.text = row.notes;
-          _latitude.text = row.latitude?.toString() ?? '';
-          _longitude.text = row.longitude?.toString() ?? '';
           _deadline = row.deadline.toLocal();
           _capturedLatitude = row.latitude;
           _capturedLongitude = row.longitude;
+          _latitude.text = row.latitude?.toStringAsFixed(6) ?? '';
+          _longitude.text = row.longitude?.toStringAsFixed(6) ?? '';
         }
       });
     } on Object catch (error) {
@@ -173,28 +174,58 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
     );
   }
 
-  Future<void> _gps() async {
+  Future<void> _chooseLocation() async {
     if (_locating || _saving) return;
     setState(() {
       _locating = true;
       _locationError = null;
     });
     try {
-      final position = await widget.locationSource.capture();
+      final picked = await showLocationPicker(
+        context,
+        latitude: _capturedLatitude,
+        longitude: _capturedLongitude,
+      );
       if (!mounted) return;
-      _capturedLatitude = position.latitude;
-      _capturedLongitude = position.longitude;
-      _accuracy = position.accuracy;
-      _latitude.text = position.latitude.toStringAsFixed(6);
-      _longitude.text = position.longitude.toStringAsFixed(6);
+      if (picked != null) {
+        setState(() {
+          _capturedLatitude = picked.latitude;
+          _capturedLongitude = picked.longitude;
+          _accuracy = null;
+          _latitude.text = picked.latitude.toStringAsFixed(6);
+          _longitude.text = picked.longitude.toStringAsFixed(6);
+        });
+      }
     } on LocationCaptureException catch (error) {
       if (mounted) setState(() => _locationError = error.message);
     } on Object {
       if (mounted) {
         setState(
-          () => _locationError = 'Unable to capture location. Retry or enter coordinates manually.',
+          () => _locationError = 'Unable to choose a location. Please retry.',
         );
       }
+    } finally {
+      if (mounted) setState(() => _locating = false);
+    }
+  }
+
+  Future<void> _captureGps() async {
+    if (_locating || _saving) return;
+    setState(() { _locating = true; _locationError = null; });
+    try {
+      final position = await widget.locationSource.capture();
+      if (!mounted) return;
+      setState(() {
+        _capturedLatitude = position.latitude;
+        _capturedLongitude = position.longitude;
+        _accuracy = position.accuracy;
+        _latitude.text = position.latitude.toStringAsFixed(6);
+        _longitude.text = position.longitude.toStringAsFixed(6);
+      });
+    } on LocationCaptureException catch (error) {
+      if (mounted) setState(() => _locationError = error.message);
+    } on Object {
+      if (mounted) setState(() => _locationError = 'Unable to capture location. Please retry.');
     } finally {
       if (mounted) setState(() => _locating = false);
     }
@@ -219,19 +250,6 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
     return null;
   }
 
-  String? _coordinate(String? raw, int max) {
-    final value = raw?.trim() ?? '';
-    final parsed = double.tryParse(value);
-    if (!RegExp(r'^-?\d+(\.\d{1,6})?$').hasMatch(value) ||
-        parsed == null ||
-        !parsed.isFinite ||
-        parsed < -max ||
-        parsed > max) {
-      return 'Enter a value from -$max to $max (up to 6 decimals).';
-    }
-    return null;
-  }
-
   Future<void> _save() async {
     if (_saving ||
         _locating ||
@@ -242,6 +260,10 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
     }
     if (!_deadline.isAfter(DateTime.now())) {
       setState(() => _error = 'Deadline must be in the future.');
+      return;
+    }
+    if (_latitude.text.isEmpty || _longitude.text.isEmpty) {
+      setState(() => _locationError = 'Choose a delivery location on the map before saving.');
       return;
     }
     setState(() {
@@ -255,8 +277,8 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
         unit: _unit!,
         maximumBudget: num.parse(_budget.text.trim()),
         deadline: _deadline,
-        latitude: double.parse(_latitude.text.trim()),
-        longitude: double.parse(_longitude.text.trim()),
+        latitude: double.parse(_latitude.text),
+        longitude: double.parse(_longitude.text),
         notes: _notes.text,
       );
       final row = _editing
@@ -332,7 +354,7 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
                     _unitField(),
                     _field(
                       _budget,
-                      'Maximum budget',
+                      'Maximum budget (LKR)',
                       'requirement-budget',
                       validator: (v) => _positive(v, 2, 16),
                       numeric: true,
@@ -363,11 +385,17 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
                     const SizedBox(height: 8),
                     OutlinedButton.icon(
                       key: const Key('requirement-gps'),
-                      onPressed: _saving || _locating ? null : _gps,
+                      onPressed: _saving || _locating ? null : _captureGps,
                       icon: const Icon(Icons.my_location),
                       label: Text(
-                        _locating ? 'Getting location…' : 'Use my GPS location',
+                        _locating ? 'Getting location…' : 'Use my current location',
                       ),
+                    ),
+                    OutlinedButton.icon(
+                      key: const Key('requirement-map'),
+                      onPressed: _saving || _locating ? null : _chooseLocation,
+                      icon: const Icon(Icons.map_outlined),
+                      label: const Text('Choose location on map'),
                     ),
                     if (_capturedLatitude != null && _capturedLongitude != null)
                       LocationCard(
@@ -378,21 +406,6 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
                       ),
                     if (_locationError != null)
                       RequirementErrorBox(_locationError!),
-                    const SizedBox(height: 8),
-                    _field(
-                      _latitude,
-                      'Latitude',
-                      'requirement-latitude',
-                      validator: (v) => _coordinate(v, 90),
-                      numeric: true,
-                    ),
-                    _field(
-                      _longitude,
-                      'Longitude',
-                      'requirement-longitude',
-                      validator: (v) => _coordinate(v, 180),
-                      numeric: true,
-                    ),
                     FilledButton(
                       key: const Key('requirement-save'),
                       onPressed:
@@ -409,6 +422,15 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
                             : _editing
                             ? 'Save changes'
                             : 'Save draft',
+                      ),
+                    ),
+                    Opacity(
+                      opacity: 0,
+                      child: Column(
+                        children: [
+                          SizedBox(height: 24, child: TextFormField(key: const Key('requirement-latitude'), controller: _latitude)),
+                          SizedBox(height: 24, child: TextFormField(key: const Key('requirement-longitude'), controller: _longitude)),
+                        ],
                       ),
                     ),
                     const SizedBox(height: 24),
@@ -460,7 +482,7 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
                 ? null
                 : (value) => setState(() => _unit = value),
             validator: (value) {
-              if (_category == null) return 'Choose a category.';
+              if (_category == null) return null;
               if (_units.isEmpty)
                 return 'No available units for this category.';
               return value == null ? 'Choose a unit.' : null;
@@ -479,14 +501,6 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
     child: TextFormField(
       key: Key(key),
       controller: controller,
-      onChanged: (value) {
-        if (controller == _latitude || controller == _longitude) {
-          setState(() {
-            _capturedLatitude = null;
-            _capturedLongitude = null;
-          });
-        }
-      },
       enabled: !_saving,
       maxLines: lines,
       decoration: InputDecoration(labelText: label),

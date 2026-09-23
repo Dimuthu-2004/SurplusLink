@@ -3,6 +3,7 @@ import 'package:mobile/core/api_exception.dart';
 import 'package:mobile/auth/auth_models.dart';
 import 'package:mobile/offers/offer_gateway.dart';
 import 'package:mobile/offers/offer_models.dart';
+import 'package:mobile/widgets/role_navigation.dart';
 
 class MyOffersScreen extends StatefulWidget {
   const MyOffersScreen({required this.gateway, required this.user, super.key});
@@ -144,9 +145,9 @@ class _MyOffersScreenState extends State<MyOffersScreen> {
           ...offerRows.map(
             (offer) => Card(
               child: ListTile(
-                title: Text('Offer ${offer.id.substring(0, 8)}'),
+                title: Text('${offerStatusLabel(offer.status)} offer'),
                 subtitle: Text(
-                  '${offer.buyerId == widget.user.id ? 'Buyer' : 'Seller'} participation · ${offerStatusLabel(offer.status)}\nValue ${offer.totalValue}',
+                  '${offer.buyerId == widget.user.id ? 'Buyer' : 'Seller'} participation\nValue LKR ${offer.totalValue.toStringAsFixed(2)}',
                 ),
                 isThreeLine: true,
                 trailing: Text('${offer.quantity}'),
@@ -228,6 +229,7 @@ class _MyOffersScreenState extends State<MyOffersScreen> {
             }),
         ],
       ),
+      bottomNavigationBar: RoleNavigation(user: widget.user, current: '/offers'),
     );
   }
 
@@ -414,8 +416,15 @@ class _OfferTransactionDetailsState extends State<OfferTransactionDetails> {
             'No transaction yet. Contact details are hidden until approval.',
           ),
         if (row != null) ...[
-          Text('Transaction: ${offerStatusLabel(row.status)}'),
-          Text('Reserved quantity: ${row.reservedQuantity}'),
+          _TransactionTimeline(status: row.status),
+          _DetailCard(
+            title: 'Transaction summary',
+            children: [
+              _DetailLine(label: 'Status', value: offerStatusLabel(row.status)),
+              _DetailLine(label: 'Reserved quantity', value: row.reservedQuantity.toStringAsFixed(2)),
+              _DetailLine(label: 'Total value', value: 'LKR ${row.totalValue.toStringAsFixed(2)}'),
+            ],
+          ),
           if (!row.contactsVisible)
             const Text('Contact details are hidden until approval.'),
           if (row.contactsVisible && contact != null) ...[
@@ -456,6 +465,51 @@ class _OfferTransactionDetailsState extends State<OfferTransactionDetails> {
       ],
     );
   }
+}
+
+class _TransactionTimeline extends StatelessWidget {
+  const _TransactionTimeline({required this.status});
+  final String status;
+
+  @override
+  Widget build(BuildContext context) {
+    const stages = [('APPROVED', 'Approved', Icons.verified_outlined), ('HANDED_OVER', 'Handed Over', Icons.local_shipping_outlined), ('COMPLETED', 'Completed', Icons.check_circle_outline)];
+    final active = stages.indexWhere((stage) => stage.$1 == status);
+    return Card(
+      color: const Color(0xFFF8FAFC),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('Progress', style: TextStyle(fontWeight: FontWeight.w800)),
+          const SizedBox(height: 16),
+          for (var index = 0; index < stages.length; index++) ...[
+            Row(children: [
+              Icon(stages[index].$3, color: index <= active ? const Color(0xFFF47B20) : const Color(0xFFCBD5E1)),
+              const SizedBox(width: 12),
+              Text(stages[index].$2, style: TextStyle(fontWeight: index == active ? FontWeight.w800 : FontWeight.w500)),
+              if (index == active) ...[const SizedBox(width: 8), const Chip(label: Text('Current'))],
+            ]),
+            if (index < stages.length - 1) const Padding(padding: EdgeInsets.only(left: 11), child: SizedBox(height: 20, child: VerticalDivider(width: 1))),
+          ],
+        ]),
+      ),
+    );
+  }
+}
+
+class _DetailCard extends StatelessWidget {
+  const _DetailCard({required this.title, required this.children});
+  final String title;
+  final List<Widget> children;
+  @override
+  Widget build(BuildContext context) => Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontWeight: FontWeight.w800)), const SizedBox(height: 12), ...children])));
+}
+
+class _DetailLine extends StatelessWidget {
+  const _DetailLine({required this.label, required this.value});
+  final String label, value;
+  @override
+  Widget build(BuildContext context) => Padding(padding: const EdgeInsets.only(bottom: 8), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(label), Text(value, style: const TextStyle(fontWeight: FontWeight.w700))]));
 }
 
 class TransactionHistoryScreen extends StatefulWidget {
