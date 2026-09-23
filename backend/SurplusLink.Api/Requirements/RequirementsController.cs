@@ -76,6 +76,16 @@ public sealed class RequirementsController(RequirementService service) : Control
     public Task<IActionResult> StartMatching(Guid id, CancellationToken ct) =>
         Handle(async actor => Ok(await service.StartMatchingAsync(id, actor, ct)));
 
+    [HttpPost("{id:guid}/select-match")]
+    [Authorize(Roles = "BUYER")]
+    public Task<IActionResult> SelectMatch(Guid id, SelectMatchRequest input, CancellationToken ct) =>
+        Handle(async actor => Ok(await service.SelectMatchAsync(id, actor, input.MatchId, ct)));
+
+    [HttpPost("{id:guid}/cancel-pending-approval")]
+    [Authorize(Roles = "BUYER")]
+    public Task<IActionResult> CancelPendingApproval(Guid id, CancellationToken ct) =>
+        Handle(async actor => Ok(await service.CancelPendingApprovalAsync(id, actor, ct)));
+
     [HttpPost("{id:guid}/cancel")]
     [Authorize(Roles = "BUYER")]
     [ProducesResponseType(typeof(RequirementResponse), 200)]

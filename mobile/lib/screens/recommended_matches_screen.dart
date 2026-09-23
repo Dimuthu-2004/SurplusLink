@@ -21,7 +21,7 @@ class RecommendedMatchesScreen extends StatefulWidget {
 
 class _RecommendedMatchesScreenState extends State<RecommendedMatchesScreen> {
   MatchPage<RecommendedMatch>? _data;
-  bool _loading = true;
+  bool _loading = true, _selecting = false;
   String? _error, _status;
   String _eligibility = 'all', _sort = 'score', _direction = 'desc';
   int _page = 1, _request = 0;
@@ -60,6 +60,32 @@ class _RecommendedMatchesScreenState extends State<RecommendedMatchesScreen> {
     }
   }
 
+  Future<void> _selectMatch(RecommendedMatch match) async {
+    if (_selecting) return;
+    setState(() { _selecting = true; _error = null; });
+    try {
+      await widget.gateway.select(widget.requirementId, match.id);
+      if (mounted) context.go('/requirements/${widget.requirementId}');
+    } on Object catch (error) {
+      if (mounted) setState(() => _error = matchError(error));
+    } finally {
+      if (mounted) setState(() => _selecting = false);
+    }
+  }
+
+  Future<void> _changeSelection() async {
+    if (_selecting) return;
+    setState(() { _selecting = true; _error = null; });
+    try {
+      await widget.gateway.cancelPendingApproval(widget.requirementId);
+      await _load(page: 1);
+    } on Object catch (error) {
+      if (mounted) setState(() => _error = matchError(error));
+    } finally {
+      if (mounted) setState(() => _selecting = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
@@ -74,9 +100,7 @@ class _RecommendedMatchesScreenState extends State<RecommendedMatchesScreen> {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
         children: [
-          const Text(
-            'View recommendations and routing estimates. Approval and reservations are managed through the workflow.',
-          ),
+          const Text('AI highlights a recommendation, but only your one selected valid match is sent for manager approval. No material is reserved by this choice.'),
           const SizedBox(height: 12),
           _select('Eligibility', 'match-eligibility', _eligibility, const {
             'all': 'All matches',
@@ -108,6 +132,15 @@ class _RecommendedMatchesScreenState extends State<RecommendedMatchesScreen> {
             MatchErrorBox(_error!, onRetry: () => _load())
           else if (_data case final data?) ...[
             Text('${data.total} matches found'),
+            if (data.items.any((match) => match.requirementStatus == 'PENDING_APPROVAL'))
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: OutlinedButton.icon(
+                  onPressed: _selecting ? null : _changeSelection,
+                  icon: const Icon(Icons.swap_horiz),
+                  label: const Text('Change selection / refresh matches'),
+                ),
+              ),
             if (data.items.isEmpty)
               const Padding(
                 padding: EdgeInsets.all(24),
@@ -117,18 +150,28 @@ class _RecommendedMatchesScreenState extends State<RecommendedMatchesScreen> {
               ),
             for (final match in data.items)
               Card(
+                color: match.aiRecommended ? Theme.of(context).colorScheme.secondaryContainer : null,
                 child: ListTile(
                   key: Key('match-${match.id}'),
                   title: Text(
                     'Score ${(match.score * 100).toStringAsFixed(1)}%',
                   ),
                   subtitle: Text(
+                    '${match.aiRecommended ? 'AI recommendation\n' : ''}'
+                    'Material: ${match.materialTitle ?? 'Not recorded'}\n'
+                    'Seller/business: ${match.sellerBusinessName ?? match.sellerName ?? match.sellerId ?? 'Not recorded'}\n'
+                    'Condition: ${match.condition ?? 'Not recorded'}\n'
+                    'Available: ${formatQuantity(match.availableQuantity)} ${formatUnit(match.unit)}\n'
+                    'Unit price: ${formatCurrency(match.unitPrice)} • Material value: ${formatCurrency(match.estimatedMaterialCost)}\n'
+                    'Location/address: ${match.sellerAddress ?? (match.latitude != null && match.longitude != null ? '${match.latitude!.toStringAsFixed(5)}, ${match.longitude!.toStringAsFixed(5)}' : 'Not recorded')}\n'
                     '${readableMatchStatus(match.status)}\n'
                     '${match.quantity == null ? '' : '${formatQuantity(match.quantity)} ${formatUnit(match.unit)} ? '}'
                     '${routingSummary(match)}\n'
-                    'Transport estimate: ${formatCurrency(match.estimatedTransportCost)}',
+                    'Transport estimate: ${formatCurrency(match.estimatedTransportCost)} • Total cost: ${formatCurrency((match.estimatedMaterialCost ?? 0) + (match.estimatedTransportCost ?? 0))}',
                   ),
-                  trailing: const Icon(Icons.chevron_right),
+                  trailing: match.requirementStatus == 'MATCH_FOUND' && !match.isRejected && match.status == 'ROUTED'
+                      ? FilledButton(onPressed: _selecting ? null : () => _selectMatch(match), child: const Text('Select'))
+                      : const Icon(Icons.chevron_right),
                   onTap: () => context.push(
                     '/requirements/${widget.requirementId}/matches/${match.id}',
                   ),

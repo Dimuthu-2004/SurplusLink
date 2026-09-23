@@ -57,7 +57,15 @@ public sealed partial class MatchService(SurplusLinkDbContext db)
                 x.MaterialRequest.Deadline,
                 x.Listing.Quantity - x.Listing.ReservedQuantity,
                 x.MaterialRequest.MaximumBudget,
-                x.MaterialRequest.Status.ToString()))
+                x.MaterialRequest.Status.ToString(),
+                x.Listing.Seller.FullName,
+                x.Listing.Seller.BusinessName,
+                x.Listing.Condition.ToString(),
+                x.Listing.Latitude,
+                x.Listing.Longitude,
+                x.Listing.Seller.Address,
+                db.AgentWorkflows.Any(w => w.MaterialRequestId == x.MaterialRequestId &&
+                    w.MaterialMatchId == x.Id && w.Status == AgentWorkflowStatus.COMPLETED)))
             .ToListAsync(ct);
 
         return new MatchPage(

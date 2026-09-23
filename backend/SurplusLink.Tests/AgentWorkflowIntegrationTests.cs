@@ -124,14 +124,13 @@ public sealed class AgentWorkflowIntegrationTests(RequirementsDatabase fixture) 
     {
         using var app = fixture.App();
         using var manager = fixture.Client(app, fixture.Manager, "MANAGER");
-        foreach (var defect in new[] { "budget", "delivery", "route", "travelTime" })
+        foreach (var defect in new[] { "budget", "route", "travelTime" })
         {
             var workflow = await SeedWorkflow(AgentWorkflowStatus.PENDING_APPROVAL);
             using (var db = fixture.Context())
             {
                 var match = await db.Matches.Include(x => x.Listing).SingleAsync(x => x.Id == workflow.MaterialMatchId);
                 if (defect == "budget") match.EstimatedTransportCost = 990;
-                if (defect == "delivery") match.Listing.AvailableUntil = DateTime.UtcNow.AddDays(1);
                 if (defect == "route") match.DurationMinutes = null;
                 if (defect == "travelTime") match.DurationMinutes = 10000;
                 await db.SaveChangesAsync();

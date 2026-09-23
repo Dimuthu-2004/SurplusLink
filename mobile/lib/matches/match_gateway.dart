@@ -6,5 +6,7 @@ abstract interface class MatchGateway {
     MatchQuery query,
   );
   Future<RecommendedMatch> get(String requirementId, String matchId);
+  Future<void> select(String requirementId, String matchId);
+  Future<void> cancelPendingApproval(String requirementId);
   Future<MatchPage<MatchHistoryEntry>> history(String matchId, {int page = 1});
 }

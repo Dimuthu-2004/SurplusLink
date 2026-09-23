@@ -146,9 +146,9 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
         var listings = await db.Listings.AsNoTracking().Where(x => x.CategoryId == request.CategoryId &&
             x.SellerId != request.BuyerId)
             .OrderByDescending(x => x.Status == ListingStatus.ACTIVE && x.AvailableUntil > DateTime.UtcNow &&
-                x.AvailableUntil.Date >= request.Deadline.Date && x.Quantity - x.ReservedQuantity >= request.RequiredQuantity &&
+                x.Quantity - x.ReservedQuantity >= request.RequiredQuantity &&
                 x.Unit.ToLower() == request.Unit.ToLower() && x.UnitPrice * request.RequiredQuantity <= request.MaximumBudget)
-            .ThenBy(x => x.UnitPrice).ThenBy(x => x.Id).Take(settings.Value.MaxCandidates).ToListAsync(ct);
+            .ThenBy(x => x.UnitPrice).ThenBy(x => x.Id).ToListAsync(ct);
         var existing = await db.Matches.AsNoTracking().Where(x => x.MaterialRequestId == request.Id)
             .ToDictionaryAsync(x => x.ListingId, x => x.Id, ct);
         var rows = new List<WorkflowListingSnapshot>();
@@ -174,7 +174,7 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
 
     internal static bool StillEligible(BuyerRequest request, Listing listing, decimal transportCost) =>
         request.Status == BuyerRequestStatus.MATCHING && request.Deadline > DateTime.UtcNow &&
-        listing.Status == ListingStatus.ACTIVE && DeliveryAvailabilityPolicy.IsAvailableThrough(listing.AvailableUntil, request.Deadline) &&
+        listing.Status == ListingStatus.ACTIVE && listing.AvailableUntil > DateTime.UtcNow &&
         listing.SellerId != request.BuyerId && listing.CategoryId == request.CategoryId &&
         string.Equals(listing.Unit, request.Unit, StringComparison.OrdinalIgnoreCase) &&
         listing.Quantity - listing.ReservedQuantity >= request.RequiredQuantity && transportCost >= 0 &&
@@ -243,7 +243,6 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
         {
             var reason = row.Status != "ACTIVE" ? "LISTING_NOT_ACTIVE"
                 : row.AvailableUntil <= DateTime.UtcNow ? "LISTING_EXPIRED"
-                : !DeliveryAvailabilityPolicy.IsAvailableThrough(row.AvailableUntil, request.Deadline) ? "LISTING_EXPIRES_BEFORE_DELIVERY"
                 : !string.Equals(row.Unit, request.Unit, StringComparison.OrdinalIgnoreCase) ? "UNIT_MISMATCH"
                 : row.AvailableQuantity < request.RequiredQuantity ? "INSUFFICIENT_QUANTITY"
                 : row.UnitPrice * request.RequiredQuantity > request.MaximumBudget ? "BUDGET_EXCEEDED"
@@ -279,14 +278,23 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
             db.AuditLogs.Add(new AuditLog { Id = Guid.NewGuid(), EntityType = nameof(MaterialMatch), EntityId = candidate.Id,
                 Action = reason is null ? "RANK" : "REJECT" });
         }
-        workflow.Status = Enum.Parse<AgentWorkflowStatus>(result.Status);
-        workflow.CurrentStage = result.Status;
+        var awaitingBuyerSelection = result.Recommendation is not null;
+        workflow.Status = awaitingBuyerSelection
+            ? AgentWorkflowStatus.COMPLETED
+            : Enum.Parse<AgentWorkflowStatus>(result.Status);
+        workflow.CurrentStage = awaitingBuyerSelection
+            ? "AWAITING_BUYER_SELECTION"
+            : result.Status;
         workflow.CompletedAtUtc = DateTime.UtcNow;
         workflow.OutputJson = JsonSerializer.Serialize(result, AgentWorkflowClient.Json);
         workflow.ValidationJson = JsonSerializer.Serialize(result.Validation, AgentWorkflowClient.Json);
         workflow.ErrorJson = result.ErrorCode is null ? null : JsonSerializer.Serialize(new { code = result.ErrorCode });
         workflow.RetryCount = retries + result.Steps.Sum(x => x.RetryCount + x.ToolCalls.Sum(t => t.RetryCount));
-        if (result.Recommendation is { } rec)
+        if (result.Recommendation is { } recommended)
+            workflow.MaterialMatchId = recommended.MatchId;
+        // A workflow recommendation is informative only. It must never create an
+        // offer, transaction, or manager queue entry until the buyer confirms it.
+        if (false && result.Recommendation is { } rec)
         {
             var match = persisted.GetValueOrDefault(rec.MatchId) ?? existingMatch;
             if (match is null)
@@ -314,7 +322,9 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
             db.AuditLogs.Add(new AuditLog { Id = Guid.NewGuid(), EntityType = nameof(Transaction),
                 EntityId = transaction.Id, Action = "PENDING_APPROVAL" });
         }
-        request.Status = result.Status == "PENDING_APPROVAL" ? BuyerRequestStatus.PENDING_APPROVAL : BuyerRequestStatus.OPEN;
+        request.Status = awaitingBuyerSelection
+            ? BuyerRequestStatus.MATCH_FOUND
+            : BuyerRequestStatus.OPEN;
         foreach (var trace in result.Steps)
         {
             var step = new AgentStep { Id = Guid.NewGuid(), Sequence = trace.Sequence, Stage = trace.Stage,

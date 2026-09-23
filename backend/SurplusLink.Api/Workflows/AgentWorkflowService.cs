@@ -138,7 +138,7 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db)
             if (workflow.MaterialRequestId != match.MaterialRequestId || match.Status != MatchStatus.ROUTED ||
                 match.Distance is null or < 0 || match.DurationMinutes is null or < 0 ||
                 match.EstimatedTransportCost is null or < 0 ||
-                match.Listing.AvailableUntil < match.MaterialRequest.Deadline || match.MaterialRequest.Deadline <= DateTime.UtcNow ||
+                match.Listing.AvailableUntil <= DateTime.UtcNow || match.MaterialRequest.Deadline <= DateTime.UtcNow ||
                 match.DurationMinutes > (decimal)(match.MaterialRequest.Deadline - DateTime.UtcNow).TotalMinutes ||
                 !string.Equals(match.Listing.Unit, match.MaterialRequest.Unit, StringComparison.OrdinalIgnoreCase) ||
                 match.Listing.UnitPrice * match.MaterialRequest.RequiredQuantity + match.EstimatedTransportCost > match.MaterialRequest.MaximumBudget)

@@ -17,7 +17,7 @@ public sealed class PersistentRequirementWorkflowStarter(SurplusLinkDbContext db
         var existing = await db.AgentWorkflows.FirstOrDefaultAsync(
             x => x.MaterialRequestId == requirementId &&
                  (x.Status == AgentWorkflowStatus.RUNNING || x.Status == AgentWorkflowStatus.PENDING_APPROVAL ||
-                  x.Status == AgentWorkflowStatus.APPROVED || x.Status == AgentWorkflowStatus.COMPLETED),
+                  x.Status == AgentWorkflowStatus.APPROVED),
             cancellationToken);
         if (existing is not null) return existing.Id;
 
