@@ -3,7 +3,7 @@ import { apiClient, normalizeApiError } from '../../api/apiClient';
 
 export const offerStatuses = ['PENDING', 'ACCEPTED', 'REJECTED', 'REVISION_REQUESTED'] as const;
 export type OfferStatus = typeof offerStatuses[number];
-export const transactionStatuses = ['PENDING_APPROVAL', 'APPROVED', 'REJECTED', 'COMPLETED'] as const;
+export const transactionStatuses = ['PENDING_APPROVAL', 'APPROVED', 'HANDED_OVER', 'REJECTED', 'COMPLETED'] as const;
 export type TransactionStatus = typeof transactionStatuses[number];
 export interface Offer { id: string; materialMatchId: string; buyerId: string; sellerId: string; quantity: number; unitValue: number; totalValue: number; status: OfferStatus; createdAt: string; updatedAt: string }
 export interface Transaction { id: string; offerId: string; buyerId: string; sellerId: string; quantity: number; totalValue: number; reservedQuantity: number; status: TransactionStatus; createdAt: string; updatedAt: string; completedAt: string | null }

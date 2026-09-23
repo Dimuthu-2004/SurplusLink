@@ -20,7 +20,15 @@ public sealed class TransactionService(SurplusLinkDbContext db)
     public async Task<TransactionResponse> GetAsync(Guid id, Guid actor, bool manager, CancellationToken ct)
     {
         await AuthorizeHistoryAsync(id, actor, manager, ct);
-        return ToResponse(await db.Transactions.AsNoTracking().SingleAsync(x => x.Id == id, ct));
+        var row = await db.Transactions.AsNoTracking().Include(x => x.Buyer).Include(x => x.Seller).SingleAsync(x => x.Id == id, ct);
+        var response = ToResponse(row);
+        if ((row.BuyerId == actor || row.SellerId == actor) &&
+            row.Status is TransactionStatus.APPROVED or TransactionStatus.HANDED_OVER or TransactionStatus.COMPLETED)
+            response = response with {
+                BuyerContact = new(row.Buyer.FullName, row.Buyer.Email, row.Buyer.PhoneNumber),
+                SellerContact = new(row.Seller.FullName, row.Seller.Email, row.Seller.PhoneNumber)
+            };
+        return response;
     }
 
     public async Task AuthorizeHistoryAsync(Guid id, Guid actor, bool manager, CancellationToken ct)
@@ -55,7 +63,7 @@ public sealed class TransactionService(SurplusLinkDbContext db)
         var ordered = SortTransactions(query, input);
         var items = await ordered.Skip((input.Page - 1) * input.PageSize).Take(input.PageSize)
             .Select(x => new TransactionResponse(x.Id, x.OfferId, x.BuyerId, x.SellerId, x.Quantity, x.TotalValue,
-                x.ReservedQuantity, x.Status, x.CreatedAtUtc, x.UpdatedAtUtc, x.CompletedAtUtc)).ToListAsync(ct);
+                x.ReservedQuantity, x.Status, x.CreatedAtUtc, x.UpdatedAtUtc, x.CompletedAtUtc, null, null)).ToListAsync(ct);
         return (items, total);
     }
 
@@ -77,7 +85,8 @@ public sealed class TransactionService(SurplusLinkDbContext db)
         var approved = await db.Transactions.CountAsync(x => x.Status == TransactionStatus.APPROVED, ct);
         var rejected = await db.Transactions.CountAsync(x => x.Status == TransactionStatus.REJECTED, ct);
         var completed = await db.Transactions.CountAsync(x => x.Status == TransactionStatus.COMPLETED, ct);
-        var totalDecisions = approved + rejected + completed;
+        var handedOver = await db.Transactions.CountAsync(x => x.Status == TransactionStatus.HANDED_OVER, ct);
+        var totalDecisions = approved + handedOver + rejected + completed;
         return new(pending, approved, rejected,
             await db.Transactions.SumAsync(x => (decimal?)x.ReservedQuantity, ct) ?? 0,
             completed, await db.Transactions.Where(x => x.Status == TransactionStatus.COMPLETED)
@@ -104,13 +113,33 @@ public sealed class TransactionService(SurplusLinkDbContext db)
         return ToResponse(transaction);
     }
 
+    public async Task<TransactionResponse> HandoverAsync(Guid id, Guid actor, CancellationToken ct)
+    {
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        await LockTransactionAsync(id, ct);
+        var transaction = await db.Transactions.SingleOrDefaultAsync(x => x.Id == id, ct)
+            ?? throw new TransactionOperationException(404, "Transaction was not found.");
+        if (transaction.SellerId != actor) throw new TransactionOperationException(403, "Only the seller can hand over materials.");
+        if (transaction.Status != TransactionStatus.APPROVED) throw new TransactionOperationException(409, "Only approved transactions can be handed over.");
+        transaction.Status = TransactionStatus.HANDED_OVER;
+        db.AuditLogs.Add(Log(id, actor, "TRANSACTION_HANDED_OVER"));
+        await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
+        return ToResponse(transaction);
+    }
+
+    private Task<int> LockTransactionAsync(Guid id, CancellationToken ct) =>
+        db.Database.ExecuteSqlInterpolatedAsync($"SELECT 1 FROM \"Transactions\" WHERE \"Id\" = {id} FOR UPDATE", ct);
+
     public async Task<TransactionResponse> CompleteAsync(Guid id, Guid actor, CancellationToken ct)
     {
         await using var tx = await db.Database.BeginTransactionAsync(ct);
+        await LockTransactionAsync(id, ct);
         var transaction = await db.Transactions.Include(x => x.Offer).ThenInclude(x => x.MaterialMatch)
             .ThenInclude(x => x.MaterialRequest).SingleOrDefaultAsync(x => x.Id == id, ct)
             ?? throw new TransactionOperationException(404, "Transaction was not found.");
-        if (transaction.Status != TransactionStatus.APPROVED) throw new TransactionOperationException(409, "Only approved transactions can be completed.");
+        if (transaction.BuyerId != actor) throw new TransactionOperationException(403, "Only the buyer can confirm receipt.");
+        if (transaction.Status != TransactionStatus.HANDED_OVER) throw new TransactionOperationException(409, "Materials must be handed over before receipt can be confirmed.");
         transaction.Status = TransactionStatus.COMPLETED;
         transaction.CompletedAtUtc = DateTime.UtcNow;
         transaction.Offer.MaterialMatch.MaterialRequest.Status = BuyerRequestStatus.COMPLETED;

@@ -274,7 +274,7 @@ public sealed partial class MatchService(SurplusLinkDbContext db)
             if (await db.Offers.AnyAsync(x => x.MaterialMatchId == existing.Id && x.Status == OfferStatus.ACCEPTED, ct) ||
                 await db.Transactions.AnyAsync(x => x.Offer.MaterialMatchId == existing.Id &&
                     (x.Status == TransactionStatus.PENDING_APPROVAL || x.Status == TransactionStatus.APPROVED ||
-                     x.Status == TransactionStatus.COMPLETED), ct))
+                     x.Status == TransactionStatus.HANDED_OVER || x.Status == TransactionStatus.COMPLETED), ct))
                 throw new MatchException(409, "A business outcome protects this candidate.");
 
             // No fabricated route survives a new evaluation. Ranking and routing

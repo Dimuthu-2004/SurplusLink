@@ -153,8 +153,11 @@ class _MyOffersScreenState extends State<MyOffersScreen> {
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) =>
-                        OfferDetailsScreen(offer: offer, user: widget.user),
+                    builder: (_) => OfferDetailsScreen(
+                      offer: offer,
+                      user: widget.user,
+                      gateway: widget.gateway,
+                    ),
                   ),
                 ),
               ),
@@ -208,7 +211,8 @@ class _MyOffersScreenState extends State<MyOffersScreen> {
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => TransactionHistoryScreen(
+                    builder: (_) => TransactionDetailsScreen(
+                      user: widget.user,
                       gateway: widget.gateway,
                       transactionId: transaction.id,
                     ),
@@ -250,9 +254,11 @@ class _MyOffersScreenState extends State<MyOffersScreen> {
 class OfferDetailsScreen extends StatelessWidget {
   const OfferDetailsScreen({
     required this.offer,
+    required this.gateway,
     required this.user,
     super.key,
   });
+  final OfferGateway gateway;
   final Offer offer;
   final AppUser user;
   @override
@@ -271,12 +277,185 @@ class OfferDetailsScreen extends StatelessWidget {
         Text('Quantity: ${offer.quantity}'),
         Text('Material value: LKR ${offer.totalValue.toStringAsFixed(2)}'),
         Text('Created: ${offer.createdAt.toLocal()}'),
-        const Text(
-          'Return to My Offers and refresh for the latest decision, reservation status and transaction history.',
+        OfferTransactionDetails(
+          gateway: gateway,
+          offerId: offer.id,
+          user: user,
         ),
       ],
     ),
   );
+}
+
+class TransactionDetailsScreen extends StatelessWidget {
+  const TransactionDetailsScreen({
+    required this.gateway,
+    required this.transactionId,
+    required this.user,
+    super.key,
+  });
+  final OfferGateway gateway;
+  final String transactionId;
+  final AppUser user;
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Transaction Details')),
+    body: SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: OfferTransactionDetails(
+        gateway: gateway,
+        transactionId: transactionId,
+        user: user,
+      ),
+    ),
+  );
+}
+
+class OfferTransactionDetails extends StatefulWidget {
+  const OfferTransactionDetails({
+    required this.gateway,
+    required this.user,
+    this.offerId,
+    this.transactionId,
+    super.key,
+  });
+  final OfferGateway gateway;
+  final AppUser user;
+  final String? offerId, transactionId;
+  @override
+  State<OfferTransactionDetails> createState() =>
+      _OfferTransactionDetailsState();
+}
+
+class _OfferTransactionDetailsState extends State<OfferTransactionDetails> {
+  Transaction? transaction;
+  bool busy = true;
+  String? error;
+  @override
+  void initState() {
+    super.initState();
+    load();
+  }
+
+  Future<void> load() async {
+    setState(() {
+      busy = true;
+      error = null;
+      transaction = null;
+    });
+    try {
+      var id = widget.transactionId;
+      if (id == null) {
+        final page = await widget.gateway.transactions(
+          OfferQuery(offerId: widget.offerId),
+        );
+        if (page.items.isNotEmpty) id = page.items.first.id;
+      }
+      final result = id == null ? null : await widget.gateway.transaction(id);
+      if (mounted) setState(() => transaction = result);
+    } on Object catch (failure) {
+      if (mounted) {
+        setState(
+          () => error = offerError(failure, 'Unable to load transaction.'),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> act(bool handover) async {
+    final id = transaction!.id;
+    setState(() {
+      busy = true;
+      error = null;
+    });
+    try {
+      if (handover) {
+        await widget.gateway.handover(id);
+      } else {
+        await widget.gateway.confirmReceipt(id);
+      }
+      await load();
+    } on Object catch (failure) {
+      if (mounted) {
+        setState(() {
+          transaction = null;
+          error = offerError(
+            failure,
+            'Unable to update transaction. Refresh and retry.',
+          );
+        });
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final row = transaction;
+    final contact = row?.buyerId == widget.user.id
+        ? row?.sellerContact
+        : row?.sellerId == widget.user.id
+        ? row?.buyerContact
+        : null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextButton(
+          onPressed: busy ? null : load,
+          child: const Text('Refresh transaction'),
+        ),
+        if (busy) const CircularProgressIndicator(),
+        if (error != null) Text(error!),
+        if (!busy && error == null && row == null)
+          const Text(
+            'No transaction yet. Contact details are hidden until approval.',
+          ),
+        if (row != null) ...[
+          Text('Transaction: ${offerStatusLabel(row.status)}'),
+          Text('Reserved quantity: ${row.reservedQuantity}'),
+          if (!row.contactsVisible)
+            const Text('Contact details are hidden until approval.'),
+          if (row.contactsVisible && contact != null) ...[
+            const Text('Counterparty contact'),
+            if (contact.fullName != null) Text(contact.fullName!),
+            Text(contact.email),
+            if (contact.phoneNumber != null) Text(contact.phoneNumber!),
+          ],
+          if (row.canHandover(widget.user))
+            FilledButton(
+              onPressed: busy ? null : () => act(true),
+              child: const Text('Material Handed Over'),
+            ),
+          if (row.canConfirmReceipt(widget.user)) ...[
+            const Text('Have you received the materials?'),
+            FilledButton(
+              onPressed: busy ? null : () => act(false),
+              child: const Text('Yes, Received'),
+            ),
+          ],
+          if (row.status == 'APPROVED' && row.buyerId == widget.user.id)
+            const Text('Waiting for the seller to hand over the materials.'),
+          if (row.status == 'HANDED_OVER' && row.sellerId == widget.user.id)
+            const Text('Waiting for the buyer to confirm receipt.'),
+          TextButton(
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => TransactionHistoryScreen(
+                  gateway: widget.gateway,
+                  transactionId: row.id,
+                ),
+              ),
+            ),
+            child: const Text('Transaction history'),
+          ),
+        ],
+      ],
+    );
+  }
 }
 
 class TransactionHistoryScreen extends StatefulWidget {

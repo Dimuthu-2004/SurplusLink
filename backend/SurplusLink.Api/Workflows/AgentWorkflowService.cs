@@ -178,7 +178,7 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db)
             match.MaterialRequest.Status = BuyerRequestStatus.APPROVED;
             workflow.Status = AgentWorkflowStatus.APPROVED;
             workflow.CurrentStage = "APPROVED";
-            workflow.CompletedAtUtc = DateTime.UtcNow;
+            workflow.CompletedAtUtc = null;
         }
         else
         {

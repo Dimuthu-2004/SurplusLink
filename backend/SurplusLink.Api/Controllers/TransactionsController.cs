@@ -69,8 +69,14 @@ public sealed class TransactionsController(TransactionService service) : Control
     public Task<ActionResult<TransactionResponse>> Approve(Guid id, CancellationToken ct) =>
         Execute(() => service.ApproveAsync(id, Actor(), ct));
 
+    [HttpPost("transactions/{id:guid}/handover")]
+    [Authorize(Roles = "SELLER")]
+    public Task<ActionResult<TransactionResponse>> Handover(Guid id, CancellationToken ct) =>
+        Execute(() => service.HandoverAsync(id, Actor(), ct));
+
+    [HttpPost("transactions/{id:guid}/confirm-receipt")]
     [HttpPost("transactions/{id:guid}/complete")]
-    [Authorize(Roles = "MANAGER")]
+    [Authorize(Roles = "BUYER")]
     public Task<ActionResult<TransactionResponse>> Complete(Guid id, CancellationToken ct) =>
         Execute(() => service.CompleteAsync(id, Actor(), ct));
 
