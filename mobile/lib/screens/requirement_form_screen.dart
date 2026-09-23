@@ -27,17 +27,22 @@ class RequirementFormScreen extends StatefulWidget {
 class _RequirementFormScreenState extends State<RequirementFormScreen> {
   final _form = GlobalKey<FormState>();
   final _quantity = TextEditingController();
-  final _unit = TextEditingController();
+  List<String> _units = [];
   final _budget = TextEditingController();
   final _notes = TextEditingController();
   final _latitude = TextEditingController();
   final _longitude = TextEditingController();
   List<RequirementCategory> _categories = [];
-  String? _category, _error, _locationError;
+  String? _category, _unit, _error, _locationError, _unitLoadError;
   double? _capturedLatitude, _capturedLongitude, _accuracy;
   DateTime _deadline = DateTime.now().add(const Duration(days: 7));
   bool _loadFailed = false;
-  bool _loading = true, _saving = false, _locating = false, _editable = true;
+  bool _loading = true,
+      _loadingUnits = false,
+      _saving = false,
+      _locating = false,
+      _editable = true;
+  int _unitRequest = 0;
   bool get _editing => widget.requirementId != null;
 
   @override
@@ -50,7 +55,6 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
   void dispose() {
     for (final controller in [
       _quantity,
-      _unit,
       _budget,
       _notes,
       _latitude,
@@ -79,7 +83,7 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
           _editable = row.canEdit;
           _category = row.categoryId;
           _quantity.text = row.requiredQuantity.toString();
-          _unit.text = row.unit;
+          _unit = row.unit;
           _budget.text = row.maximumBudget.toString();
           _notes.text = row.notes;
           _latitude.text = row.latitude?.toString() ?? '';
@@ -98,6 +102,57 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
       }
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+    if (_category != null && _editable) {
+      await _loadUnits(_category!, preferredUnit: _unit);
+    }
+  }
+
+  Future<void> _onCategoryChanged(String? categoryId) async {
+    if (categoryId == _category) return;
+    setState(() => _category = categoryId);
+    if (categoryId == null) {
+      _unitRequest++;
+      setState(() {
+        _units = [];
+        _unit = null;
+        _unitLoadError = null;
+      });
+      return;
+    }
+    await _loadUnits(categoryId);
+  }
+
+  Future<void> _loadUnits(String categoryId, {String? preferredUnit}) async {
+    final request = ++_unitRequest;
+    setState(() {
+      _loadingUnits = true;
+      _units = [];
+      _unit = null;
+      _unitLoadError = null;
+    });
+    try {
+      final units = await widget.gateway.activeUnits(categoryId);
+      if (!mounted || request != _unitRequest) return;
+      String? selected;
+      for (final unit in units) {
+        if (unit.toLowerCase() == preferredUnit?.trim().toLowerCase()) {
+          selected = unit;
+          break;
+        }
+      }
+      setState(() {
+        _units = units;
+        _unit = selected;
+      });
+    } on Object catch (error) {
+      if (mounted && request == _unitRequest) {
+        setState(() => _unitLoadError = requirementError(error));
+      }
+    } finally {
+      if (mounted && request == _unitRequest) {
+        setState(() => _loadingUnits = false);
+      }
     }
   }
 
@@ -178,7 +233,11 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
   }
 
   Future<void> _save() async {
-    if (_saving || _locating || !_editable || !_form.currentState!.validate()) {
+    if (_saving ||
+        _locating ||
+        _loadingUnits ||
+        !_editable ||
+        !_form.currentState!.validate()) {
       return;
     }
     if (!_deadline.isAfter(DateTime.now())) {
@@ -193,7 +252,7 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
       final draft = RequirementDraft(
         categoryId: _category!,
         requiredQuantity: num.parse(_quantity.text.trim()),
-        unit: _unit.text,
+        unit: _unit!,
         maximumBudget: num.parse(_budget.text.trim()),
         deadline: _deadline,
         latitude: double.parse(_latitude.text.trim()),
@@ -260,9 +319,7 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
                       key: const Key('requirement-category'),
                       categories: _categories,
                       value: _category,
-                      onChanged: _saving
-                          ? null
-                          : (value) => setState(() => _category = value),
+                      onChanged: _saving ? null : _onCategoryChanged,
                     ),
                     const SizedBox(height: 16),
                     _field(
@@ -272,16 +329,7 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
                       validator: (v) => _positive(v, 3, 15),
                       numeric: true,
                     ),
-                    _field(
-                      _unit,
-                      'Unit (for example kg or bags)',
-                      'requirement-unit',
-                      validator: (v) => v == null || v.trim().isEmpty
-                          ? 'Enter a unit.'
-                          : v.trim().length > 32
-                          ? 'Use at most 32 characters.'
-                          : null,
-                    ),
+                    _unitField(),
                     _field(
                       _budget,
                       'Maximum budget',
@@ -347,7 +395,14 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
                     ),
                     FilledButton(
                       key: const Key('requirement-save'),
-                      onPressed: _saving || _locating ? null : _save,
+                      onPressed:
+                          _saving ||
+                              _locating ||
+                              _loadingUnits ||
+                              (_category != null &&
+                                  (_units.isEmpty || _unit == null))
+                          ? null
+                          : _save,
                       child: Text(
                         _saving
                             ? 'Saving…'
@@ -364,6 +419,54 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
           ),
   );
 
+  Widget _unitField() => Padding(
+    padding: const EdgeInsets.only(bottom: 16),
+    child: _loadingUnits
+        ? const InputDecorator(
+            decoration: InputDecoration(labelText: 'Unit'),
+            child: Text('Loading available units…'),
+          )
+        : _unitLoadError != null
+        ? InputDecorator(
+            decoration: const InputDecoration(labelText: 'Unit'),
+            child: Row(
+              children: [
+                Expanded(child: Text(_unitLoadError!)),
+                TextButton(
+                  onPressed: _category == null
+                      ? null
+                      : () => _loadUnits(_category!),
+                  child: const Text('Retry'),
+                ),
+              ],
+            ),
+          )
+        : DropdownButtonFormField<String>(
+            key: const Key('requirement-unit'),
+            value: _units.contains(_unit) ? _unit : null,
+            isExpanded: true,
+            decoration: const InputDecoration(labelText: 'Unit'),
+            hint: Text(
+              _category == null
+                  ? 'Choose a category first'
+                  : _units.isEmpty
+                  ? 'No available units for this category'
+                  : 'Choose a unit',
+            ),
+            items: _units
+                .map((unit) => DropdownMenuItem(value: unit, child: Text(unit)))
+                .toList(),
+            onChanged: _saving || _category == null || _units.isEmpty
+                ? null
+                : (value) => setState(() => _unit = value),
+            validator: (value) {
+              if (_category == null) return 'Choose a category.';
+              if (_units.isEmpty)
+                return 'No available units for this category.';
+              return value == null ? 'Choose a unit.' : null;
+            },
+          ),
+  );
   Widget _field(
     TextEditingController controller,
     String label,

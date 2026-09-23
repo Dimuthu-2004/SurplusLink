@@ -93,7 +93,7 @@ it('loads the manager dashboard from authenticated summaries, isolates errors, r
   expect(within(screen.getByRole('table', { name: 'Listing totals by category' })).getByRole('row', { name: 'Steel 19' })).toBeInTheDocument();
   metric('Expiring soon', '0');
   metric('Open requirements', '17');
-  metric('Pending requirements', '7');
+  metric('Pending approval', '7');
   metric('Upcoming requirement deadlines', '12');
   expect(screen.getByRole('link', { name: 'View buyer requirements' })).toHaveAttribute('href', '/app/manager/requirements');
   expect(screen.queryByRole('table', { name: 'Upcoming requirement deadlines' })).not.toBeInTheDocument();
@@ -120,7 +120,7 @@ it('loads the manager dashboard from authenticated summaries, isolates errors, r
   expect(screen.getByText('No matches yet.')).toBeInTheDocument();
   expect(screen.getByText('No rejection reasons recorded.')).toBeInTheDocument();
   metric('Active listings', '0');
-  metric('Pending requirements', '0');
+  metric('Pending approval', '0');
   metric('Route failures', '2');
   expect(screen.queryByText('BUDGET_EXCEEDED')).not.toBeInTheDocument();
 });

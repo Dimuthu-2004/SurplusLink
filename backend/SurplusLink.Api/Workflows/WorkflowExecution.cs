@@ -314,8 +314,7 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
             db.AuditLogs.Add(new AuditLog { Id = Guid.NewGuid(), EntityType = nameof(Transaction),
                 EntityId = transaction.Id, Action = "PENDING_APPROVAL" });
         }
-        // Existing manager approval requires an OPEN/MATCH_FOUND requirement.
-        request.Status = result.Status == "PENDING_APPROVAL" ? BuyerRequestStatus.MATCH_FOUND : BuyerRequestStatus.OPEN;
+        request.Status = result.Status == "PENDING_APPROVAL" ? BuyerRequestStatus.PENDING_APPROVAL : BuyerRequestStatus.OPEN;
         foreach (var trace in result.Steps)
         {
             var step = new AgentStep { Id = Guid.NewGuid(), Sequence = trace.Sequence, Stage = trace.Stage,

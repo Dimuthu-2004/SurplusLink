@@ -187,7 +187,7 @@ public sealed class WorkflowPersistenceTests(RequirementsDatabase fixture) : ICl
         Assert.NotNull(workflow.MaterialMatchId);
         Assert.Equal(4, workflow.Steps.Count);
         Assert.Equal(6, workflow.Steps.Single(x => x.Stage == "VALIDATION").ToolCalls.Count);
-        Assert.Equal(BuyerRequestStatus.MATCH_FOUND, (await db.BuyerRequests.FindAsync(id))!.Status);
+        Assert.Equal(BuyerRequestStatus.PENDING_APPROVAL, (await db.BuyerRequests.FindAsync(id))!.Status);
         Assert.Equal(0, await db.Reservations.CountAsync(x => x.MaterialRequestId == id));
         Assert.Equal(0, await db.Listings.Where(x => x.CategoryId == db.BuyerRequests.Where(r => r.Id == id).Select(r => r.CategoryId).First()).SumAsync(x => x.ReservedQuantity));
         Assert.Equal(1, client.Calls);

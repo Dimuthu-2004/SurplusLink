@@ -15,6 +15,12 @@ public sealed class MaterialCategoriesController(IMaterialInventoryService servi
     public async Task<ActionResult<IReadOnlyList<MaterialCategoryResponse>>> GetAll(CancellationToken cancellationToken) =>
         Ok(await service.GetCategoriesAsync(cancellationToken));
 
+    [HttpGet("{categoryId:guid}/active-units")]
+    [Authorize(Roles = "SELLER,BUYER,MANAGER")]
+    [ProducesResponseType<IReadOnlyList<string>>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<string>>> GetActiveUnits(Guid categoryId, CancellationToken cancellationToken) =>
+        Ok(await service.GetActiveUnitsAsync(categoryId, cancellationToken));
+
     [HttpPost]
     [Authorize(Roles = nameof(UserRole.MANAGER))]
     [ProducesResponseType<MaterialCategoryResponse>(StatusCodes.Status201Created)]

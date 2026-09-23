@@ -155,6 +155,39 @@ void main() {
     },
   );
 
+  testWidgets(
+    'category change reloads the unit dropdown and blocks save without active units',
+    (tester) async {
+      final gateway = FakeRequirements()
+        ..categoryItems = const [
+          RequirementCategory('c1', 'Cement'),
+          RequirementCategory('c2', 'Tiles'),
+        ]
+        ..unitsByCategory = {
+          'c1': ['kg'],
+          'c2': [],
+        };
+      await pumpApp(tester, gateway, path: '/requirements/new');
+      await tester.tap(find.byKey(const Key('requirement-category')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Cement').last);
+      await tester.pumpAndSettle();
+      expect(gateway.unitRequests, ['c1']);
+      await selectUnit(tester, 'kg');
+      await tester.tap(find.byKey(const Key('requirement-category')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Tiles').last);
+      await tester.pumpAndSettle();
+      expect(gateway.unitRequests, ['c1', 'c2']);
+      expect(find.text('No available units for this category'), findsOneWidget);
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const Key('requirement-save')))
+            .onPressed,
+        isNull,
+      );
+    },
+  );
   testWidgets('GPS denial and save errors retain entered values for retry', (
     tester,
   ) async {
@@ -378,12 +411,19 @@ Future<void> pumpApp(
   }
 }
 
+Future<void> selectUnit(WidgetTester tester, String unit) async {
+  await tester.tap(find.byKey(const Key('requirement-unit')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(unit).last);
+  await tester.pumpAndSettle();
+}
+
 Future<void> fillForm(WidgetTester tester) async {
   await tester.tap(find.byKey(const Key('requirement-category')));
   await tester.pumpAndSettle();
   await tester.tap(find.text('Cement').last);
   await tester.pumpAndSettle();
   await tester.enterText(find.byKey(const Key('requirement-quantity')), '12');
-  await tester.enterText(find.byKey(const Key('requirement-unit')), 'kg');
+  await selectUnit(tester, 'kg');
   await tester.enterText(find.byKey(const Key('requirement-budget')), '120.50');
 }
