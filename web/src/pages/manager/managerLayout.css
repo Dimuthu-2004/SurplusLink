@@ -1,0 +1,18 @@
+.app-shell.manager-shell {
+  height: 100dvh;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.manager-shell .app-header { flex: 0 0 auto; }
+.manager-shell .app-body { flex: 1; min-height: 0; overflow: hidden; }
+.manager-shell .side-nav { min-height: 0; overflow-y: auto; }
+.manager-shell .page-content { min-height: 0; overflow-y: auto; }
+.manager-shell .dashboard-back { display: inline-flex; align-items: center; gap: .4rem; }
+.manager-shell .structured-result { white-space: pre-wrap; overflow-wrap: anywhere; }
+.manager-shell .requirement-id { overflow-wrap: anywhere; }
+@media (max-width: 700px) {
+  .manager-shell .app-body { grid-template-rows: auto minmax(0, 1fr); }
+  .manager-shell .side-nav { overflow-x: auto; }
+}

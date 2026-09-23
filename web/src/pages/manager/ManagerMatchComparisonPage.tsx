@@ -56,8 +56,8 @@ function RequirementMatches({ api, requirementId }: { api: ManagerMatchesApi; re
         <RequirementBadge status={row.status} />
       </div>
       <dl className="detail-grid">
-        <div><dt>Requirement ID</dt><dd>{row.id}</dd></div>
-        <div><dt>Category</dt><dd>{row.categoryId}</dd></div>
+
+        <div><dt>Category</dt><dd>{list.data?.items[0]?.categoryName ?? 'Category unavailable'}</dd></div>
         <div><dt>Required quantity</dt><dd>{requirementNumber(row.requiredQuantity)} {row.unit}</dd></div>
         <div><dt>Budget</dt><dd>{matchCurrency(row.maximumBudget)}</dd></div>
         <div><dt>Deadline</dt><dd>{requirementDate(row.deadline)}</dd></div>

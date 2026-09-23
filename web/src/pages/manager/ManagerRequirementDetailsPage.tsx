@@ -34,8 +34,7 @@ export function ManagerRequirementDetailsPage({ api = managerRequirementsApi, wo
       </> : <>
         {categories.error && <RequirementError message={'Category name unavailable. ' + categories.error} retry={categories.reload} label="Retry category name" />}
         <dl className="detail-grid">
-          <div><dt>Requirement ID</dt><dd>{row.id}</dd></div><div><dt>Buyer ID</dt><dd>{row.buyerId}</dd></div>
-          <div><dt>Category ID</dt><dd>{row.categoryId}</dd></div>
+
           <div><dt>Required quantity</dt><dd>{requirementNumber(row.requiredQuantity)} {row.unit}</dd></div>
           <div><dt>Maximum budget</dt><dd>{requirementNumber(row.maximumBudget, 2)}</dd></div>
           <div><dt>Deadline (local time)</dt><dd>{requirementDate(row.deadline)}</dd></div>
@@ -43,7 +42,7 @@ export function ManagerRequirementDetailsPage({ api = managerRequirementsApi, wo
           <div><dt>Created</dt><dd>{requirementDate(row.createdAt)}</dd></div>
           <div><dt>Last updated</dt><dd>{requirementDate(row.updatedAt)}</dd></div>
         </dl>
-        <h3>Notes</h3><p className="requirement-notes">{row.notes || 'No notes added.'}</p>
+        <small className="requirement-id" title={row.id}>Request reference: {row.id.slice(0, 8)}</small><small className="requirement-id" title={row.buyerId}>Buyer reference: {row.buyerId.slice(0, 8)}</small><h3>Notes</h3><p className="requirement-notes">{row.notes || 'No notes added.'}</p>
         <p className="muted">Manager access is read-only. Buyers manage their own requirements.</p>
       </>}
       <nav className="action-row" aria-label="Requirement views">

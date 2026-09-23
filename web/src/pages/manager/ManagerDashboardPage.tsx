@@ -21,8 +21,8 @@ export function ManagerDashboardPage() {
           {(data) => <>
             <div className="analytics-metrics">
               <AnalyticsMetric label="Active listings" value={requirementNumber(data.activeCount)} />
-            </div>
               <AnalyticsMetric label="Expiring soon" value={requirementNumber(data.expiringListings.length)} />
+            </div>
             <h3>Category totals</h3>
             <p className="muted">Listing counts across all statuses.</p>
             {data.listingsByCategory.length === 0 ? <p className="empty-state">No listings yet.</p> : (
@@ -57,7 +57,6 @@ export function ManagerDashboardPage() {
         <AnalyticsPanel title="Matches" load={managerDashboardApi.matches}>
           {(data) => <>
             <div className="analytics-metrics">
-              <AnalyticsMetric label="Average match score" value={average(data.averageScore)} />
               <AnalyticsMetric label="Route failures" value={requirementNumber(data.routeFailureCount)} />
             </div>
             {data.total === 0 && <p className="empty-state">No matches yet.</p>}
@@ -81,9 +80,8 @@ export function ManagerDashboardPage() {
             <div className="analytics-metrics">
               <AnalyticsMetric label="Pending approvals" value={requirementNumber(data.pendingApprovalCount)} />
               <AnalyticsMetric label="Approved transactions" value={requirementNumber(data.approvedCount)} />
-              <AnalyticsMetric label="Rejected transactions" value={requirementNumber(data.rejectedCount)} />
-              <AnalyticsMetric label="Completed transactions" value={requirementNumber(data.completionCount)} />
             </div>
+            <Link className="back-link" to="/app/manager/approvals">Review pending approvals</Link>
             {data.pendingApprovalCount + data.approvedCount + data.rejectedCount + data.completionCount === 0 && (
               <p className="empty-state">No transactions yet.</p>
             )}
@@ -92,10 +90,6 @@ export function ManagerDashboardPage() {
       </div>
     </div>
   );
-}
-
-function average(value: number | null) {
-  return value === null ? 'Not available' : requirementNumber(value, 2);
 }
 
 function rejectionReasonLabel(reason: string) {
