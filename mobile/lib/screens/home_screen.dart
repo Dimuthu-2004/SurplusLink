@@ -2,6 +2,8 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile/auth/auth_controller.dart';
 import 'package:mobile/auth/auth_models.dart';
+import 'package:mobile/widgets/role_navigation.dart';
+import 'package:mobile/widgets/surplus_link_logo.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({
@@ -48,7 +50,7 @@ class HomeScreen extends StatelessWidget {
 
       return Scaffold(
         appBar: AppBar(
-          title: const Text('SurplusLink'),
+          title: const SurplusLinkLogo(size: 32),
           actions: [
             IconButton(
               key: const Key('logout-button'),
@@ -116,6 +118,7 @@ class HomeScreen extends StatelessWidget {
             ),
           ),
         ),
+        bottomNavigationBar: RoleNavigation(user: user, current: '/home'),
       );
     },
   );

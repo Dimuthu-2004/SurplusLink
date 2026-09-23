@@ -14,6 +14,7 @@ import 'package:mobile/widgets/location_card.dart';
 import 'package:mobile/core/api_exception.dart';
 import 'package:mobile/materials/material_inventory_gateway.dart';
 import 'package:mobile/materials/material_models.dart';
+import 'package:mobile/widgets/location_picker.dart';
 
 class MaterialListingFormScreen extends StatefulWidget {
   const MaterialListingFormScreen({
@@ -204,21 +205,27 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
     }
   }
 
-  Future<void> _captureGps() async {
+  Future<void> _chooseLocation() async {
     if (_locating || _isSaving) return;
     setState(() => _locating = true);
     try {
-      final position = await widget.locationSource.capture();
+      final picked = await showLocationPicker(
+        context,
+        latitude: _latitude,
+        longitude: _longitude,
+      );
       if (!mounted) return;
-      setState(() {
-        _accuracy = position.accuracy;
-        _latitude = position.latitude;
-        _longitude = position.longitude;
-      });
+      if (picked != null) {
+        setState(() {
+          _accuracy = null;
+          _latitude = picked.latitude;
+          _longitude = picked.longitude;
+        });
+      }
     } on LocationCaptureException catch (error) {
       if (mounted) _showMessage(error.message);
     } on Object {
-      if (mounted) _showMessage('Unable to capture GPS location.');
+      if (mounted) _showMessage('Unable to choose a location. Please retry.');
     } finally {
       if (mounted) setState(() => _locating = false);
     }
@@ -406,7 +413,7 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                     keyboardType: const TextInputType.numberWithOptions(
                       decimal: true,
                     ),
-                    decoration: const InputDecoration(labelText: 'Unit price'),
+                    decoration: const InputDecoration(labelText: 'Unit price (LKR)'),
                     validator: (value) => _positiveNumber(value, 'Unit price'),
                   ),
                   const SizedBox(height: 12),
@@ -426,13 +433,13 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                       lookup: widget.locationLookup ?? unavailableAddress,
                     )
                   else
-                    const Text('No location captured yet.'),
+                    const Text('No location selected yet.'),
                   OutlinedButton.icon(
                     key: const Key('capture-gps'),
-                    onPressed: _locating || _isSaving ? null : _captureGps,
-                    icon: const Icon(Icons.my_location),
+                    onPressed: _locating || _isSaving ? null : _chooseLocation,
+                    icon: const Icon(Icons.map_outlined),
                     label: Text(
-                      _locating ? 'Finding location...' : 'Capture GPS',
+                      _locating ? 'Opening map...' : 'Choose location on map',
                     ),
                   ),
                   const Divider(),

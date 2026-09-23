@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:mobile/auth/auth_controller.dart';
 import 'package:mobile/widgets/dashboard_back_button.dart';
 import 'package:mobile/widgets/profile_fields.dart';
+import 'package:mobile/widgets/role_navigation.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({required this.authController, super.key});
@@ -61,6 +62,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ],
         ),
       ),
+      bottomNavigationBar: widget.authController.user == null
+          ? null
+          : RoleNavigation(user: widget.authController.user!, current: '/profile'),
     ),
   );
 }

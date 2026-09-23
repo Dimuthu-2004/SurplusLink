@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 
 type Count = { key: string; count: number };
 const colors = ['#087f8c', '#6366f1', '#e3a008', '#db5375', '#20a778', '#9163cb', '#4176ad'];
@@ -44,5 +44,24 @@ export function AnalyticsChart({ title, values, initialView = 'bars' }: {
 }
 
 export function AnalyticsMetric({ label, value, detail }: { label: string; value: string | number; detail?: string }) {
-  return <div className="analytics-metric"><span>{label}</span><strong>{value}</strong>{detail && <small>{detail}</small>}</div>;
+  const numeric = typeof value === 'number' ? value : Number(value);
+  const previous = useRef(numeric);
+  const [display, setDisplay] = useState(Number.isFinite(numeric) ? numeric : value);
+  useEffect(() => {
+    if (!Number.isFinite(numeric)) { setDisplay(value); return; }
+    if (previous.current === numeric) return;
+    const startValue = previous.current;
+    previous.current = numeric;
+    const started = performance.now();
+    const duration = 650;
+    let frame = 0;
+    const tick = (now: number) => {
+      const progress = Math.min(1, (now - started) / duration);
+      setDisplay(Math.round(startValue + (numeric - startValue) * (1 - Math.pow(1 - progress, 3))));
+      if (progress < 1) frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [numeric, value]);
+  return <div className="analytics-metric"><span>{label}</span><strong>{display}</strong>{detail && <small>{detail}</small>}</div>;
 }
