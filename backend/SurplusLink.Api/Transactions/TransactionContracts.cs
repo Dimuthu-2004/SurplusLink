@@ -53,7 +53,9 @@ public sealed record OfferResponse(Guid Id, Guid MaterialMatchId, Guid BuyerId, 
     DateTime CreatedAt, DateTime UpdatedAt);
 public sealed record TransactionResponse(Guid Id, Guid OfferId, Guid BuyerId, Guid SellerId, decimal Quantity,
     decimal TotalValue, decimal ReservedQuantity, [property: JsonConverter(typeof(JsonStringEnumConverter))] TransactionStatus Status,
-    DateTime CreatedAt, DateTime UpdatedAt, DateTime? CompletedAt);
+    DateTime CreatedAt, DateTime UpdatedAt, DateTime? CompletedAt,
+    TransactionContact? BuyerContact = null, TransactionContact? SellerContact = null);
+public sealed record TransactionContact(string? FullName, string Email, string? PhoneNumber);
 public sealed record TransactionHistoryEntry(Guid Id, Guid? ActorUserId, string Action, DateTime CreatedAt, string? Note);
 public sealed record TransactionHistoryPage(IReadOnlyList<TransactionHistoryEntry> Items, int Total, int TotalPages, int Page, int PageSize);
 public sealed record TransactionAnalyticsSummary(int PendingApprovalCount, int ApprovedCount, int RejectedCount,

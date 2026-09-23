@@ -107,7 +107,10 @@ public sealed class PreS12GoldenWorkflowTests(RequirementsDatabase fixture) : IC
                 (await manager.PostAsJsonAsync($"/api/workflows/{resumed.WorkflowId}/approve", new { note = "Revised review" })).EnsureSuccessStatusCode();
                 var approvedTransaction = await db.Transactions.AsNoTracking().SingleAsync(x =>
                     x.Offer.MaterialMatch.MaterialRequestId == request.Id && x.Status == TransactionStatus.APPROVED);
-                (await manager.PostAsync($"/api/transactions/{approvedTransaction.Id}/complete", null)).EnsureSuccessStatusCode();
+                Assert.Equal(HttpStatusCode.Forbidden, (await manager.PostAsync($"/api/transactions/{approvedTransaction.Id}/complete", null)).StatusCode);
+                (await seller.PostAsync($"/api/transactions/{approvedTransaction.Id}/handover", null)).EnsureSuccessStatusCode();
+                Assert.Equal(BuyerRequestStatus.APPROVED, (await buyer.GetFromJsonAsync<RequirementResponse>($"/api/requirements/{request.Id}"))!.Status);
+                (await buyer.PostAsync($"/api/transactions/{approvedTransaction.Id}/confirm-receipt", null)).EnsureSuccessStatusCode();
                 var finalRequest = await buyer.GetFromJsonAsync<RequirementResponse>($"/api/requirements/{request.Id}");
                 Assert.Equal(BuyerRequestStatus.COMPLETED, finalRequest!.Status);
                 var sellerOutcome = await seller.GetFromJsonAsync<TransactionResponse>($"/api/transactions/{approvedTransaction.Id}");

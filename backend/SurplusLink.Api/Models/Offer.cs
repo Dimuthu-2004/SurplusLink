@@ -13,7 +13,8 @@ public enum TransactionStatus
     PENDING_APPROVAL,
     APPROVED,
     REJECTED,
-    COMPLETED
+    COMPLETED,
+    HANDED_OVER
 }
 
 public sealed class Offer : AuditableEntity

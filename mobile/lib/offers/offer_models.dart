@@ -1,7 +1,10 @@
+import 'package:mobile/auth/auth_models.dart';
+
 const offerStatuses = ['PENDING', 'ACCEPTED', 'REJECTED', 'REVISION_REQUESTED'];
 const transactionStatuses = [
   'PENDING_APPROVAL',
   'APPROVED',
+  'HANDED_OVER',
   'REJECTED',
   'COMPLETED',
 ];
@@ -14,15 +17,17 @@ String offerStatusLabel(String value) => value
 class OfferQuery {
   const OfferQuery({
     this.status,
+    this.offerId,
     this.sortBy = 'createdAt',
     this.sortDir = 'desc',
     this.page = 1,
     this.pageSize = 20,
   });
-  final String? status, sortBy, sortDir;
+  final String? status, sortBy, sortDir, offerId;
   final int page, pageSize;
   Map<String, String> toParams() => {
     'status': ?status,
+    'offerId': ?offerId,
     'sortBy': sortBy!,
     'sortDir': sortDir!,
     'page': '$page',
@@ -58,6 +63,10 @@ class Transaction {
   const Transaction({
     required this.id,
     required this.offerId,
+    this.buyerId = '',
+    this.sellerId = '',
+    this.buyerContact,
+    this.sellerContact,
     required this.status,
     required this.reservedQuantity,
     required this.totalValue,
@@ -66,12 +75,31 @@ class Transaction {
   factory Transaction.fromJson(Map<String, dynamic> j) => Transaction(
     id: j['id'] as String,
     offerId: j['offerId'] as String,
+    buyerId: j['buyerId'] as String,
+    sellerId: j['sellerId'] as String,
+    buyerContact: j['buyerContact'] == null
+        ? null
+        : TransactionContact.fromJson(j['buyerContact']),
+    sellerContact: j['sellerContact'] == null
+        ? null
+        : TransactionContact.fromJson(j['sellerContact']),
     status: j['status'] as String,
     reservedQuantity: (j['reservedQuantity'] as num).toDouble(),
     totalValue: (j['totalValue'] as num).toDouble(),
     updatedAt: DateTime.parse(j['updatedAt'] as String),
   );
-  final String id, offerId, status;
+  final String id, offerId, status, buyerId, sellerId;
+  final TransactionContact? buyerContact, sellerContact;
+  bool get contactsVisible =>
+      const ['APPROVED', 'HANDED_OVER', 'COMPLETED'].contains(status);
+  bool canHandover(AppUser user) =>
+      status == 'APPROVED' &&
+      sellerId == user.id &&
+      user.hasRole(AppRole.seller);
+  bool canConfirmReceipt(AppUser user) =>
+      status == 'HANDED_OVER' &&
+      buyerId == user.id &&
+      user.hasRole(AppRole.buyer);
   final double reservedQuantity, totalValue;
   final DateTime updatedAt;
 }
@@ -137,4 +165,20 @@ class TransactionHistoryPage {
       );
   final List<TransactionHistoryEntry> items;
   final int total, page, totalPages;
+}
+
+class TransactionContact {
+  const TransactionContact({
+    this.fullName,
+    required this.email,
+    this.phoneNumber,
+  });
+  factory TransactionContact.fromJson(Map<String, dynamic> j) =>
+      TransactionContact(
+        fullName: j['fullName'] as String?,
+        email: j['email'] as String,
+        phoneNumber: j['phoneNumber'] as String?,
+      );
+  final String? fullName, phoneNumber;
+  final String email;
 }
