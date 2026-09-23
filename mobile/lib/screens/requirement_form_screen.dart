@@ -465,7 +465,7 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
           )
         : DropdownButtonFormField<String>(
             key: const Key('requirement-unit'),
-            value: _units.contains(_unit) ? _unit : null,
+            initialValue: _units.contains(_unit) ? _unit : null,
             isExpanded: true,
             decoration: const InputDecoration(labelText: 'Unit'),
             hint: Text(
@@ -483,8 +483,9 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
                 : (value) => setState(() => _unit = value),
             validator: (value) {
               if (_category == null) return null;
-              if (_units.isEmpty)
+              if (_units.isEmpty) {
                 return 'No available units for this category.';
+              }
               return value == null ? 'Choose a unit.' : null;
             },
           ),
