@@ -32,6 +32,9 @@ class FakeRequirements implements RequirementGateway {
     const RequirementCategory('c1', 'Cement'),
   ];
   List<BuyerRequirement> items = [];
+  List<String> unitItems = ['kg'];
+  Map<String, List<String>> unitsByCategory = {};
+  final unitRequests = <String>[];
   Object? error, startError, saveError;
   RequirementDraft? saved;
   final queries = <RequirementQuery>[];
@@ -51,6 +54,13 @@ class FakeRequirements implements RequirementGateway {
     if (pendingCategories != null) return pendingCategories!.future;
     if (error != null) throw error!;
     return categoryItems;
+  }
+
+  @override
+  Future<List<String>> activeUnits(String categoryId) async {
+    unitRequests.add(categoryId);
+    if (error != null) throw error!;
+    return unitsByCategory[categoryId] ?? unitItems;
   }
 
   @override

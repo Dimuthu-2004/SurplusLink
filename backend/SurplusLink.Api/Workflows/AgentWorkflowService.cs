@@ -59,13 +59,13 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db)
         workflow.Status = AgentWorkflowStatus.REVISION_REQUESTED;
         workflow.CurrentStage = "REVISION";
         workflow.Decision = cleanNote;
-        // A revision must be actionable. MATCH_FOUND cannot be edited or matched
-        // again by the buyer, whereas OPEN can be amended and explicitly restarted.
+        // A revision must be actionable. A pending approval cannot be edited or
+        // matched again by the buyer, whereas OPEN can be amended and restarted.
         if (workflow.MaterialRequestId is Guid requestId)
         {
             var request = await db.BuyerRequests.SingleOrDefaultAsync(x => x.Id == requestId, ct)
                 ?? throw new AgentWorkflowException(409, "The workflow material request was not found.");
-            if (request.Status == BuyerRequestStatus.MATCH_FOUND)
+            if (request.Status is BuyerRequestStatus.MATCH_FOUND or BuyerRequestStatus.PENDING_APPROVAL)
             {
                 request.Status = BuyerRequestStatus.OPEN;
                 db.AuditLogs.Add(new AuditLog
@@ -151,7 +151,7 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db)
                 throw new AgentWorkflowException(409, "A workflow cannot approve a self-dealing match.");
             if (match.Listing.Status != ListingStatus.ACTIVE)
                 throw new AgentWorkflowException(409, "The listing is not available for reservation.");
-            if (match.MaterialRequest.Status is not BuyerRequestStatus.OPEN and not BuyerRequestStatus.MATCH_FOUND)
+            if (match.MaterialRequest.Status is not BuyerRequestStatus.OPEN and not BuyerRequestStatus.MATCH_FOUND and not BuyerRequestStatus.PENDING_APPROVAL)
                 throw new AgentWorkflowException(409, "The material request is not open for reservation.");
             if (match.Listing.CategoryId != match.MaterialRequest.CategoryId)
                 throw new AgentWorkflowException(409, "The workflow match categories do not match.");

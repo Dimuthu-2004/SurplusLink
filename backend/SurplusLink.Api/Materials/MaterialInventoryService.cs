@@ -306,6 +306,21 @@ public sealed class MaterialInventoryService(SurplusLinkDbContext dbContext) : I
             .Select(category => ToResponse(category))
             .ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<string>> GetActiveUnitsAsync(Guid categoryId, CancellationToken cancellationToken)
+    {
+        var units = await dbContext.Listings.AsNoTracking()
+            .Where(listing => listing.CategoryId == categoryId && listing.Status == ListingStatus.ACTIVE)
+            .Select(listing => listing.Unit)
+            .ToListAsync(cancellationToken);
+
+        return units.Select(unit => unit.Trim())
+            .Where(unit => unit.Length > 0)
+            .GroupBy(unit => unit, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.Key.ToLowerInvariant())
+            .OrderBy(unit => unit, StringComparer.Ordinal)
+            .ToArray();
+    }
+
     public async Task<MaterialCategoryResponse> CreateCategoryAsync(MaterialCategoryRequest request, CancellationToken cancellationToken)
     {
         var name = NormalizedName(request.Name);

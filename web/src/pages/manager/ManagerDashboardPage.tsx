@@ -44,7 +44,7 @@ export function ManagerDashboardPage() {
           {(data) => <>
             <div className="analytics-metrics">
               <AnalyticsMetric label="Open requirements" value={requirementNumber(data.openCount)} />
-              <AnalyticsMetric label="Pending requirements" detail="Pending approval" value={
+              <AnalyticsMetric label="Pending approval" value={
                 requirementNumber(data.countsByStatus.find((item) => item.status === 'PENDING_APPROVAL')?.count ?? 0)
               } />
               <AnalyticsMetric label="Upcoming requirement deadlines" value={requirementNumber(data.upcomingDeadlineCount)} detail="Next 7 days" />

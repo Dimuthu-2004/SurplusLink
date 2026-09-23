@@ -2,6 +2,7 @@ import 'requirement_models.dart';
 
 abstract interface class RequirementGateway {
   Future<List<RequirementCategory>> categories();
+  Future<List<String>> activeUnits(String categoryId);
   Future<RequirementPage<BuyerRequirement>> my(RequirementQuery query);
   Future<BuyerRequirement> get(String id);
   Future<BuyerRequirement> create(RequirementDraft draft);

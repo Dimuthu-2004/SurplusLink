@@ -136,6 +136,18 @@ void main() {
     ]);
   });
 
+  test(
+    'active units use the category API and preserve bearer authentication',
+    () async {
+      final repository = repo((request) async {
+        expect(request.method, 'GET');
+        expect(request.url.path, '/api/material-categories/c1/active-units');
+        expect(request.headers['authorization'], 'Bearer buyer-token');
+        return http.Response('["pcs", "m2"]', 200);
+      });
+      expect(await repository.activeUnits('c1'), ['pcs', 'm2']);
+    },
+  );
   test('history parses paged status transitions', () async {
     final repository = repo((request) async {
       expect(request.url.queryParameters, {'page': '2', 'pageSize': '20'});
