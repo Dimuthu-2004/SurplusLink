@@ -304,11 +304,12 @@ public sealed class BuyerRequirementsIntegrationTests : IClassFixture<Requiremen
     }
 
     [PostgresFact]
-    public async Task Workflow_and_terminal_states_cannot_be_changed_by_buyer_crud_or_actions()
+    public async Task Terminal_states_are_locked_while_match_found_requirements_can_be_edited_or_rerun()
     {
         using var app = fixture.App();
         using var buyer = fixture.Client(app, fixture.Buyer);
-        var states = Enum.GetValues<BuyerRequestStatus>().Except([BuyerRequestStatus.DRAFT, BuyerRequestStatus.OPEN]);
+        var states = Enum.GetValues<BuyerRequestStatus>().Except([
+            BuyerRequestStatus.DRAFT, BuyerRequestStatus.OPEN, BuyerRequestStatus.MATCH_FOUND]);
         foreach (var state in states)
         {
             var row = await Create(buyer);
@@ -321,6 +322,21 @@ public sealed class BuyerRequirementsIntegrationTests : IClassFixture<Requiremen
                 Assert.Equal(HttpStatusCode.Conflict, (await buyer.PostAsync(path + "/" + action, null)).StatusCode);
             Assert.Equal(state, (await buyer.GetFromJsonAsync<RequirementResponse>(path))!.Status);
         }
+
+        var matchFound = await Create(buyer);
+        using (var db = fixture.Context())
+            await db.BuyerRequests.Where(x => x.Id == matchFound.Id).ExecuteUpdateAsync(s =>
+                s.SetProperty(x => x.Status, BuyerRequestStatus.MATCH_FOUND));
+        var matchFoundPath = $"/api/requirements/{matchFound.Id}";
+        Assert.Equal(HttpStatusCode.OK, (await buyer.PutAsJsonAsync(matchFoundPath, Body())).StatusCode);
+        Assert.Equal(BuyerRequestStatus.OPEN,
+            (await buyer.GetFromJsonAsync<RequirementResponse>(matchFoundPath))!.Status);
+
+        using (var db = fixture.Context())
+            await db.BuyerRequests.Where(x => x.Id == matchFound.Id).ExecuteUpdateAsync(s =>
+                s.SetProperty(x => x.Status, BuyerRequestStatus.MATCH_FOUND));
+        Assert.Equal(HttpStatusCode.OK,
+            (await buyer.PostAsync(matchFoundPath + "/start-matching", null)).StatusCode);
     }
 
     private static async Task<(int Reservations, int Workflows, decimal Reserved)> Snapshot(SurplusLinkDbContext db) =>

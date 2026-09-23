@@ -66,17 +66,24 @@ public sealed class PreS12GoldenWorkflowTests(RequirementsDatabase fixture) : IC
             {
                 var workflow = await db.AgentWorkflows.SingleAsync(x => x.Id == start.WorkflowId);
                 Assert.Equal(1, await db.AgentWorkflows.CountAsync(x => x.MaterialRequestId == request.Id));
-                Assert.True(workflow.Status == AgentWorkflowStatus.PENDING_APPROVAL, workflow.ErrorJson ?? workflow.ValidationJson);
+                Assert.True(workflow.Status == AgentWorkflowStatus.COMPLETED, workflow.ErrorJson ?? workflow.ValidationJson);
                 Assert.Equal(0, await db.Reservations.CountAsync(x => x.MaterialRequestId == request.Id));
                 Assert.Equal(0, await db.Listings.Where(x => listingIds.Contains(x.Id)).SumAsync(x => x.ReservedQuantity));
+                Assert.Equal(0, await db.Offers.CountAsync(x => x.MaterialMatch.MaterialRequestId == request.Id));
             }
             var matches = await buyer.GetFromJsonAsync<MatchPage>($"/api/matches/requirement/{request.Id}");
             Assert.Equal(2, matches!.Total);
             Assert.Contains(matches.Items, x => x.ListingId == listingIds[1] && x.RejectionReason == "INSUFFICIENT_QUANTITY");
             Assert.Contains(matches.Items, x => x.ListingId == listingIds[0] && x.DurationMinutes == 30);
+            var chosen = matches.Items.Single(x => x.ListingId == listingIds[0] && x.Status == "ROUTED");
+            var selectionResponse = await buyer.PostAsJsonAsync($"/api/requirements/{request.Id}/select-match", new { matchId = chosen.Id });
+            selectionResponse.EnsureSuccessStatusCode();
+            var selection = (await selectionResponse.Content.ReadFromJsonAsync<RequirementResponse>())!;
+            Assert.Equal(BuyerRequestStatus.PENDING_APPROVAL, selection.Status);
+            Assert.NotNull(selection.WorkflowId);
             var pending = await manager.GetFromJsonAsync<JsonElement>("/api/workflows?status=PENDING_APPROVAL");
-            Assert.Contains(pending.GetProperty("items").EnumerateArray(), x => x.GetProperty("id").GetGuid() == start.WorkflowId);
-            (await manager.PostAsJsonAsync($"/api/workflows/{start.WorkflowId}/{decision}", new { note = "Golden audit " + decision })).EnsureSuccessStatusCode();
+            Assert.Contains(pending.GetProperty("items").EnumerateArray(), x => x.GetProperty("id").GetGuid() == selection.WorkflowId);
+            (await manager.PostAsJsonAsync($"/api/workflows/{selection.WorkflowId}/{decision}", new { note = "Golden audit " + decision })).EnsureSuccessStatusCode();
             using (var db = fixture.Context())
             {
                 Assert.Equal(decision == "approve" ? 400m : 0m, (await db.Listings.FindAsync(listingIds[0]))!.ReservedQuantity);
@@ -92,19 +99,27 @@ public sealed class PreS12GoldenWorkflowTests(RequirementsDatabase fixture) : IC
                     await db.Entry(await db.Listings.SingleAsync(x => x.Id == listingIds[0])).ReloadAsync();
                     Assert.Equal(400m, (await db.Listings.FindAsync(listingIds[0]))!.ReservedQuantity);
                 }
-                Assert.Equal("Golden audit " + decision, (await db.Approvals.SingleAsync(x => x.AgentWorkflowId == start.WorkflowId)).Note);
+                Assert.Equal("Golden audit " + decision, (await db.Approvals.SingleAsync(x => x.AgentWorkflowId == selection.WorkflowId)).Note);
             }
             if (decision == "revise")
             {
+                (await buyer.PutAsJsonAsync($"/api/requirements/{request.Id}", new { categoryId = category.Id,
+                    requiredQuantity = 400, unit = "m2", maximumBudget = 400000,
+                    deadline = DateTime.UtcNow.AddDays(7), latitude = 6.9, longitude = 79.8 })).EnsureSuccessStatusCode();
                 var restart = await buyer.PostAsync($"/api/requirements/{request.Id}/start-matching", null);
                 restart.EnsureSuccessStatusCode();
                 var resumed = (await restart.Content.ReadFromJsonAsync<StartMatchingResponse>())!;
                 Assert.NotEqual(start.WorkflowId, resumed.WorkflowId);
                 await WaitForMatch(buyer, request.Id);
                 using var db = fixture.Context();
-                Assert.Equal(AgentWorkflowStatus.PENDING_APPROVAL, (await db.AgentWorkflows.FindAsync(resumed.WorkflowId))!.Status);
+                Assert.Equal(AgentWorkflowStatus.COMPLETED, (await db.AgentWorkflows.FindAsync(resumed.WorkflowId))!.Status);
                 Assert.Equal(0m, (await db.Listings.FindAsync(listingIds[0]))!.ReservedQuantity);
-                (await manager.PostAsJsonAsync($"/api/workflows/{resumed.WorkflowId}/approve", new { note = "Revised review" })).EnsureSuccessStatusCode();
+                var rerunMatches = await buyer.GetFromJsonAsync<MatchPage>($"/api/matches/requirement/{request.Id}");
+                var rerunChoice = rerunMatches!.Items.Single(x => x.ListingId == listingIds[0] && x.Status == "ROUTED");
+                var rerunSelectionResponse = await buyer.PostAsJsonAsync($"/api/requirements/{request.Id}/select-match", new { matchId = rerunChoice.Id });
+                rerunSelectionResponse.EnsureSuccessStatusCode();
+                var rerunSelection = (await rerunSelectionResponse.Content.ReadFromJsonAsync<RequirementResponse>())!;
+                (await manager.PostAsJsonAsync($"/api/workflows/{rerunSelection.WorkflowId}/approve", new { note = "Revised review" })).EnsureSuccessStatusCode();
                 var approvedTransaction = await db.Transactions.AsNoTracking().SingleAsync(x =>
                     x.Offer.MaterialMatch.MaterialRequestId == request.Id && x.Status == TransactionStatus.APPROVED);
                 Assert.Equal(HttpStatusCode.Forbidden, (await manager.PostAsync($"/api/transactions/{approvedTransaction.Id}/complete", null)).StatusCode);
@@ -116,7 +131,7 @@ public sealed class PreS12GoldenWorkflowTests(RequirementsDatabase fixture) : IC
                 var sellerOutcome = await seller.GetFromJsonAsync<TransactionResponse>($"/api/transactions/{approvedTransaction.Id}");
                 Assert.Equal(TransactionStatus.COMPLETED, sellerOutcome!.Status);
                 Assert.Equal(400m, sellerOutcome.ReservedQuantity);
-                Assert.Equal(2, await db.AgentWorkflows.CountAsync(x => x.MaterialRequestId == request.Id));
+                Assert.Equal(4, await db.AgentWorkflows.CountAsync(x => x.MaterialRequestId == request.Id));
                 Assert.Equal(1, await db.Reservations.CountAsync(x => x.MaterialRequestId == request.Id));
             }
         }

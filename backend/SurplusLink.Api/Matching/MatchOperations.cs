@@ -22,7 +22,7 @@ public sealed partial class MatchService
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         var request = await LockOpenRequirement(id, actor, manager, ct);
         var listings = await db.Listings.AsNoTracking().Where(x => x.CategoryId == request.CategoryId)
-            .OrderByDescending(x => x.Status == ListingStatus.ACTIVE && x.AvailableUntil >= request.Deadline &&
+            .OrderByDescending(x => x.Status == ListingStatus.ACTIVE && x.AvailableUntil > DateTime.UtcNow &&
                 x.SellerId != request.BuyerId && x.Quantity - x.ReservedQuantity >= request.RequiredQuantity &&
                 x.Unit.ToLower() == request.Unit.ToLower() && x.UnitPrice * request.RequiredQuantity <= request.MaximumBudget)
             .ThenBy(x => x.UnitPrice).ThenBy(x => x.Id).Take(100).ToListAsync(ct);
