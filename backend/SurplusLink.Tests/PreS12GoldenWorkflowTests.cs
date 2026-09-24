@@ -36,7 +36,7 @@ public sealed class PreS12GoldenWorkflowTests(RequirementsDatabase fixture) : IC
         using var manager = fixture.Client(app, fixture.Manager, "MANAGER");
         foreach (var decision in new[] { "approve", "reject", "revise" })
         {
-            var categoryResponse = await manager.PostAsJsonAsync("/api/material-categories", new { name = "Floor Tiles " + Guid.NewGuid() });
+            var categoryResponse = await manager.PostAsJsonAsync("/api/material-categories", new { name = "Floor Tiles " + Guid.NewGuid(), allowedUnits = new[] { "m2" } });
             categoryResponse.EnsureSuccessStatusCode();
             var category = (await categoryResponse.Content.ReadFromJsonAsync<MaterialCategoryResponse>())!;
             var listingIds = new List<Guid>();

@@ -22,7 +22,7 @@ public sealed class MatchingReevaluationTests(RequirementsDatabase fixture) : IC
             using var seller = fixture.Client(app, fixture.Seller, "SELLER");
             using var buyer = fixture.Client(app, fixture.Buyer);
             using var manager = fixture.Client(app, fixture.Manager, "MANAGER");
-            var categoryResponse = await manager.PostAsJsonAsync("/api/material-categories", new { name = "Tiles " + Guid.NewGuid() });
+            var categoryResponse = await manager.PostAsJsonAsync("/api/material-categories", new { name = "Tiles " + Guid.NewGuid(), allowedUnits = new[] { "pcs" } });
             categoryResponse.EnsureSuccessStatusCode();
             var category = (await categoryResponse.Content.ReadFromJsonAsync<MaterialCategoryResponse>())!;
             var created = await seller.PostAsJsonAsync("/api/materials", new {
