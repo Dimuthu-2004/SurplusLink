@@ -148,7 +148,6 @@ GoRouter createAppRouter({
           path: '/requirements/new',
           builder: (context, state) => RequirementFormScreen(
             gateway: requirementGateway,
-            addressSearch: addressSearch,
             locationSource: requirementLocation,
             locationLookup: locationLookup,
           ),
@@ -158,7 +157,6 @@ GoRouter createAppRouter({
           builder: (context, state) => RequirementFormScreen(
             gateway: requirementGateway,
             requirementId: state.pathParameters['id']!,
-            addressSearch: addressSearch,
             locationSource: requirementLocation,
             locationLookup: locationLookup,
           ),
