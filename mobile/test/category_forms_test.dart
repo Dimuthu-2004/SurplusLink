@@ -17,6 +17,7 @@ import 'package:mobile/core/api_client.dart';
 import 'package:mobile/core/api_exception.dart';
 import 'package:mobile/materials/material_inventory_gateway.dart';
 import 'package:mobile/materials/material_inventory_repository.dart';
+import 'package:mobile/requirements/requirement_location.dart';
 import 'package:mobile/materials/material_models.dart';
 import 'package:mobile/requirements/requirement_repository.dart';
 import 'package:mobile/screens/add_material_screen.dart';
@@ -308,7 +309,7 @@ void main() {
     },
   );
 
-  for (final buyer in [false, true]) {
+  for (final buyer in [true]) {
     testWidgets(
       '${buyer ? "buyer" : "seller"} manual address and map share saved coordinates',
       (tester) async {
@@ -404,6 +405,80 @@ void main() {
     );
   }
 
+  testWidgets(
+    'seller location uses address search, map, and current location without coordinate inputs',
+    (tester) async {
+      tester.view.physicalSize = const Size(1100, 3200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final materials = FakeCategoryMaterials();
+      Future<List<AddressResult>> search(String query) async {
+        expect(query, 'Colombo');
+        return [const AddressResult(6.9, 79.8, 'Colombo address')];
+      }
+
+      Future<PickedLocation?> pick(
+        BuildContext context, {
+        double? latitude,
+        double? longitude,
+      }) async {
+        expect(latitude, 6.9);
+        expect(longitude, 79.8);
+        return const PickedLocation(7.1, 80.2);
+      }
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MaterialListingFormScreen(
+            gateway: materials,
+            listingId: 'listing-1',
+            addressSearch: search,
+            locationPicker: pick,
+            locationSource: const _FixedLocationSource(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('material-latitude')), findsNothing);
+      expect(find.byKey(const Key('material-longitude')), findsNothing);
+      expect(
+        find.ancestor(
+          of: find.text('Find address'),
+          matching: find.byType(OutlinedButton),
+        ),
+        findsOneWidget,
+      );
+
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Search address'),
+        'Colombo',
+      );
+      await tester.tap(find.text('Find address'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Colombo address'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('save-material')));
+      await tester.pumpAndSettle();
+      expect(materials.saved!.latitude, 6.9);
+      expect(materials.saved!.longitude, 79.8);
+
+      await tester.tap(find.byKey(const Key('material-map')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('save-material')));
+      await tester.pumpAndSettle();
+      expect(materials.saved!.latitude, 7.1);
+      expect(materials.saved!.longitude, 80.2);
+
+      await tester.tap(find.byKey(const Key('capture-gps')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('save-material')));
+      await tester.pumpAndSettle();
+      expect(materials.saved!.latitude, 6.5);
+      expect(materials.saved!.longitude, 79.5);
+    },
+  );
   testWidgets(
     'material category filter selects an ID and clears to all categories',
     (tester) async {
@@ -518,4 +593,12 @@ class FakeCategoryMaterials implements MaterialInventoryGateway {
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _FixedLocationSource implements RequirementLocationSource {
+  const _FixedLocationSource();
+
+  @override
+  Future<RequirementLocation> capture() async =>
+      const RequirementLocation(6.5, 79.5, accuracy: 12);
 }

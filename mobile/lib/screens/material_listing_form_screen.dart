@@ -243,6 +243,28 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
     }
   }
 
+  Future<void> _captureGps() async {
+    if (_locating || _isSaving) return;
+    setState(() => _locating = true);
+    try {
+      final position = await widget.locationSource.capture();
+      if (!mounted) return;
+      setState(() {
+        _accuracy = position.accuracy;
+        _latitude = position.latitude;
+        _longitude = position.longitude;
+        _latitudeText.text = position.latitude.toStringAsFixed(6);
+        _longitudeText.text = position.longitude.toStringAsFixed(6);
+      });
+    } on LocationCaptureException catch (error) {
+      if (mounted) _showMessage(error.message);
+    } on Object {
+      if (mounted) _showMessage('Unable to capture location. Please retry.');
+    } finally {
+      if (mounted) setState(() => _locating = false);
+    }
+  }
+
   Future<void> _save() async {
     if (_isSaving ||
         _mediaBusy ||
@@ -446,6 +468,8 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                     prefix: 'material',
                     search: widget.addressSearch,
                     enabled: !_isSaving && !_locating,
+                    showCoordinateFields: false,
+                    emphasizeSearchAction: true,
                     onChanged: () => setState(() {
                       _latitude = double.tryParse(_latitudeText.text.trim());
                       _longitude = double.tryParse(_longitudeText.text.trim());
@@ -466,13 +490,33 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                     )
                   else
                     const Text('No location selected yet.'),
-                  OutlinedButton.icon(
-                    key: const Key('capture-gps'),
-                    onPressed: _locating || _isSaving ? null : _chooseLocation,
-                    icon: const Icon(Icons.map_outlined),
-                    label: Text(
-                      _locating ? 'Opening map...' : 'Choose location on map',
-                    ),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      OutlinedButton.icon(
+                        key: const Key('capture-gps'),
+                        onPressed: _locating || _isSaving ? null : _captureGps,
+                        icon: const Icon(Icons.my_location),
+                        label: Text(
+                          _locating
+                              ? 'Getting location...'
+                              : 'Use my current location',
+                        ),
+                      ),
+                      OutlinedButton.icon(
+                        key: const Key('material-map'),
+                        onPressed: _locating || _isSaving
+                            ? null
+                            : _chooseLocation,
+                        icon: const Icon(Icons.map_outlined),
+                        label: Text(
+                          _locating
+                              ? 'Opening map...'
+                              : 'Choose location on map',
+                        ),
+                      ),
+                    ],
                   ),
                   const Divider(),
                   Text(
