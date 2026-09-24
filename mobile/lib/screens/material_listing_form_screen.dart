@@ -1,11 +1,10 @@
-import 'package:mobile/widgets/manual_location_fields.dart';
-import 'package:mobile/categories/seller_unit_field.dart';
 import 'package:mobile/widgets/dashboard_back_button.dart';
 
 import 'dart:typed_data';
 
 import 'package:mobile/categories/category_dropdown.dart';
 import 'package:mobile/categories/material_category.dart';
+import 'package:mobile/categories/seller_unit_field.dart';
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -23,20 +22,20 @@ class MaterialListingFormScreen extends StatefulWidget {
     required this.gateway,
     this.listingId,
     this.media,
-    this.locationSource = const DeviceRequirementLocation(),
-    this.locationLookup,
     this.addressSearch,
     this.locationPicker = showLocationPicker,
+    this.locationSource = const DeviceRequirementLocation(),
+    this.locationLookup,
     super.key,
   });
 
   final MaterialInventoryGateway gateway;
   final String? listingId;
   final MaterialMedia? media;
-  final RequirementLocationSource locationSource;
-  final AddressLookup? locationLookup;
   final AddressSearch? addressSearch;
   final LocationPicker locationPicker;
+  final RequirementLocationSource locationSource;
+  final AddressLookup? locationLookup;
 
   bool get isEditing => listingId != null;
 
@@ -62,8 +61,6 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
   double? _accuracy;
   String _condition = 'GOOD';
   DateTime _availableUntil = DateTime.now().add(const Duration(days: 7));
-  final _latitudeText = TextEditingController();
-  final _longitudeText = TextEditingController();
   double? _latitude;
   double? _longitude;
   bool _isLoading = false;
@@ -81,10 +78,7 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
     _titleController.dispose();
     _descriptionController.dispose();
     _quantityController.dispose();
-
     _priceController.dispose();
-    _latitudeText.dispose();
-    _longitudeText.dispose();
     super.dispose();
   }
 
@@ -119,8 +113,6 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
         _availableUntil = listing.availableUntil;
         _latitude = listing.latitude;
         _longitude = listing.longitude;
-        _latitudeText.text = listing.latitude?.toString() ?? '';
-        _longitudeText.text = listing.longitude?.toString() ?? '';
         _photoUrls
           ..clear()
           ..addAll(listing.photos.map((photo) => photo.photoUrl));
@@ -177,7 +169,9 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
     setState(() => _mediaBusy = true);
     try {
       final captured = camera ? await _media.takePhoto() : null;
-      final files = camera ? [?captured] : await _media.pickGallery();
+      final files = camera
+          ? [?captured]
+          : await _media.pickGallery();
       if (files.length > remaining && mounted) {
         _showMessage('Only the first $remaining photos can be added.');
       }
@@ -230,36 +224,12 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
           _accuracy = null;
           _latitude = picked.latitude;
           _longitude = picked.longitude;
-          _latitudeText.text = picked.latitude.toStringAsFixed(6);
-          _longitudeText.text = picked.longitude.toStringAsFixed(6);
         });
       }
     } on LocationCaptureException catch (error) {
       if (mounted) _showMessage(error.message);
     } on Object {
       if (mounted) _showMessage('Unable to choose a location. Please retry.');
-    } finally {
-      if (mounted) setState(() => _locating = false);
-    }
-  }
-
-  Future<void> _captureGps() async {
-    if (_locating || _isSaving) return;
-    setState(() => _locating = true);
-    try {
-      final position = await widget.locationSource.capture();
-      if (!mounted) return;
-      setState(() {
-        _accuracy = position.accuracy;
-        _latitude = position.latitude;
-        _longitude = position.longitude;
-        _latitudeText.text = position.latitude.toStringAsFixed(6);
-        _longitudeText.text = position.longitude.toStringAsFixed(6);
-      });
-    } on LocationCaptureException catch (error) {
-      if (mounted) _showMessage(error.message);
-    } on Object {
-      if (mounted) _showMessage('Unable to capture location. Please retry.');
     } finally {
       if (mounted) setState(() => _locating = false);
     }
@@ -412,12 +382,12 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: SellerUnitField(
-                          key: ValueKey('material-unit-$_category'),
+                          key: const Key('material-unit'),
                           categoryId: _category,
                           initialUnit: _unit,
                           load: widget.gateway.categoryUnits,
                           enabled: !_isSaving,
-                          onChanged: (value) => _unit = value,
+                          onChanged: (value) => setState(() => _unit = value),
                         ),
                       ),
                     ],
@@ -448,9 +418,7 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                     keyboardType: const TextInputType.numberWithOptions(
                       decimal: true,
                     ),
-                    decoration: const InputDecoration(
-                      labelText: 'Unit price (LKR)',
-                    ),
+                    decoration: const InputDecoration(labelText: 'Unit price (LKR)'),
                     validator: (value) => _positiveNumber(value, 'Unit price'),
                   ),
                   const SizedBox(height: 12),
@@ -462,26 +430,7 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                     onTap: _chooseDate,
                   ),
                   const Divider(),
-                  ManualLocationFields(
-                    latitude: _latitudeText,
-                    longitude: _longitudeText,
-                    prefix: 'material',
-                    search: widget.addressSearch,
-                    enabled: !_isSaving && !_locating,
-                    showCoordinateFields: false,
-                    emphasizeSearchAction: true,
-                    onChanged: () => setState(() {
-                      _latitude = double.tryParse(_latitudeText.text.trim());
-                      _longitude = double.tryParse(_longitudeText.text.trim());
-                      _accuracy = null;
-                    }),
-                  ),
-                  if (_latitude != null &&
-                      _longitude != null &&
-                      _latitude!.isFinite &&
-                      _longitude!.isFinite &&
-                      _latitude!.abs() <= 90 &&
-                      _longitude!.abs() <= 180)
+                  if (_latitude != null && _longitude != null)
                     LocationCard(
                       latitude: _latitude!,
                       longitude: _longitude!,
@@ -490,33 +439,13 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                     )
                   else
                     const Text('No location selected yet.'),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      OutlinedButton.icon(
-                        key: const Key('capture-gps'),
-                        onPressed: _locating || _isSaving ? null : _captureGps,
-                        icon: const Icon(Icons.my_location),
-                        label: Text(
-                          _locating
-                              ? 'Getting location...'
-                              : 'Use my current location',
-                        ),
-                      ),
-                      OutlinedButton.icon(
-                        key: const Key('material-map'),
-                        onPressed: _locating || _isSaving
-                            ? null
-                            : _chooseLocation,
-                        icon: const Icon(Icons.map_outlined),
-                        label: Text(
-                          _locating
-                              ? 'Opening map...'
-                              : 'Choose location on map',
-                        ),
-                      ),
-                    ],
+                  OutlinedButton.icon(
+                    key: const Key('capture-gps'),
+                    onPressed: _locating || _isSaving ? null : _chooseLocation,
+                    icon: const Icon(Icons.map_outlined),
+                    label: Text(
+                      _locating ? 'Opening map...' : 'Choose location on map',
+                    ),
                   ),
                   const Divider(),
                   Text(
