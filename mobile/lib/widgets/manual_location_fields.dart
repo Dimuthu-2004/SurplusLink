@@ -10,13 +10,18 @@ class ManualLocationFields extends StatefulWidget {
     this.search,
     this.enabled = true,
     this.requiredLocation = false,
+    this.showCoordinateFields = true,
+    this.emphasizeSearchAction = false,
     super.key,
   });
   final TextEditingController latitude, longitude;
   final VoidCallback onChanged;
   final String prefix;
   final AddressSearch? search;
-  final bool enabled, requiredLocation;
+  final bool enabled,
+      requiredLocation,
+      showCoordinateFields,
+      emphasizeSearchAction;
   @override
   State<ManualLocationFields> createState() => _ManualLocationFieldsState();
 }
@@ -99,8 +104,10 @@ class _ManualLocationFieldsState extends State<ManualLocationFields> {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      const Text(
-        'Enter an address or coordinates, or choose a location on the map.',
+      Text(
+        widget.showCoordinateFields
+            ? 'Enter an address or coordinates, or choose a location on the map.'
+            : 'Search for an address, use your current location, or choose a location on the map.',
       ),
       if (widget.search != null) ...[
         TextField(
@@ -117,10 +124,36 @@ class _ManualLocationFieldsState extends State<ManualLocationFields> {
             });
           },
         ),
-        TextButton(
-          onPressed: widget.enabled && !_busy ? _search : null,
-          child: Text(_busy ? 'Searching addresses...' : 'Find address'),
-        ),
+        if (widget.emphasizeSearchAction)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              onPressed: widget.enabled && !_busy ? _search : null,
+              icon: _busy
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.search),
+              label: Text(_busy ? 'Searching addresses...' : 'Find address'),
+              style: OutlinedButton.styleFrom(
+                backgroundColor: Theme.of(context)
+                    .colorScheme
+                    .surfaceContainerHighest,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
+                visualDensity: VisualDensity.compact,
+              ),
+            ),
+          )
+        else
+          TextButton(
+            onPressed: widget.enabled && !_busy ? _search : null,
+            child: Text(_busy ? 'Searching addresses...' : 'Find address'),
+          ),
         if (_message != null) Text(_message!),
         for (final result in _results)
           ListTile(
@@ -138,30 +171,32 @@ class _ManualLocationFieldsState extends State<ManualLocationFields> {
                   },
           ),
       ],
-      TextFormField(
-        key: Key('${widget.prefix}-latitude'),
-        controller: widget.latitude,
-        enabled: widget.enabled,
-        decoration: const InputDecoration(labelText: 'Latitude'),
-        keyboardType: const TextInputType.numberWithOptions(
-          decimal: true,
-          signed: true,
+      if (widget.showCoordinateFields) ...[
+        TextFormField(
+          key: Key('${widget.prefix}-latitude'),
+          controller: widget.latitude,
+          enabled: widget.enabled,
+          decoration: const InputDecoration(labelText: 'Latitude'),
+          keyboardType: const TextInputType.numberWithOptions(
+            decimal: true,
+            signed: true,
+          ),
+          onChanged: (_) => widget.onChanged(),
+          validator: (v) => _validate(v, 90, widget.longitude),
         ),
-        onChanged: (_) => widget.onChanged(),
-        validator: (v) => _validate(v, 90, widget.longitude),
-      ),
-      TextFormField(
-        key: Key('${widget.prefix}-longitude'),
-        controller: widget.longitude,
-        enabled: widget.enabled,
-        decoration: const InputDecoration(labelText: 'Longitude'),
-        keyboardType: const TextInputType.numberWithOptions(
-          decimal: true,
-          signed: true,
+        TextFormField(
+          key: Key('${widget.prefix}-longitude'),
+          controller: widget.longitude,
+          enabled: widget.enabled,
+          decoration: const InputDecoration(labelText: 'Longitude'),
+          keyboardType: const TextInputType.numberWithOptions(
+            decimal: true,
+            signed: true,
+          ),
+          onChanged: (_) => widget.onChanged(),
+          validator: (v) => _validate(v, 180, widget.latitude),
         ),
-        onChanged: (_) => widget.onChanged(),
-        validator: (v) => _validate(v, 180, widget.latitude),
-      ),
+      ],
       const SizedBox(height: 12),
     ],
   );
