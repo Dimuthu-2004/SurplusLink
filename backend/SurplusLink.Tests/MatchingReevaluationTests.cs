@@ -155,7 +155,7 @@ public sealed class MatchingReevaluationTests(RequirementsDatabase fixture) : IC
     {
         public Task<(WorkflowRunResult Result, int Retries)> RunAsync(WorkflowRunRequest request, CancellationToken ct) =>
             Task.FromResult((!request.Listings.Any(x => x.Status == "ACTIVE" && x.TransportCost is not null)
-                ? new WorkflowRunResult(request.WorkflowId, "REVISION_REQUESTED", new(false, false, null, ["NO_CANDIDATES"], []), null, [], null)
+                ? new WorkflowRunResult(request.WorkflowId, "REJECTED", new(false, false, null, ["NO_CANDIDATES"], []), null, [], null)
                 : WorkflowExecutionTests.Success(request), 0));
     }
     private sealed class CheckedTransport : ITransportEstimateService

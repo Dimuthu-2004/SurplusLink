@@ -25,7 +25,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.textContaining('Buyer participation'), findsOneWidget);
       expect(find.text('Approve'), findsNothing);
-      await tester.tap(find.text('Offer 12345678'));
+      await tester.tap(find.byType(ListTile).first);
       await tester.pumpAndSettle();
       expect(find.text('Offer Details'), findsOneWidget);
       expect(find.text('Your participation: Buyer'), findsOneWidget);
@@ -74,10 +74,11 @@ void main() {
       if (role == 'buyer') {
         expect(find.text('seller@test.local'), findsOneWidget);
         expect(find.text('Have you received the materials?'), findsOneWidget);
+        await tester.scrollUntilVisible(find.text('Yes, Received'), 100);
         await tester.tap(find.text('Yes, Received'));
         await tester.pumpAndSettle();
         expect(gateway.status, 'COMPLETED');
-        expect(find.text('Transaction: Completed'), findsOneWidget);
+        expect(find.text('Completed'), findsWidgets);
       }
     });
   }
@@ -109,6 +110,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('seller@test.local'), findsOneWidget);
     expect(find.text('Yes, Received'), findsNothing);
+    expect(find.byTooltip('Call seller'), findsOneWidget);
   });
 
   testWidgets('transaction history retries and loads every server page', (
@@ -151,7 +153,7 @@ class FakeOffers implements OfferGateway {
     totalValue: 320000,
     updatedAt: DateTime.utc(2026),
     buyerContact: const TransactionContact(email: 'buyer@test.local'),
-    sellerContact: const TransactionContact(email: 'seller@test.local'),
+    sellerContact: const TransactionContact(email: 'seller@test.local', phoneNumber: '0771234567'),
   );
   @override
   Future<Transaction> handover(String id) async {

@@ -9,7 +9,7 @@ import { ManagerMatchComparisonPage } from '../pages/manager/ManagerMatchCompari
 import { createManagerMatchesApi, type ManagerMatchesApi } from '../features/matches/managerMatchesApi';
 const context = { id: 'r1', buyerId: 'b1', categoryId: 'c1', requiredQuantity: 400, unit: 'pcs', maximumBudget: 400000,
   deadline: '2030-01-01', status: 'OPEN', notes: 'Tiles requirement', latitude: 6.9, longitude: 79.8, createdAt: '2026-09-22', updatedAt: '2026-09-22' };
-const raw = { id: 'm1', requirementId: 'r1', listingId: 'l1', sellerId: 's1', score: .8, status: 'ROUTE_FAILED', valid: true, rejected: false,
+const raw = { id: 'm1', requirementId: 'r1', listingId: 'l1', sellerId: 's1', score: .8, status: 'ROUTE_FAILED', valid: false, rejected: false,
   distance: null, durationMinutes: null, estimatedTransportCost: null, materialTitle: 'Tiles', categoryName: 'Floor tiles',
   quantity: 400, availableQuantity: 500, unit: 'pcs', unitPrice: 800, rejectionReason: null, createdAt: '2026-09-22' };
 const original = apiClient.defaults.adapter;

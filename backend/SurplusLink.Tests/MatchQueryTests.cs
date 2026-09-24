@@ -48,7 +48,7 @@ public sealed class MatchQueryTests
     public void Filters_compose_and_conflicting_filters_return_no_matches()
     {
         var rows = Enum.GetValues<MatchStatus>().Select(status => new MaterialMatch { Status = status }).AsQueryable();
-        Assert.Equal(4, MatchQueryBuilder.Filter(rows, new() { Valid = true }).Count());
+        Assert.Equal(1, MatchQueryBuilder.Filter(rows, new() { Valid = true }).Count());
         Assert.Single(MatchQueryBuilder.Filter(rows, new() { Rejected = true }));
         Assert.Single(MatchQueryBuilder.Filter(rows, new() { Valid = false, Rejected = true, Status = "rejected" }));
         Assert.Empty(MatchQueryBuilder.Filter(rows, new() { Valid = true, Rejected = true }));

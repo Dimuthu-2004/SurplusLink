@@ -7,7 +7,9 @@ public static class MatchQueryBuilder
     public static IQueryable<MaterialMatch> Filter(IQueryable<MaterialMatch> rows, MatchQuery query)
     {
         if (query.Valid.HasValue)
-            rows = rows.Where(x => (x.Status != MatchStatus.REJECTED) == query.Valid.Value);
+            // A candidate is selectable only after a successful route. Generated,
+            // ranked and route-failed rows remain comparison history, not valid matches.
+            rows = rows.Where(x => (x.Status == MatchStatus.ROUTED) == query.Valid.Value);
         if (query.Rejected.HasValue)
             rows = rows.Where(x => (x.Status == MatchStatus.REJECTED) == query.Rejected.Value);
         if (query.Status is not null)

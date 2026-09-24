@@ -182,7 +182,10 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
 
     internal static void ValidateResult(WorkflowRunRequest input, WorkflowRunResult result)
     {
-        var allowedStatuses = new[] { "PENDING_APPROVAL", "REVISION_REQUESTED", "REJECTED", "FAILED" };
+        // The AI service evaluates candidates only. It must not place a
+        // recommendation in approval or request a revision; both are explicit
+        // human actions.
+        var allowedStatuses = new[] { "MATCH_FOUND", "REJECTED", "FAILED" };
         var stages = new[] { "PLANNER", "MATCHING", "LOGISTICS", "VALIDATION" };
         var validationTools = new[] { "check_listing_active", "check_listing_not_expired", "check_available_quantity",
             "check_budget", "check_match_data_complete", "check_transaction_threshold" };
@@ -206,10 +209,10 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
                 call.DurationMilliseconds < 0 || call.CompletedAtUtc < call.StartedAtUtc ||
                 call.Status is not ("COMPLETED" or "FAILED"))) throw new JsonException("Invalid tool trace.");
         }
-        var pending = result.Status == "PENDING_APPROVAL";
-        if (pending != result.Validation.Valid || pending != result.Validation.RequiresApproval)
-            throw new JsonException("Invalid approval gate.");
-        if (!pending)
+        var matchFound = result.Status == "MATCH_FOUND";
+        if (matchFound != result.Validation.Valid || matchFound != result.Validation.RequiresApproval)
+            throw new JsonException("Invalid match-selection gate.");
+        if (!matchFound)
         {
             if (result.Recommendation is not null || result.Validation.RecommendedMatchId is not null)
                 throw new JsonException("Failed validation cannot recommend a match.");
@@ -217,7 +220,7 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
         }
         if (result.ErrorCode is not null || result.Validation.Violations.Length != 0 || result.Steps.Length != 4 ||
             result.Steps.Any(x => x.Status != "COMPLETED" || x.ErrorCode is not null))
-            throw new JsonException("Incomplete approval validation.");
+            throw new JsonException("Incomplete match validation.");
         var calls = result.Steps[3].ToolCalls;
         if (!calls.Select(x => x.ToolName).SequenceEqual(validationTools) || calls.Any(x => x.ErrorCode is not null ||
             x.Status != "COMPLETED" || x.Output is not { ValueKind: JsonValueKind.Object } output ||
@@ -265,7 +268,7 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
                 reason ??= "DELIVERY_DEADLINE_EXCEEDED";
             var routeSucceeded = row.DistanceKm is not null && row.DurationMinutes is not null && row.TransportCost is not null;
             candidate.Status = reason is not null ? MatchStatus.REJECTED : routeSucceeded ? MatchStatus.ROUTED : MatchStatus.ROUTE_FAILED;
-            candidate.RejectionReason = reason;
+            candidate.RejectionReason = reason ?? (routeSucceeded ? null : "ROUTE_UNAVAILABLE");
             candidate.Distance = routeSucceeded ? row.DistanceKm : null;
             candidate.DurationMinutes = routeSucceeded ? row.DurationMinutes : null;
             candidate.EstimatedTransportCost = routeSucceeded ? row.TransportCost : null;
@@ -278,7 +281,7 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
             db.AuditLogs.Add(new AuditLog { Id = Guid.NewGuid(), EntityType = nameof(MaterialMatch), EntityId = candidate.Id,
                 Action = reason is null ? "RANK" : "REJECT" });
         }
-        var awaitingBuyerSelection = result.Recommendation is not null;
+        var awaitingBuyerSelection = result.Status == "MATCH_FOUND";
         workflow.Status = awaitingBuyerSelection
             ? AgentWorkflowStatus.COMPLETED
             : Enum.Parse<AgentWorkflowStatus>(result.Status);
@@ -322,9 +325,9 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
             db.AuditLogs.Add(new AuditLog { Id = Guid.NewGuid(), EntityType = nameof(Transaction),
                 EntityId = transaction.Id, Action = "PENDING_APPROVAL" });
         }
-        request.Status = awaitingBuyerSelection
-            ? BuyerRequestStatus.MATCH_FOUND
-            : BuyerRequestStatus.OPEN;
+        // Keep every generated candidate available to the buyer, including a
+        // route failure. A retry is still explicit through Start Matching.
+        request.Status = BuyerRequestStatus.MATCH_FOUND;
         foreach (var trace in result.Steps)
         {
             var step = new AgentStep { Id = Guid.NewGuid(), Sequence = trace.Sequence, Stage = trace.Stage,

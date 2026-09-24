@@ -42,7 +42,7 @@ public sealed partial class MatchService(SurplusLinkDbContext db)
                 x.Distance,
                 x.EstimatedTransportCost,
                 x.Status.ToString(),
-                x.Status != MatchStatus.REJECTED,
+                x.Status == MatchStatus.ROUTED,
                 x.Status == MatchStatus.REJECTED,
                 x.RejectionReason,
                 x.CreatedAtUtc,
@@ -207,7 +207,7 @@ public sealed partial class MatchService(SurplusLinkDbContext db)
                 ? null
                 : (double)failure / count,
             await rows.CountAsync(
-                x => x.Status != MatchStatus.REJECTED,
+                x => x.Status == MatchStatus.ROUTED,
                 ct),
             await rows.CountAsync(
                 x => x.Status == MatchStatus.REJECTED,
@@ -405,6 +405,7 @@ public sealed partial class MatchService(SurplusLinkDbContext db)
         match.Status = succeeded
             ? MatchStatus.ROUTED
             : MatchStatus.ROUTE_FAILED;
+        match.RejectionReason = succeeded ? null : "ROUTE_UNAVAILABLE";
 
         Audit(
             match,

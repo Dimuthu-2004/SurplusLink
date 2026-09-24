@@ -138,6 +138,14 @@ void main() {
         'estimatedTransportCost': null,
       });
       expect(row.distance, isNull);
+      final routeFailed = RecommendedMatch.fromJson({
+        ...matchJson,
+        'status': 'ROUTE_FAILED',
+        'valid': false,
+        'rejected': false,
+        'rejectionReason': 'ROUTE_UNAVAILABLE',
+      });
+      expect(routeFailed.isSelectable, isFalse);
     },
   );
   test('401 invokes shared logout while 403 does not', () async {

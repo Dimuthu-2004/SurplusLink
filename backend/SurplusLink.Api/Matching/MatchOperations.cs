@@ -83,6 +83,7 @@ public sealed partial class MatchService
             match.DurationMinutes = success ? estimate!.Route.DurationMinutes : null;
             match.EstimatedTransportCost = success ? estimate!.EstimatedTransportCost : null;
             match.Status = success ? MatchStatus.ROUTED : MatchStatus.ROUTE_FAILED;
+            match.RejectionReason = success ? null : "ROUTE_UNAVAILABLE";
             Audit(match, actor, success ? "ROUTE_SUCCEEDED" : "ROUTE_FAILED");
             if (success && (listing.UnitPrice * request.RequiredQuantity + match.EstimatedTransportCost > request.MaximumBudget ||
                 match.DurationMinutes > (decimal)(request.Deadline - DateTime.UtcNow).TotalMinutes))

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mobile/core/api_exception.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:mobile/auth/auth_models.dart';
 import 'package:mobile/offers/offer_gateway.dart';
 import 'package:mobile/offers/offer_models.dart';
@@ -431,7 +432,18 @@ class _OfferTransactionDetailsState extends State<OfferTransactionDetails> {
             const Text('Counterparty contact'),
             if (contact.fullName != null) Text(contact.fullName!),
             Text(contact.email),
-            if (contact.phoneNumber != null) Text(contact.phoneNumber!),
+            if (contact.phoneNumber case final phone? when phone.trim().isNotEmpty)
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(phone),
+                  IconButton(
+                    tooltip: 'Call seller',
+                    icon: const Icon(Icons.phone),
+                    onPressed: () => launchUrl(Uri(scheme: 'tel', path: phone)),
+                  ),
+                ],
+              ),
           ],
           if (row.canHandover(widget.user))
             FilledButton(
