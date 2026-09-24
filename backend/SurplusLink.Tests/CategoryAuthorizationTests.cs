@@ -66,7 +66,7 @@ public sealed class CategoryAuthorizationTests
         if (role is not null) Authenticate(client, role, app.Services);
         var path = "/api/material-categories" + (method is "PUT" or "DELETE" ? $"/{Guid.NewGuid()}" : "");
         using var request = new HttpRequestMessage(new HttpMethod(method), path);
-        if (method is "POST" or "PUT") request.Content = JsonContent.Create(new { name = "Cement" });
+        if (method is "POST" or "PUT") request.Content = JsonContent.Create(new { name = "Cement", allowedUnits = new[] { "kg" } });
         using var response = await client.SendAsync(request);
         Assert.Equal(expected, (int)response.StatusCode);
         Assert.Equal(expected < 300 ? 1 : 0, ((CategoryServiceStub)(object)service).Calls);
@@ -102,6 +102,14 @@ public sealed class CategoryAuthorizationTests
         Assert.Equal("kg", MaterialUnits.Normalize(" KG "));
     }
 
+    [Fact]
+    public void Allowed_units_must_come_from_catalog_and_are_canonical()
+    {
+        Assert.Equal(new[] { "box", "kg", "l" }, MaterialUnits.ValidateAllowed([" KG ", "kg", " BOX ", "L"], MaterialUnits.Catalog));
+        Assert.Throws<MaterialOperationException>(() => MaterialUnits.ValidateAllowed([], MaterialUnits.Catalog));
+        Assert.Throws<MaterialOperationException>(() => MaterialUnits.ValidateAllowed(["arbitrary"], MaterialUnits.Catalog));
+    }
+
     private static void Authenticate(HttpClient client, string role, IServiceProvider services)
     {
         var options = services.GetRequiredService<IOptions<JwtOptions>>().Value;
@@ -123,6 +131,7 @@ public sealed class CategoryAuthorizationTests
             var category = new MaterialCategoryResponse(Guid.NewGuid(), "Cement", DateTime.UtcNow, DateTime.UtcNow);
             return targetMethod!.Name switch
             {
+                nameof(IMaterialInventoryService.GetUnitCatalogAsync) => Task.FromResult(MaterialUnits.Catalog),
                 nameof(IMaterialInventoryService.GetCategoryUnitsAsync) => Task.FromResult(Units),
                 nameof(IMaterialInventoryService.GetCategoriesAsync) => Task.FromResult<IReadOnlyList<MaterialCategoryResponse>>([category]),
                 nameof(IMaterialInventoryService.CreateCategoryAsync) => Task.FromResult(category),

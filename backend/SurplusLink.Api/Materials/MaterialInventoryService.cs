@@ -12,7 +12,7 @@ public sealed class MaterialInventoryService(SurplusLinkDbContext dbContext) : I
         CancellationToken cancellationToken)
     {
         ValidateListingRequest(request);
-        await EnsureCategoryExistsAsync(request.CategoryId, cancellationToken);
+        await EnsureCategoryUnitAsync(request.CategoryId, request.Unit, cancellationToken);
 
         var listing = new Listing
         {
@@ -136,7 +136,7 @@ public sealed class MaterialInventoryService(SurplusLinkDbContext dbContext) : I
                 "Only DRAFT or REJECTED listings can be edited. Publish the updated listing for manager verification.");
         }
 
-        await EnsureCategoryExistsAsync(request.CategoryId, cancellationToken);
+        await EnsureCategoryUnitAsync(request.CategoryId, request.Unit, cancellationToken);
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         try
         {
@@ -308,12 +308,14 @@ public sealed class MaterialInventoryService(SurplusLinkDbContext dbContext) : I
             .Select(category => ToResponse(category))
             .ToListAsync(cancellationToken);
 
+    public Task<IReadOnlyList<string>> GetUnitCatalogAsync(CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<string>>(MaterialUnits.Catalog);
+
     public async Task<IReadOnlyList<string>> GetCategoryUnitsAsync(Guid categoryId, CancellationToken cancellationToken)
     {
-        var units = await dbContext.Listings.AsNoTracking()
-            .Where(listing => listing.CategoryId == categoryId)
-            .Select(listing => listing.Unit).ToListAsync(cancellationToken);
-        return MaterialUnits.Distinct(units);
+        var units = await dbContext.Categories.AsNoTracking().Where(category => category.Id == categoryId)
+            .Select(category => category.AllowedUnits).SingleOrDefaultAsync(cancellationToken);
+        return MaterialUnits.Distinct(units ?? []);
     }
 
     public async Task<IReadOnlyList<string>> GetActiveUnitsAsync(Guid categoryId, CancellationToken cancellationToken)
@@ -339,7 +341,8 @@ public sealed class MaterialInventoryService(SurplusLinkDbContext dbContext) : I
             throw new MaterialOperationException(MaterialOperationError.Conflict, "A material category with that name already exists.");
         }
 
-        var category = new Category { Id = Guid.NewGuid(), Name = name };
+        var units = MaterialUnits.ValidateAllowed(request.AllowedUnits, await GetUnitCatalogAsync(cancellationToken));
+        var category = new Category { Id = Guid.NewGuid(), Name = name, AllowedUnits = units };
         dbContext.Categories.Add(category);
         await dbContext.SaveChangesAsync(cancellationToken);
         return ToResponse(category);
@@ -358,6 +361,7 @@ public sealed class MaterialInventoryService(SurplusLinkDbContext dbContext) : I
             throw new MaterialOperationException(MaterialOperationError.Conflict, "A material category with that name already exists.");
         }
 
+        category.AllowedUnits = MaterialUnits.ValidateAllowed(request.AllowedUnits, await GetUnitCatalogAsync(cancellationToken));
         category.Name = name;
         await dbContext.SaveChangesAsync(cancellationToken);
         return ToResponse(category);
@@ -392,12 +396,15 @@ public sealed class MaterialInventoryService(SurplusLinkDbContext dbContext) : I
             .SingleOrDefaultAsync(item => item.Id == listingId && item.SellerId == sellerId, cancellationToken)
         ?? throw new MaterialOperationException(MaterialOperationError.NotFound, "Material listing was not found.");
 
-    private async Task EnsureCategoryExistsAsync(Guid categoryId, CancellationToken cancellationToken)
+    private async Task EnsureCategoryUnitAsync(Guid categoryId, string unit, CancellationToken cancellationToken)
     {
-        if (categoryId == Guid.Empty || !await dbContext.Categories.AnyAsync(category => category.Id == categoryId, cancellationToken))
+        var category = await dbContext.Categories.SingleOrDefaultAsync(category => category.Id == categoryId, cancellationToken);
+        if (category is null)
         {
             throw new MaterialOperationException(MaterialOperationError.Validation, "CategoryId must reference an existing material category.");
         }
+        if (!MaterialUnits.Distinct(category.AllowedUnits).Contains(MaterialUnits.Normalize(unit)))
+            throw new MaterialOperationException(MaterialOperationError.Validation, "Select an allowed unit for this category.");
     }
 
     private async Task<Listing?> GetListingWithDetailsAsync(Guid listingId, CancellationToken cancellationToken) =>
@@ -506,7 +513,7 @@ public sealed class MaterialInventoryService(SurplusLinkDbContext dbContext) : I
             listing.Seller.BusinessName, listing.Seller.Email, listing.Seller.PhoneNumber));
 
     private static MaterialCategoryResponse ToResponse(Category category) =>
-        new(category.Id, category.Name, category.CreatedAtUtc, category.UpdatedAtUtc);
+        new(category.Id, category.Name, category.CreatedAtUtc, category.UpdatedAtUtc, MaterialUnits.Distinct(category.AllowedUnits));
 }
 
 

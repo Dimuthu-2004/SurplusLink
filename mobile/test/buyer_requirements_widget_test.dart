@@ -179,7 +179,7 @@ void main() {
       await tester.tap(find.text('Tiles').last);
       await tester.pumpAndSettle();
       expect(gateway.unitRequests, ['c1', 'c2']);
-      expect(find.text('No available units for this category'), findsOneWidget);
+      expect(find.text('No units assigned to this category'), findsOneWidget);
       expect(
         tester
             .widget<FilledButton>(find.byKey(const Key('requirement-save')))
@@ -412,7 +412,7 @@ Future<void> pumpApp(
 }
 
 Future<void> selectUnit(WidgetTester tester, String unit) async {
-  await tester.tap(find.byKey(const Key('requirement-unit')));
+  await tester.enterText(find.widgetWithText(TextField, 'Unit'), unit);
   await tester.pumpAndSettle();
   await tester.tap(find.text(unit).last);
   await tester.pumpAndSettle();

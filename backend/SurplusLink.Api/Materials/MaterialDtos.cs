@@ -81,11 +81,14 @@ public sealed record MaterialListingResponse(
 
 public sealed class MaterialCategoryRequest
 {
+    [Required, MinLength(1), MaxLength(100)]
+    public string[] AllowedUnits { get; init; } = [];
+
     [Required, MaxLength(120)]
     public string Name { get; init; } = string.Empty;
 }
 
-public sealed record MaterialCategoryResponse(Guid Id, string Name, DateTime CreatedAtUtc, DateTime UpdatedAtUtc);
+public sealed record MaterialCategoryResponse(Guid Id, string Name, DateTime CreatedAtUtc, DateTime UpdatedAtUtc, IReadOnlyList<string>? AllowedUnits = null);
 
 public sealed class MaterialListingQuery
 {

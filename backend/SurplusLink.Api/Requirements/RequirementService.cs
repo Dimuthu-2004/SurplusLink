@@ -1,3 +1,4 @@
+using SurplusLink.Api.Materials;
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
@@ -252,8 +253,11 @@ public sealed class RequirementService(SurplusLinkDbContext db, IRequirementWork
         if (!Validator.TryValidateObject(input, new ValidationContext(input), errors, true))
             throw new RequirementException(400, string.Join(" ", errors.Select(x => x.ErrorMessage)));
         FutureDeadline(input.Deadline!.Value.UtcDateTime);
-        return await db.Categories.SingleOrDefaultAsync(x => x.Id == input.CategoryId, ct)
+        var category = await db.Categories.SingleOrDefaultAsync(x => x.Id == input.CategoryId, ct)
             ?? throw new RequirementException(400, "Category does not exist.");
+        if (!MaterialUnits.Distinct(category.AllowedUnits).Contains(MaterialUnits.Normalize(input.Unit)))
+            throw new RequirementException(400, "Select an allowed unit for this category.");
+        return category;
     }
 
     private static void FutureDeadline(DateTime deadline)
@@ -279,7 +283,7 @@ public sealed class RequirementService(SurplusLinkDbContext db, IRequirementWork
         request.CategoryId = input.CategoryId;
         request.Notes = input.Notes?.Trim() ?? string.Empty;
         request.RequiredQuantity = input.RequiredQuantity;
-        request.Unit = input.Unit.Trim();
+        request.Unit = MaterialUnits.Normalize(input.Unit);
         request.MaximumBudget = input.MaximumBudget;
         request.Deadline = input.Deadline!.Value.UtcDateTime;
         request.Latitude = input.Latitude;

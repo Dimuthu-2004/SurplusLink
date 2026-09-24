@@ -1,3 +1,4 @@
+import 'package:mobile/categories/searchable_unit_field.dart';
 import 'package:mobile/widgets/manual_location_fields.dart';
 import 'package:mobile/categories/category_repository.dart';
 import 'package:mobile/widgets/location_card.dart';
@@ -498,31 +499,15 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
               ],
             ),
           )
-        : DropdownButtonFormField<String>(
+        : SearchableUnitField(
             key: ValueKey('requirement-unit-$_category-$_unitRequest'),
-            initialValue: _units.contains(_unit) ? _unit : null,
-            isExpanded: true,
-            decoration: const InputDecoration(labelText: 'Unit'),
-            hint: Text(
-              _category == null
-                  ? 'Choose a category first'
-                  : _units.isEmpty
-                  ? 'No available units for this category'
-                  : 'Choose a unit',
-            ),
-            items: _units
-                .map((unit) => DropdownMenuItem(value: unit, child: Text(unit)))
-                .toList(),
-            onChanged: _saving || _category == null || _units.isEmpty
-                ? null
-                : (value) => setState(() => _unit = value),
-            validator: (value) {
-              if (_category == null) return null;
-              if (_units.isEmpty) {
-                return 'No available units for this category.';
-              }
-              return value == null ? 'Choose a unit.' : null;
-            },
+            initialUnit: _units.contains(_unit) ? _unit : null,
+            units: _units,
+            hint: _category == null ? 'Choose a category first' : _units.isEmpty
+                ? 'No units assigned to this category' : 'Type to find a unit',
+            enabled: !_saving && _category != null && _units.isNotEmpty,
+            onChanged: (value) => setState(() => _unit = value),
+            validator: (value) => _category == null ? null : value == null ? 'Choose an allowed unit.' : null,
           ),
   );
   Widget _field(

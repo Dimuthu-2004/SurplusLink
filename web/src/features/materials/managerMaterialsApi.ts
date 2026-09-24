@@ -30,6 +30,7 @@ export interface ListingPhoto {
 }
 
 export interface MaterialCategory {
+  allowedUnits?: string[];
   id: string;
   name: string;
   createdAtUtc: string;
@@ -83,8 +84,9 @@ export interface ManagerMaterialsApi {
   getHistory(id: string): Promise<ListingHistoryItem[]>;
   verifyListing(id: string, approved: boolean): Promise<MaterialListing>;
   getCategories(): Promise<MaterialCategory[]>;
-  createCategory(name: string): Promise<MaterialCategory>;
-  updateCategory(id: string, name: string): Promise<MaterialCategory>;
+  getUnitCatalog(): Promise<string[]>;
+  createCategory(name: string, allowedUnits: string[]): Promise<MaterialCategory>;
+  updateCategory(id: string, name: string, allowedUnits: string[]): Promise<MaterialCategory>;
   deleteCategory(id: string): Promise<void>;
   getAnalytics(): Promise<InventoryAnalytics>;
 }
@@ -108,11 +110,14 @@ export function createManagerMaterialsApi(
     async getCategories() {
       return request(client.get<MaterialCategory[]>('/api/material-categories'));
     },
-    async createCategory(name) {
-      return request(client.post<MaterialCategory>('/api/material-categories', { name }));
+    async getUnitCatalog() {
+      return request(client.get<string[]>('/api/material-categories/unit-catalog'));
     },
-    async updateCategory(id, name) {
-      return request(client.put<MaterialCategory>(`/api/material-categories/${id}`, { name }));
+    async createCategory(name, allowedUnits) {
+      return request(client.post<MaterialCategory>('/api/material-categories', { name, allowedUnits }));
+    },
+    async updateCategory(id, name, allowedUnits) {
+      return request(client.put<MaterialCategory>(`/api/material-categories/${id}`, { name, allowedUnits }));
     },
     async deleteCategory(id) {
       await request(client.delete(`/api/material-categories/${id}`));

@@ -53,6 +53,7 @@ public static class MarketplaceModelConfiguration
         modelBuilder.Entity<Category>(entity =>
         {
             entity.ToTable("Categories");
+            entity.Property(category => category.AllowedUnits).HasColumnType("text[]").HasDefaultValueSql("ARRAY[]::text[]").IsRequired();
             entity.HasKey(category => category.Id).HasName("PK_Categories");
             entity.Property(category => category.Name).HasColumnType("citext").HasMaxLength(120).IsRequired();
             entity.HasIndex(category => category.Name).IsUnique().HasDatabaseName("UX_Categories_Name");
