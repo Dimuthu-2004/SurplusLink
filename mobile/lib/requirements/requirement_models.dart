@@ -89,8 +89,8 @@ class RequirementDraft {
     'unit': unit.trim(),
     'maximumBudget': maximumBudget,
     'deadline': deadline.toUtc().toIso8601String(),
-    'latitude': latitude,
-    'longitude': longitude,
+    'latitude': double.parse(latitude.toStringAsFixed(6)),
+    'longitude': double.parse(longitude.toStringAsFixed(6)),
     'notes': notes.trim(),
   };
 }
