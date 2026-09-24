@@ -1,3 +1,5 @@
+import 'package:mobile/widgets/manual_location_fields.dart';
+import 'package:mobile/categories/category_repository.dart';
 import 'package:mobile/widgets/location_card.dart';
 import 'package:mobile/location/location_lookup.dart';
 import 'package:mobile/categories/category_dropdown.dart';
@@ -15,12 +17,16 @@ class RequirementFormScreen extends StatefulWidget {
     this.requirementId,
     this.locationSource = const DeviceRequirementLocation(),
     this.locationLookup,
+    this.addressSearch,
+    this.locationPicker = showLocationPicker,
     super.key,
   });
   final RequirementGateway gateway;
   final String? requirementId;
   final RequirementLocationSource locationSource;
   final AddressLookup? locationLookup;
+  final AddressSearch? addressSearch;
+  final LocationPicker locationPicker;
   @override
   State<RequirementFormScreen> createState() => _RequirementFormScreenState();
 }
@@ -116,6 +122,7 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
       _unitRequest++;
       setState(() {
         _units = [];
+        _loadingUnits = false;
         _unit = null;
         _unitLoadError = null;
       });
@@ -133,11 +140,13 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
       _unitLoadError = null;
     });
     try {
-      final units = await widget.gateway.activeUnits(categoryId);
+      final units = normalizeUnits(
+        await widget.gateway.activeUnits(categoryId),
+      );
       if (!mounted || request != _unitRequest) return;
       String? selected;
       for (final unit in units) {
-        if (unit.toLowerCase() == preferredUnit?.trim().toLowerCase()) {
+        if (unit == normalizeUnit(preferredUnit ?? '')) {
           selected = unit;
           break;
         }
@@ -146,9 +155,9 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
         _units = units;
         _unit = selected;
       });
-    } on Object catch (error) {
+    } on Object {
       if (mounted && request == _unitRequest) {
-        setState(() => _unitLoadError = requirementError(error));
+        setState(() => _unitLoadError = 'Unable to load units. Please retry.');
       }
     } finally {
       if (mounted && request == _unitRequest) {
@@ -181,7 +190,7 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
       _locationError = null;
     });
     try {
-      final picked = await showLocationPicker(
+      final picked = await widget.locationPicker(
         context,
         latitude: _capturedLatitude,
         longitude: _capturedLongitude,
@@ -211,7 +220,10 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
 
   Future<void> _captureGps() async {
     if (_locating || _saving) return;
-    setState(() { _locating = true; _locationError = null; });
+    setState(() {
+      _locating = true;
+      _locationError = null;
+    });
     try {
       final position = await widget.locationSource.capture();
       if (!mounted) return;
@@ -225,7 +237,11 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
     } on LocationCaptureException catch (error) {
       if (mounted) setState(() => _locationError = error.message);
     } on Object {
-      if (mounted) setState(() => _locationError = 'Unable to capture location. Please retry.');
+      if (mounted) {
+        setState(
+          () => _locationError = 'Unable to capture location. Please retry.',
+        );
+      }
     } finally {
       if (mounted) setState(() => _locating = false);
     }
@@ -263,7 +279,9 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
       return;
     }
     if (_latitude.text.isEmpty || _longitude.text.isEmpty) {
-      setState(() => _locationError = 'Choose a delivery location on the map before saving.');
+      setState(
+        () => _locationError = 'Enter a delivery location manually or choose it on the map before saving.',
+      );
       return;
     }
     setState(() {
@@ -383,12 +401,32 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
                       style: TextStyle(fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 8),
+                    ManualLocationFields(
+                      latitude: _latitude,
+                      longitude: _longitude,
+                      prefix: 'requirement',
+                      search: widget.addressSearch,
+                      requiredLocation: true,
+                      enabled: !_saving && !_locating,
+                      onChanged: () => setState(() {
+                        _capturedLatitude = double.tryParse(
+                          _latitude.text.trim(),
+                        );
+                        _capturedLongitude = double.tryParse(
+                          _longitude.text.trim(),
+                        );
+                        _accuracy = null;
+                        _locationError = null;
+                      }),
+                    ),
                     OutlinedButton.icon(
                       key: const Key('requirement-gps'),
                       onPressed: _saving || _locating ? null : _captureGps,
                       icon: const Icon(Icons.my_location),
                       label: Text(
-                        _locating ? 'Getting location…' : 'Use my current location',
+                        _locating
+                            ? 'Getting location…'
+                            : 'Use my current location',
                       ),
                     ),
                     OutlinedButton.icon(
@@ -397,7 +435,12 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
                       icon: const Icon(Icons.map_outlined),
                       label: const Text('Choose location on map'),
                     ),
-                    if (_capturedLatitude != null && _capturedLongitude != null)
+                    if (_capturedLatitude != null &&
+                        _capturedLongitude != null &&
+                        _capturedLatitude!.isFinite &&
+                        _capturedLongitude!.isFinite &&
+                        _capturedLatitude!.abs() <= 90 &&
+                        _capturedLongitude!.abs() <= 180)
                       LocationCard(
                         latitude: _capturedLatitude!,
                         longitude: _capturedLongitude!,
@@ -424,15 +467,6 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
                             : 'Save draft',
                       ),
                     ),
-                    Opacity(
-                      opacity: 0,
-                      child: Column(
-                        children: [
-                          SizedBox(height: 24, child: TextFormField(key: const Key('requirement-latitude'), controller: _latitude)),
-                          SizedBox(height: 24, child: TextFormField(key: const Key('requirement-longitude'), controller: _longitude)),
-                        ],
-                      ),
-                    ),
                     const SizedBox(height: 24),
                   ],
                 ),
@@ -442,6 +476,7 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
   );
 
   Widget _unitField() => Padding(
+    key: const Key('requirement-unit'),
     padding: const EdgeInsets.only(bottom: 16),
     child: _loadingUnits
         ? const InputDecorator(
@@ -464,7 +499,7 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
             ),
           )
         : DropdownButtonFormField<String>(
-            key: const Key('requirement-unit'),
+            key: ValueKey('requirement-unit-$_category-$_unitRequest'),
             initialValue: _units.contains(_unit) ? _unit : null,
             isExpanded: true,
             decoration: const InputDecoration(labelText: 'Unit'),

@@ -1,3 +1,5 @@
+import 'package:mobile/widgets/manual_location_fields.dart';
+import 'package:mobile/categories/seller_unit_field.dart';
 import 'package:mobile/widgets/dashboard_back_button.dart';
 
 import 'dart:typed_data';
@@ -23,6 +25,8 @@ class MaterialListingFormScreen extends StatefulWidget {
     this.media,
     this.locationSource = const DeviceRequirementLocation(),
     this.locationLookup,
+    this.addressSearch,
+    this.locationPicker = showLocationPicker,
     super.key,
   });
 
@@ -31,6 +35,8 @@ class MaterialListingFormScreen extends StatefulWidget {
   final MaterialMedia? media;
   final RequirementLocationSource locationSource;
   final AddressLookup? locationLookup;
+  final AddressSearch? addressSearch;
+  final LocationPicker locationPicker;
 
   bool get isEditing => listingId != null;
 
@@ -47,7 +53,7 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _quantityController = TextEditingController();
-  final _unitController = TextEditingController(text: 'kg');
+  String? _unit;
   final _priceController = TextEditingController();
   final List<String> _photoUrls = [];
   final List<_SelectedPhoto> _selectedPhotos = [];
@@ -56,6 +62,8 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
   double? _accuracy;
   String _condition = 'GOOD';
   DateTime _availableUntil = DateTime.now().add(const Duration(days: 7));
+  final _latitudeText = TextEditingController();
+  final _longitudeText = TextEditingController();
   double? _latitude;
   double? _longitude;
   bool _isLoading = false;
@@ -73,8 +81,10 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
     _titleController.dispose();
     _descriptionController.dispose();
     _quantityController.dispose();
-    _unitController.dispose();
+
     _priceController.dispose();
+    _latitudeText.dispose();
+    _longitudeText.dispose();
     super.dispose();
   }
 
@@ -103,12 +113,14 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
         _titleController.text = listing.title;
         _descriptionController.text = listing.description;
         _quantityController.text = listing.quantity.toString();
-        _unitController.text = listing.unit;
+        _unit = listing.unit;
         _priceController.text = listing.unitPrice.toString();
         _condition = listing.condition;
         _availableUntil = listing.availableUntil;
         _latitude = listing.latitude;
         _longitude = listing.longitude;
+        _latitudeText.text = listing.latitude?.toString() ?? '';
+        _longitudeText.text = listing.longitude?.toString() ?? '';
         _photoUrls
           ..clear()
           ..addAll(listing.photos.map((photo) => photo.photoUrl));
@@ -165,9 +177,7 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
     setState(() => _mediaBusy = true);
     try {
       final captured = camera ? await _media.takePhoto() : null;
-      final files = camera
-          ? [?captured]
-          : await _media.pickGallery();
+      final files = camera ? [?captured] : await _media.pickGallery();
       if (files.length > remaining && mounted) {
         _showMessage('Only the first $remaining photos can be added.');
       }
@@ -209,7 +219,7 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
     if (_locating || _isSaving) return;
     setState(() => _locating = true);
     try {
-      final picked = await showLocationPicker(
+      final picked = await widget.locationPicker(
         context,
         latitude: _latitude,
         longitude: _longitude,
@@ -220,6 +230,8 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
           _accuracy = null;
           _latitude = picked.latitude;
           _longitude = picked.longitude;
+          _latitudeText.text = picked.latitude.toStringAsFixed(6);
+          _longitudeText.text = picked.longitude.toStringAsFixed(6);
         });
       }
     } on LocationCaptureException catch (error) {
@@ -255,7 +267,7 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
         title: _titleController.text,
         description: _descriptionController.text,
         quantity: double.parse(_quantityController.text.trim()),
-        unit: _unitController.text,
+        unit: _unit!,
         condition: _condition,
         unitPrice: double.parse(_priceController.text.trim()),
         latitude: _latitude,
@@ -334,7 +346,10 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                     value: _category,
                     onChanged: _isSaving
                         ? null
-                        : (value) => setState(() => _category = value),
+                        : (value) => setState(() {
+                            _category = value;
+                            _unit = null;
+                          }),
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
@@ -374,13 +389,13 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                       ),
                       const SizedBox(width: 8),
                       Expanded(
-                        child: TextFormField(
-                          key: const Key('material-unit'),
-                          controller: _unitController,
-                          maxLength: 32,
-                          decoration: const InputDecoration(labelText: 'Unit'),
-                          validator: (value) =>
-                              _requiredLength(value, 'Unit', 32),
+                        child: SellerUnitField(
+                          key: ValueKey('material-unit-$_category'),
+                          categoryId: _category,
+                          initialUnit: _unit,
+                          load: widget.gateway.categoryUnits,
+                          enabled: !_isSaving,
+                          onChanged: (value) => _unit = value,
                         ),
                       ),
                     ],
@@ -411,7 +426,9 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                     keyboardType: const TextInputType.numberWithOptions(
                       decimal: true,
                     ),
-                    decoration: const InputDecoration(labelText: 'Unit price (LKR)'),
+                    decoration: const InputDecoration(
+                      labelText: 'Unit price (LKR)',
+                    ),
                     validator: (value) => _positiveNumber(value, 'Unit price'),
                   ),
                   const SizedBox(height: 12),
@@ -423,7 +440,24 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                     onTap: _chooseDate,
                   ),
                   const Divider(),
-                  if (_latitude != null && _longitude != null)
+                  ManualLocationFields(
+                    latitude: _latitudeText,
+                    longitude: _longitudeText,
+                    prefix: 'material',
+                    search: widget.addressSearch,
+                    enabled: !_isSaving && !_locating,
+                    onChanged: () => setState(() {
+                      _latitude = double.tryParse(_latitudeText.text.trim());
+                      _longitude = double.tryParse(_longitudeText.text.trim());
+                      _accuracy = null;
+                    }),
+                  ),
+                  if (_latitude != null &&
+                      _longitude != null &&
+                      _latitude!.isFinite &&
+                      _longitude!.isFinite &&
+                      _latitude!.abs() <= 90 &&
+                      _longitude!.abs() <= 180)
                     LocationCard(
                       latitude: _latitude!,
                       longitude: _longitude!,

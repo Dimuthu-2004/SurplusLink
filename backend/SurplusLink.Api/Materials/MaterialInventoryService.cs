@@ -308,6 +308,14 @@ public sealed class MaterialInventoryService(SurplusLinkDbContext dbContext) : I
             .Select(category => ToResponse(category))
             .ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<string>> GetCategoryUnitsAsync(Guid categoryId, CancellationToken cancellationToken)
+    {
+        var units = await dbContext.Listings.AsNoTracking()
+            .Where(listing => listing.CategoryId == categoryId)
+            .Select(listing => listing.Unit).ToListAsync(cancellationToken);
+        return MaterialUnits.Distinct(units);
+    }
+
     public async Task<IReadOnlyList<string>> GetActiveUnitsAsync(Guid categoryId, CancellationToken cancellationToken)
     {
         var units = await dbContext.Listings.AsNoTracking()
@@ -427,7 +435,7 @@ public sealed class MaterialInventoryService(SurplusLinkDbContext dbContext) : I
         listing.Title = request.Title.Trim();
         listing.Description = request.Description.Trim();
         listing.Quantity = request.Quantity;
-        listing.Unit = request.Unit.Trim();
+        listing.Unit = MaterialUnits.Normalize(request.Unit);
         listing.Condition = Enum.Parse<MaterialCondition>(request.Condition, ignoreCase: false);
         listing.UnitPrice = request.UnitPrice;
         listing.Latitude = request.Latitude;

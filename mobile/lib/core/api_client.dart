@@ -45,6 +45,21 @@ final class ApiClient {
     }).toList();
   }
 
+  Future<List<String>> getStringListJson(
+    String path, {
+    bool authenticated = false,
+  }) async {
+    final json = await _send(
+      method: 'GET',
+      path: path,
+      authenticated: authenticated,
+    );
+    if (json is! List || json.any((item) => item is! String)) {
+      throw const FormatException('Expected an array of strings.');
+    }
+    return json.cast<String>();
+  }
+
   Future<Map<String, dynamic>> postJson(
     String path,
     Map<String, dynamic> body, {

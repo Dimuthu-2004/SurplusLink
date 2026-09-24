@@ -72,6 +72,36 @@ public sealed class CategoryAuthorizationTests
         Assert.Equal(expected < 300 ? 1 : 0, ((CategoryServiceStub)(object)service).Calls);
     }
 
+    [Theory]
+    [InlineData("SELLER", false)]
+    [InlineData("BUYER", false)]
+    [InlineData("MANAGER", true)]
+    [InlineData("BUYER", true)]
+    public async Task Category_units_returns_a_string_array_including_empty_categories(string role, bool empty)
+    {
+        using var factory = new ApiWebApplicationFactory();
+        var service = DispatchProxy.Create<IMaterialInventoryService, CategoryServiceStub>();
+        ((CategoryServiceStub)(object)service).Units = empty ? [] : ["kg", "m2"];
+        using var app = factory.WithWebHostBuilder(builder => builder.ConfigureServices(services =>
+        {
+            services.RemoveAll<IMaterialInventoryService>();
+            services.AddSingleton(service);
+        }));
+        using var client = app.CreateClient();
+        Authenticate(client, role, app.Services);
+        using var response = await client.GetAsync($"/api/material-categories/{Guid.NewGuid()}/units");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(empty ? [] : new[] { "kg", "m2" }, await response.Content.ReadFromJsonAsync<string[]>());
+    }
+
+    [Fact]
+    public void Units_normalize_case_and_whitespace_and_remove_empty_duplicates()
+    {
+        Assert.Equal(new[] { "kg", "square metre" }, MaterialUnits.Distinct([" KG ", "kg", "Kg", " square   METRE ", "square metre", " "]));
+        Assert.Empty(MaterialUnits.Distinct([]));
+        Assert.Equal("kg", MaterialUnits.Normalize(" KG "));
+    }
+
     private static void Authenticate(HttpClient client, string role, IServiceProvider services)
     {
         var options = services.GetRequiredService<IOptions<JwtOptions>>().Value;
@@ -86,12 +116,14 @@ public sealed class CategoryAuthorizationTests
     public class CategoryServiceStub : DispatchProxy
     {
         public int Calls { get; private set; }
+        public IReadOnlyList<string> Units { get; set; } = [];
         protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
         {
             Calls++;
             var category = new MaterialCategoryResponse(Guid.NewGuid(), "Cement", DateTime.UtcNow, DateTime.UtcNow);
             return targetMethod!.Name switch
             {
+                nameof(IMaterialInventoryService.GetCategoryUnitsAsync) => Task.FromResult(Units),
                 nameof(IMaterialInventoryService.GetCategoriesAsync) => Task.FromResult<IReadOnlyList<MaterialCategoryResponse>>([category]),
                 nameof(IMaterialInventoryService.CreateCategoryAsync) => Task.FromResult(category),
                 nameof(IMaterialInventoryService.UpdateCategoryAsync) => Task.FromResult(category),

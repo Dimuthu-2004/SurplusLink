@@ -19,6 +19,10 @@ final class MaterialInventoryRepository implements MaterialInventoryGateway {
       CategoryRepository(_apiClient).categories();
 
   @override
+  Future<List<String>> categoryUnits(String categoryId) =>
+      CategoryRepository(_apiClient).units(categoryId);
+
+  @override
   Future<MaterialListingPage> search(MaterialListingQuery query) async {
     final path = Uri(
       path: '/api/materials',

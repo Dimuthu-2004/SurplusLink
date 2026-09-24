@@ -23,12 +23,8 @@ class RequirementRepository implements RequirementGateway {
   Future<List<RequirementCategory>> categories() =>
       _guard(() => CategoryRepository(_api).categories());
   @override
-  Future<List<String>> activeUnits(String categoryId) => _guard(
-    () async => (await _api.getListJson(
-      '/api/material-categories/${Uri.encodeComponent(categoryId)}/active-units',
-      authenticated: true,
-    )).cast<String>(),
-  );
+  Future<List<String>> activeUnits(String categoryId) =>
+      _guard(() => CategoryRepository(_api).units(categoryId));
   @override
   Future<RequirementPage<BuyerRequirement>> my(RequirementQuery query) =>
       _guard(() async {

@@ -11,5 +11,6 @@ public sealed class ReverseGeocodingUnavailableException(string message, Excepti
 
 public interface IReverseGeocodingService
 {
+    Task<IReadOnlyList<ReverseGeocodingResponse>> SearchAsync(string query, CancellationToken cancellationToken);
     Task<ReverseGeocodingResponse> ReverseAsync(decimal latitude, decimal longitude, CancellationToken cancellationToken);
 }

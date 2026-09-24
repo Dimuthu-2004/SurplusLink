@@ -39,6 +39,7 @@ void main() {
       ),
       offerGateway: OfferRepository(apiClient),
       locationLookup: ApiLocationLookup(apiClient).lookup,
+      addressSearch: ApiLocationLookup(apiClient).search,
     ),
   );
 }

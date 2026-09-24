@@ -4,17 +4,24 @@ import 'package:mobile/location/location_lookup.dart';
 import 'package:mobile/screens/material_listing_form_screen.dart';
 
 class EditMaterialScreen extends StatelessWidget {
-  const EditMaterialScreen({required this.gateway, required this.listingId, this.locationLookup, super.key});
+  const EditMaterialScreen({
+    required this.gateway,
+    required this.listingId,
+    this.locationLookup,
+    this.addressSearch,
+    super.key,
+  });
 
   final MaterialInventoryGateway gateway;
   final String listingId;
   final AddressLookup? locationLookup;
+  final AddressSearch? addressSearch;
 
   @override
-  Widget build(BuildContext context) =>
-      MaterialListingFormScreen(
-        gateway: gateway,
-        listingId: listingId,
-        locationLookup: locationLookup,
-      );
+  Widget build(BuildContext context) => MaterialListingFormScreen(
+    gateway: gateway,
+    listingId: listingId,
+    locationLookup: locationLookup,
+    addressSearch: addressSearch,
+  );
 }

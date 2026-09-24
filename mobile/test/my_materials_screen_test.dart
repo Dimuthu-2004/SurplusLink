@@ -161,6 +161,8 @@ void main() {
 }
 
 final class _FakeMaterialsGateway implements MaterialInventoryGateway {
+  @override
+  Future<List<String>> categoryUnits(String categoryId) async => ['kg'];
   MaterialListingQuery? lastQuery;
   bool includeListing = false;
   int searchCount = 0;

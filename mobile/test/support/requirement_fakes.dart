@@ -35,6 +35,8 @@ class FakeRequirements implements RequirementGateway {
   List<String> unitItems = ['kg'];
   Map<String, List<String>> unitsByCategory = {};
   final unitRequests = <String>[];
+  final pendingUnits = <String, Completer<List<String>>>{};
+  Object? unitError;
   Object? error, startError, saveError;
   RequirementDraft? saved;
   final queries = <RequirementQuery>[];
@@ -59,6 +61,10 @@ class FakeRequirements implements RequirementGateway {
   @override
   Future<List<String>> activeUnits(String categoryId) async {
     unitRequests.add(categoryId);
+    if (unitError != null) throw unitError!;
+    if (pendingUnits.containsKey(categoryId)) {
+      return pendingUnits[categoryId]!.future;
+    }
     if (error != null) throw error!;
     return unitsByCategory[categoryId] ?? unitItems;
   }

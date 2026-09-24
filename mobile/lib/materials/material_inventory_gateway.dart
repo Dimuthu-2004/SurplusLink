@@ -3,6 +3,7 @@ import 'package:mobile/categories/material_category.dart';
 
 abstract interface class MaterialInventoryGateway {
   Future<List<MaterialCategory>> categories();
+  Future<List<String>> categoryUnits(String categoryId);
   Future<String> uploadPhoto(List<int> bytes);
   String photoUrl(String path);
   Future<MaterialListingPage> search(MaterialListingQuery query);
