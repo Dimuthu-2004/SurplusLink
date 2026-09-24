@@ -78,6 +78,44 @@ public sealed class NominatimReverseGeocodingService(
         }
     }
 
+    public async Task<IReadOnlyList<ReverseGeocodingResponse>> SearchAsync(string query, CancellationToken cancellationToken)
+    {
+        var key = "nominatim-search:" + query.Trim().ToLowerInvariant();
+        if (cache.TryGetValue(key, out IReadOnlyList<ReverseGeocodingResponse>? cached) && cached is not null) return cached;
+        await RequestGate.WaitAsync(cancellationToken);
+        try
+        {
+            if (cache.TryGetValue(key, out cached) && cached is not null) return cached;
+            var wait = MinimumRequestInterval - (DateTimeOffset.UtcNow - lastRequest);
+            if (wait > TimeSpan.Zero) await Task.Delay(wait, cancellationToken);
+            var uri = new UriBuilder(httpClient.BaseAddress!) { Path = "/search", Query = "format=jsonv2&limit=5&q=" + Uri.EscapeDataString(query.Trim()) }.Uri;
+            lastRequest = DateTimeOffset.UtcNow;
+            using var response = await httpClient.GetAsync(uri, cancellationToken);
+            response.EnsureSuccessStatusCode();
+            var payload = await response.Content.ReadFromJsonAsync<SearchResult[]>(cancellationToken) ?? [];
+            var results = new List<ReverseGeocodingResponse>();
+            foreach (var item in payload)
+            {
+                if (!decimal.TryParse(item.Latitude, NumberStyles.Float, CultureInfo.InvariantCulture, out var lat) || lat is < -90 or > 90 ||
+                    !decimal.TryParse(item.Longitude, NumberStyles.Float, CultureInfo.InvariantCulture, out var lon) || lon is < -180 or > 180 ||
+                    string.IsNullOrWhiteSpace(item.DisplayName)) throw new JsonException("Invalid location result.");
+                results.Add(new(lat, lon, item.DisplayName, "OpenStreetMap Nominatim"));
+            }
+            cache.Set(key, results, CacheDuration);
+            return results;
+        }
+        catch (Exception exception) when (exception is HttpRequestException or JsonException || exception is OperationCanceledException && !cancellationToken.IsCancellationRequested)
+        {
+            throw new ReverseGeocodingUnavailableException("Address search is temporarily unavailable. Enter coordinates or choose on the map.", exception);
+        }
+        finally { RequestGate.Release(); }
+    }
+
+    private sealed record SearchResult(
+        [property: System.Text.Json.Serialization.JsonPropertyName("lat")] string? Latitude,
+        [property: System.Text.Json.Serialization.JsonPropertyName("lon")] string? Longitude,
+        [property: System.Text.Json.Serialization.JsonPropertyName("display_name")] string? DisplayName);
+
     private sealed record NominatimResponse(
         [property: System.Text.Json.Serialization.JsonPropertyName("display_name")] string? DisplayName);
 }

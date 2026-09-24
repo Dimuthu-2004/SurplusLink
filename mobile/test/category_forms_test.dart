@@ -1,3 +1,8 @@
+import 'package:mobile/screens/material_listing_form_screen.dart';
+import 'package:mobile/widgets/location_picker.dart';
+import 'package:mobile/location/location_lookup.dart';
+import 'package:mobile/categories/seller_unit_field.dart';
+
 import 'dart:async';
 import 'dart:convert';
 
@@ -61,6 +66,31 @@ void main() {
     }
   });
 
+  test(
+    'both repositories read normalized string units and empty responses',
+    () async {
+      for (final empty in [false, true]) {
+        final api = ApiClient(
+          baseUri: Uri.parse('https://api.surpluslink.test'),
+          tokenStorage: MemoryTokenStorage()..token = 'token',
+          httpClient: MockClient((request) async {
+            expect(request.url.path, '/api/material-categories/c1/units');
+            expect(request.headers['authorization'], 'Bearer token');
+            return http.Response(empty ? '[]' : '[" KG ","kg","PCS"]', 200);
+          }),
+        );
+        expect(
+          await MaterialInventoryRepository(api).categoryUnits('c1'),
+          empty ? [] : ['kg', 'pcs'],
+        );
+        expect(
+          await RequirementRepository(api).activeUnits('c1'),
+          empty ? [] : ['kg', 'pcs'],
+        );
+      }
+    },
+  );
+
   for (final buyer in [false, true]) {
     final label = buyer ? 'Requirement' : 'Material';
     testWidgets('$label category loading then names and required validation', (
@@ -101,10 +131,15 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Steel').last);
       await tester.pumpAndSettle();
+      if (buyer) {
+        await tester.tap(find.byKey(const Key('requirement-unit')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('kg').last);
+        await tester.pumpAndSettle();
+      }
       final fields = buyer
           ? {
               'requirement-quantity': '10',
-              'requirement-unit': 'kg',
               'requirement-budget': '100',
               'requirement-latitude': '6',
               'requirement-longitude': '79',
@@ -207,6 +242,187 @@ void main() {
   }
 
   testWidgets(
+    'seller units normalize duplicates and allow new entry only for empty categories',
+    (tester) async {
+      final material = FakeCategoryMaterials()..units = [' KG ', 'kg', 'Kg'];
+      await pumpForm(tester, false, material, FakeRequirements());
+      await tester.tap(find.byType(CategoryDropdown));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Cement').last);
+      await tester.pumpAndSettle();
+      final dropdown = tester.widget<DropdownButton<String>>(
+        find.descendant(
+          of: find.byType(SellerUnitField),
+          matching: find.byType(DropdownButton<String>),
+        ),
+      );
+      expect(dropdown.items!.map((item) => item.value), ['kg']);
+      expect(find.widgetWithText(TextField, 'New unit'), findsNothing);
+      material.units = [];
+      await tester.tap(find.byType(CategoryDropdown));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Steel').last);
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.widgetWithText(TextField, 'New unit'),
+        ' PCS ',
+      );
+      await tester.tap(find.text('Use new unit'));
+      await tester.pumpAndSettle();
+      expect(find.text('pcs'), findsOneWidget);
+      expect(find.widgetWithText(TextField, 'New unit'), findsNothing);
+      for (final entry in {
+        'material-title': 'Steel',
+        'material-description': 'Reusable',
+        'material-quantity': '10',
+        'material-unit-price': '20',
+      }.entries) {
+        await tester.enterText(find.byKey(Key(entry.key)), entry.value);
+      }
+      await tester.tap(find.byKey(const Key('save-material')));
+      await tester.pumpAndSettle();
+      expect(material.saved!.unit, 'pcs');
+    },
+  );
+
+  testWidgets(
+    'buyer ignores stale units and shows a retryable unit error separately from empty results',
+    (tester) async {
+      final buyer = FakeRequirements()..categoryItems = categoryOptions;
+      final first = Completer<List<String>>();
+      buyer.pendingUnits['c1'] = first;
+      buyer.unitsByCategory['c2'] = [' PCS ', 'pcs'];
+      await pumpForm(tester, true, FakeCategoryMaterials(), buyer);
+      await tester.tap(find.byType(CategoryDropdown));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Cement').last);
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Loading available units'), findsOneWidget);
+      await tester.tap(find.byType(CategoryDropdown));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Steel').last);
+      await tester.pumpAndSettle();
+      first.complete(['kg']);
+      await tester.pumpAndSettle();
+      expect(find.text('kg'), findsNothing);
+      await tester.tap(find.byKey(const Key('requirement-unit')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('pcs').last);
+      await tester.pumpAndSettle();
+      buyer.unitError = const ApiException('Unable to complete the request');
+      await tester.tap(find.byType(CategoryDropdown));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Cement').last);
+      await tester.pumpAndSettle();
+      expect(find.text('Unable to load units. Please retry.'), findsOneWidget);
+      expect(find.textContaining('No available units'), findsNothing);
+      buyer.unitError = null;
+      buyer.pendingUnits.clear();
+      buyer.unitItems = [];
+      await tester.tap(find.text('Retry'));
+      await tester.pumpAndSettle();
+      expect(find.text('No available units for this category'), findsOneWidget);
+      expect(find.text('Unable to load units. Please retry.'), findsNothing);
+    },
+  );
+
+  for (final buyer in [false, true]) {
+    testWidgets(
+      '${buyer ? "buyer" : "seller"} manual address and map share saved coordinates',
+      (tester) async {
+        tester.view.physicalSize = const Size(1100, 3200);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final materials = FakeCategoryMaterials();
+        final requirements = FakeRequirements()
+          ..saveError = const ApiException('Test save intercepted.');
+        Future<List<AddressResult>> search(String query) async {
+          expect(query, 'Colombo');
+          return [const AddressResult(6.9, 79.8, 'Colombo address')];
+        }
+
+        Future<PickedLocation?> pick(
+          BuildContext context, {
+          double? latitude,
+          double? longitude,
+        }) async {
+          expect(latitude, 6.9);
+          expect(longitude, 79.8);
+          return const PickedLocation(7.1, 80.2);
+        }
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: buyer
+                ? RequirementFormScreen(
+                    gateway: requirements,
+                    requirementId: 'r1',
+                    addressSearch: search,
+                    locationPicker: pick,
+                  )
+                : MaterialListingFormScreen(
+                    gateway: materials,
+                    listingId: 'listing-1',
+                    addressSearch: search,
+                    locationPicker: pick,
+                  ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final prefix = buyer ? 'requirement' : 'material';
+        final save = find.byKey(
+          Key(buyer ? 'requirement-save' : 'save-material'),
+        );
+        await tester.enterText(find.byKey(Key('$prefix-latitude')), 'NaN');
+        await tester.tap(save);
+        await tester.pumpAndSettle();
+        expect(find.text('Enter a value from -90.0 to 90.0.'), findsOneWidget);
+        expect(buyer ? requirements.saved : materials.saved, isNull);
+        await tester.enterText(
+          find.widgetWithText(TextField, 'Search address'),
+          'Colombo',
+        );
+        await tester.tap(find.text('Find address'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Colombo address'));
+        await tester.pumpAndSettle();
+        await tester.tap(save);
+        await tester.pumpAndSettle();
+        expect(
+          buyer ? requirements.saved!.latitude : materials.saved!.latitude,
+          6.9,
+        );
+        expect(
+          buyer ? requirements.saved!.longitude : materials.saved!.longitude,
+          79.8,
+        );
+        await tester.tap(
+          find.byKey(Key(buyer ? 'requirement-map' : 'capture-gps')),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          tester
+              .widget<TextFormField>(find.byKey(Key('$prefix-latitude')))
+              .controller!
+              .text,
+          '7.100000',
+        );
+        await tester.tap(save);
+        await tester.pumpAndSettle();
+        expect(
+          buyer ? requirements.saved!.latitude : materials.saved!.latitude,
+          7.1,
+        );
+        expect(
+          buyer ? requirements.saved!.longitude : materials.saved!.longitude,
+          80.2,
+        );
+      },
+    );
+  }
+
+  testWidgets(
     'material category filter selects an ID and clears to all categories',
     (tester) async {
       String? selected;
@@ -264,6 +480,14 @@ Future<void> pumpForm(
 
 class FakeCategoryMaterials implements MaterialInventoryGateway {
   List<MaterialCategory> items = categoryOptions;
+  List<String> units = ['kg'];
+  @override
+  Future<List<String>> categoryUnits(String categoryId) async {
+    if (unitError != null) throw unitError!;
+    return units;
+  }
+
+  Object? unitError;
   Completer<List<MaterialCategory>>? pending;
   Object? error;
   MaterialListingDraft? saved;

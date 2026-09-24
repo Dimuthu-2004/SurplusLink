@@ -22,6 +22,7 @@ class SurplusLinkApp extends StatefulWidget {
     this.offerGateway,
     this.requirementLocation = const DeviceRequirementLocation(),
     this.locationLookup,
+    this.addressSearch,
     this.initialLocation = AppRoutes.splash,
     super.key,
   });
@@ -33,6 +34,7 @@ class SurplusLinkApp extends StatefulWidget {
   final OfferGateway? offerGateway;
   final RequirementLocationSource requirementLocation;
   final AddressLookup? locationLookup;
+  final AddressSearch? addressSearch;
   final String initialLocation;
 
   @override
@@ -53,6 +55,7 @@ class _SurplusLinkAppState extends State<SurplusLinkApp> {
       offerGateway: widget.offerGateway,
       requirementLocation: widget.requirementLocation,
       locationLookup: widget.locationLookup,
+      addressSearch: widget.addressSearch,
       initialLocation: widget.initialLocation,
     );
     unawaited(widget.authController.initialize());

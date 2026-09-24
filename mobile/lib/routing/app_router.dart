@@ -45,6 +45,7 @@ GoRouter createAppRouter({
   RequirementLocationSource requirementLocation =
       const DeviceRequirementLocation(),
   AddressLookup? locationLookup,
+  AddressSearch? addressSearch,
   String initialLocation = AppRoutes.splash,
 }) {
   String? pendingLocation;
@@ -111,7 +112,9 @@ GoRouter createAppRouter({
           onOpenMaterials: materialGateway == null
               ? null
               : () => context.push(AppRoutes.materials),
-              onOpenOffers: offerGateway == null ? null : () => context.push('/offers'),
+          onOpenOffers: offerGateway == null
+              ? null
+              : () => context.push('/offers'),
         ),
       ),
       if (matchGateway != null) ...[
@@ -144,6 +147,7 @@ GoRouter createAppRouter({
         GoRoute(
           path: '/requirements/new',
           builder: (context, state) => RequirementFormScreen(
+            addressSearch: addressSearch,
             gateway: requirementGateway,
             locationSource: requirementLocation,
             locationLookup: locationLookup,
@@ -152,6 +156,7 @@ GoRouter createAppRouter({
         GoRoute(
           path: '/requirements/:id/edit',
           builder: (context, state) => RequirementFormScreen(
+            addressSearch: addressSearch,
             gateway: requirementGateway,
             requirementId: state.pathParameters['id']!,
             locationSource: requirementLocation,
@@ -195,6 +200,7 @@ GoRouter createAppRouter({
           builder: (context, state) => _sellerOnly(
             authController,
             AddMaterialScreen(
+              addressSearch: addressSearch,
               gateway: materialGateway,
               locationLookup: locationLookup,
             ),
@@ -205,6 +211,7 @@ GoRouter createAppRouter({
           builder: (context, state) => _sellerOnly(
             authController,
             EditMaterialScreen(
+              addressSearch: addressSearch,
               gateway: materialGateway,
               listingId: state.pathParameters['id']!,
               locationLookup: locationLookup,
@@ -222,10 +229,15 @@ GoRouter createAppRouter({
         ),
       ],
       if (offerGateway != null)
-        GoRoute(path: '/offers', builder: (_, _) {
-          final user = authController.user;
-          return user == null ? const SizedBox.shrink() : MyOffersScreen(gateway: offerGateway, user: user);
-        }),
+        GoRoute(
+          path: '/offers',
+          builder: (_, _) {
+            final user = authController.user;
+            return user == null
+                ? const SizedBox.shrink()
+                : MyOffersScreen(gateway: offerGateway, user: user);
+          },
+        ),
     ],
     errorBuilder: (context, state) => Scaffold(
       body: Center(child: Text('Page not found: ${state.uri.path}')),

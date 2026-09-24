@@ -141,11 +141,11 @@ void main() {
     () async {
       final repository = repo((request) async {
         expect(request.method, 'GET');
-        expect(request.url.path, '/api/material-categories/c1/active-units');
+        expect(request.url.path, '/api/material-categories/c1/units');
         expect(request.headers['authorization'], 'Bearer buyer-token');
         return http.Response('["pcs", "m2"]', 200);
       });
-      expect(await repository.activeUnits('c1'), ['pcs', 'm2']);
+      expect(await repository.activeUnits('c1'), ['m2', 'pcs']);
     },
   );
   test('history parses paged status transitions', () async {

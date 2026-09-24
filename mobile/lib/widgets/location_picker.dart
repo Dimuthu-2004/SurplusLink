@@ -8,6 +8,12 @@ class PickedLocation {
   final double longitude;
 }
 
+typedef LocationPicker = Future<PickedLocation?> Function(
+  BuildContext context, {
+  double? latitude,
+  double? longitude,
+});
+
 Future<PickedLocation?> showLocationPicker(
   BuildContext context, {
   double? latitude,
@@ -15,7 +21,14 @@ Future<PickedLocation?> showLocationPicker(
 }) => showModalBottomSheet<PickedLocation>(
   context: context,
   isScrollControlled: true,
-  builder: (_) => _LocationPickerSheet(latitude: latitude, longitude: longitude),
+  builder: (_) => _LocationPickerSheet(
+    latitude: latitude != null && latitude.isFinite && latitude.abs() <= 90
+        ? latitude
+        : null,
+    longitude: longitude != null && longitude.isFinite && longitude.abs() <= 180
+        ? longitude
+        : null,
+  ),
 );
 
 class _LocationPickerSheet extends StatefulWidget {
@@ -28,7 +41,10 @@ class _LocationPickerSheet extends StatefulWidget {
 }
 
 class _LocationPickerSheetState extends State<_LocationPickerSheet> {
-  late LatLng _center = LatLng(widget.latitude ?? 6.9271, widget.longitude ?? 79.8612);
+  late LatLng _center = LatLng(
+    widget.latitude ?? 6.9271,
+    widget.longitude ?? 79.8612,
+  );
 
   @override
   Widget build(BuildContext context) => SafeArea(
@@ -41,15 +57,24 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
             child: Row(
               children: [
                 const Expanded(
-                  child: Text('Choose location on map', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                  child: Text(
+                    'Choose location on map',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                  ),
                 ),
-                IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close)),
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close),
+                ),
               ],
             ),
           ),
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 20),
-            child: Align(alignment: Alignment.centerLeft, child: Text('Move the map until the pin is over the location.')),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text('Move the map until the pin is over the location.'),
+            ),
           ),
           const SizedBox(height: 12),
           Expanded(
@@ -66,12 +91,19 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
                   ),
                   children: [
                     TileLayer(
-                      urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      urlTemplate:
+                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                       userAgentPackageName: 'com.surpluslink.mobile',
                     ),
                   ],
                 ),
-                const IgnorePointer(child: Icon(Icons.location_pin, size: 48, color: Color(0xFFF47B20))),
+                const IgnorePointer(
+                  child: Icon(
+                    Icons.location_pin,
+                    size: 48,
+                    color: Color(0xFFF47B20),
+                  ),
+                ),
               ],
             ),
           ),
@@ -80,7 +112,10 @@ class _LocationPickerSheetState extends State<_LocationPickerSheet> {
             child: SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
-                onPressed: () => Navigator.pop(context, PickedLocation(_center.latitude, _center.longitude)),
+                onPressed: () => Navigator.pop(
+                  context,
+                  PickedLocation(_center.latitude, _center.longitude),
+                ),
                 icon: const Icon(Icons.check),
                 label: const Text('Confirm location'),
               ),

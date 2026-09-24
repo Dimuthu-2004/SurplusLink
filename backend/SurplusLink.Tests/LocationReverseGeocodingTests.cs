@@ -48,6 +48,30 @@ public sealed class LocationReverseGeocodingTests
         Assert.Equal(400, ((ObjectResult)longitude.Result!).StatusCode);
     }
 
+    [Fact]
+    public async Task Search_returns_coordinates_and_caches_the_address()
+    {
+        var handler = new FakeHandler("""[{"lat":"6.9","lon":"79.8","display_name":"Colombo"}]""");
+        var service = CreateService(handler);
+        var first = await service.SearchAsync(" Colombo ", CancellationToken.None);
+        Assert.Equal(6.9m, Assert.Single(first).Latitude);
+        Assert.Equal(79.8m, first[0].Longitude);
+        Assert.Equal("Colombo", first[0].DisplayName);
+        Assert.Equal(first, await service.SearchAsync("colombo", CancellationToken.None));
+        Assert.Equal(1, handler.CallCount);
+        Assert.Equal("/search", handler.LastUri!.AbsolutePath);
+        Assert.Contains("q=Colombo", handler.LastUri.Query);
+    }
+
+    [Fact]
+    public async Task Search_empty_results_are_successful_and_failures_are_controlled()
+    {
+        Assert.Empty(await CreateService(new FakeHandler("[]")).SearchAsync("No place", CancellationToken.None));
+        await Assert.ThrowsAsync<ReverseGeocodingUnavailableException>(() => CreateService(new FakeHandler(throwOnRequest: true)).SearchAsync("Colombo", CancellationToken.None));
+        var invalid = await new LocationsController(new ThrowingService()).Search(" ", CancellationToken.None);
+        Assert.Equal(400, ((ObjectResult)invalid.Result!).StatusCode);
+    }
+
     private static NominatimReverseGeocodingService CreateService(FakeHandler handler)
     {
         var client = new HttpClient(handler) { BaseAddress = new Uri("https://nominatim.openstreetmap.org/reverse") };
@@ -73,6 +97,7 @@ public sealed class LocationReverseGeocodingTests
 
     private sealed class ThrowingService : IReverseGeocodingService
     {
+        public Task<IReadOnlyList<ReverseGeocodingResponse>> SearchAsync(string query, CancellationToken cancellationToken) => throw new InvalidOperationException();
         public Task<ReverseGeocodingResponse> ReverseAsync(decimal latitude, decimal longitude, CancellationToken cancellationToken) =>
             throw new InvalidOperationException();
     }
