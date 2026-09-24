@@ -239,6 +239,35 @@ void main() {
     await expectLater(forbidden.get('r1'), throwsA(isA<ApiException>()));
     expect(expired, 1);
   });
+  test('toJson rounds latitude and longitude to six decimal places', () {
+    final draft = RequirementDraft(
+      categoryId: 'c1',
+      requiredQuantity: 10,
+      unit: 'kg',
+      maximumBudget: 100,
+      deadline: DateTime.utc(2030),
+      latitude: 6.123456789,   // 9 decimal places
+      longitude: 79.987654321, // 9 decimal places
+    );
+    final json = draft.toJson();
+    expect(json['latitude'], 6.123457);   // rounded to 6
+    expect(json['longitude'], 79.987654); // rounded to 6
+  });
+
+  test('toJson preserves coordinates already within six decimal places', () {
+    final draft = RequirementDraft(
+      categoryId: 'c1',
+      requiredQuantity: 10,
+      unit: 'kg',
+      maximumBudget: 100,
+      deadline: DateTime.utc(2030),
+      latitude: 6.9271,
+      longitude: 79.8612,
+    );
+    final json = draft.toJson();
+    expect(json['latitude'], 6.9271);
+    expect(json['longitude'], 79.8612);
+  });
 }
 
 RequirementRepository repo(

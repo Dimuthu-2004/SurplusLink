@@ -166,7 +166,7 @@ public sealed class BuyerRequirementsIntegrationTests : IClassFixture<Requiremen
             ("unit", "   "), ("unit", new string('x', 33)),
             ("deadline", DateTimeOffset.UtcNow.AddDays(-1)), ("deadline", null),
             ("latitude", 91), ("longitude", -181), ("latitude", null), ("longitude", null),
-            ("latitude", 6.1234567m), ("buyerId", fixture.OtherBuyer), ("status", "APPROVED")
+            ("buyerId", fixture.OtherBuyer), ("status", "APPROVED")
         };
         foreach (var (key, value) in invalid)
         {
@@ -182,6 +182,21 @@ public sealed class BuyerRequirementsIntegrationTests : IClassFixture<Requiremen
         Assert.Equal(HttpStatusCode.NotFound, (await buyer.DeleteAsync(missing)).StatusCode);
         foreach (var action in new[] { "submit", "start-matching", "cancel" })
             Assert.Equal(HttpStatusCode.NotFound, (await buyer.PostAsync(missing + "/" + action, null)).StatusCode);
+    }
+
+    [PostgresFact]
+    public async Task Extra_coordinate_precision_is_silently_rounded_to_six_decimals()
+    {
+        using var app = fixture.App();
+        using var buyer = fixture.Client(app, fixture.Buyer);
+        var body = Body();
+        body["latitude"] = 6.12345678m;   // 8 decimal places
+        body["longitude"] = 79.98765432m; // 8 decimal places
+        var response = await buyer.PostAsJsonAsync("/api/requirements", body);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var created = (await response.Content.ReadFromJsonAsync<RequirementResponse>())!;
+        Assert.Equal(6.123457m, created.Latitude);   // rounded to 6
+        Assert.Equal(79.987654m, created.Longitude); // rounded to 6
     }
 
     [PostgresFact]

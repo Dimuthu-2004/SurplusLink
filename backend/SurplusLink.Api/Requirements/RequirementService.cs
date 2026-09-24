@@ -286,8 +286,8 @@ public sealed class RequirementService(SurplusLinkDbContext db, IRequirementWork
         request.Unit = MaterialUnits.Normalize(input.Unit);
         request.MaximumBudget = input.MaximumBudget;
         request.Deadline = input.Deadline!.Value.UtcDateTime;
-        request.Latitude = input.Latitude;
-        request.Longitude = input.Longitude;
+        request.Latitude = input.Latitude is decimal lat ? decimal.Round(lat, 6) : null;
+        request.Longitude = input.Longitude is decimal lon ? decimal.Round(lon, 6) : null;
     }
 
     private void Audit(BuyerRequest request, string action) => db.AuditLogs.Add(new AuditLog

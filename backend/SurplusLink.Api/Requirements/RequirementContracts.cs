@@ -31,9 +31,6 @@ public sealed class SaveRequirementRequest : IValidatableObject
             yield return new("Quantity supports at most three decimal places.", [nameof(RequiredQuantity)]);
         if (decimal.Round(MaximumBudget, 2) != MaximumBudget)
             yield return new("Budget supports at most two decimal places.", [nameof(MaximumBudget)]);
-        if (Latitude is decimal lat && decimal.Round(lat, 6) != lat ||
-            Longitude is decimal lon && decimal.Round(lon, 6) != lon)
-            yield return new("Coordinates support at most six decimal places.", [nameof(Latitude), nameof(Longitude)]);
     }
 }
 
