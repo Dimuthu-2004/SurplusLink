@@ -133,15 +133,9 @@ void main() {
       await tester.tap(find.byKey(const Key('requirement-gps')));
       await tester.pumpAndSettle();
       expect(location.calls, 1);
-      expect(
-        tester
-            .widget<TextFormField>(
-              find.byKey(const Key('requirement-latitude')),
-            )
-            .controller!
-            .text,
-        '6.123457',
-      );
+      expect(find.byKey(const Key('requirement-latitude')), findsNothing);
+      expect(find.byKey(const Key('requirement-longitude')), findsNothing);
+      expect(find.text('Latitude: 6.123457'), findsOneWidget);
       await tester.tap(find.byKey(const Key('requirement-save')));
       await tester.pump();
       expect(find.text('Saving…'), findsOneWidget);
@@ -179,7 +173,7 @@ void main() {
       await tester.tap(find.text('Tiles').last);
       await tester.pumpAndSettle();
       expect(gateway.unitRequests, ['c1', 'c2']);
-      expect(find.text('No units assigned to this category'), findsOneWidget);
+      expect(find.text('No available units for this category'), findsOneWidget);
       expect(
         tester
             .widget<FilledButton>(find.byKey(const Key('requirement-save')))
@@ -188,17 +182,13 @@ void main() {
       );
     },
   );
-  testWidgets('GPS denial and save errors retain entered values for retry', (
+  testWidgets('GPS denial keeps the form ready for map selection', (
     tester,
   ) async {
-    final gateway = FakeRequirements()
-      ..saveError = const ApiException(
-        'Deadline must be in the future.',
-        statusCode: 400,
-      );
+    final gateway = FakeRequirements();
     final location = FakeRequirementLocation()
       ..error = const LocationCaptureException(
-        'Permission denied. Enter coordinates manually.',
+        'Permission denied. Choose a location on the map.',
       );
     await pumpApp(
       tester,
@@ -210,14 +200,14 @@ void main() {
     await tester.tap(find.byKey(const Key('requirement-gps')));
     await tester.pumpAndSettle();
     expect(find.textContaining('Permission denied'), findsOneWidget);
-    await tester.enterText(find.byKey(const Key('requirement-latitude')), '6');
-    await tester.enterText(
-      find.byKey(const Key('requirement-longitude')),
-      '79',
-    );
     await tester.tap(find.byKey(const Key('requirement-save')));
     await tester.pumpAndSettle();
-    expect(find.text('Deadline must be in the future.'), findsOneWidget);
+    expect(
+      find.text('Choose a delivery location on the map before saving.'),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('requirement-map')), findsOneWidget);
+    expect(gateway.saves, 0);
     expect(
       tester
           .widget<TextFormField>(find.byKey(const Key('requirement-quantity')))
@@ -227,7 +217,7 @@ void main() {
     );
   });
 
-  testWidgets('draft edit is prefilled and open edit is blocked', (
+  testWidgets('draft and open edits are prefilled', (
     tester,
   ) async {
     final gateway = FakeRequirements();
@@ -248,8 +238,7 @@ void main() {
     expect(gateway.saved!.notes, 'Updated note');
     gateway.row = testRequirement(status: 'OPEN');
     await pumpApp(tester, gateway, path: '/requirements/r1/edit');
-    expect(find.textContaining('Only draft requirements'), findsOneWidget);
-    expect(find.byKey(const Key('requirement-save')), findsNothing);
+    expect(find.byKey(const Key('requirement-save')), findsOneWidget);
   });
 
   testWidgets(
@@ -267,7 +256,7 @@ void main() {
       await tester.tap(find.byKey(const Key('confirm-requirement-action')));
       await tester.pumpAndSettle();
       expect(gateway.submits, 1);
-      expect(find.byKey(const Key('requirement-edit')), findsNothing);
+      expect(find.byKey(const Key('requirement-edit')), findsOneWidget);
       await tester.tap(find.byKey(const Key('requirement-start')));
       await tester.pumpAndSettle();
       expect(find.textContaining('does not reserve'), findsOneWidget);
@@ -412,7 +401,7 @@ Future<void> pumpApp(
 }
 
 Future<void> selectUnit(WidgetTester tester, String unit) async {
-  await tester.enterText(find.widgetWithText(TextField, 'Unit'), unit);
+  await tester.tap(find.byKey(const Key('requirement-unit')));
   await tester.pumpAndSettle();
   await tester.tap(find.text(unit).last);
   await tester.pumpAndSettle();

@@ -13,7 +13,6 @@ class RequirementFormScreen extends StatefulWidget {
   const RequirementFormScreen({
     required this.gateway,
     this.requirementId,
-    this.addressSearch,
     this.locationPicker = showLocationPicker,
     this.locationSource = const DeviceRequirementLocation(),
     this.locationLookup,
@@ -21,7 +20,6 @@ class RequirementFormScreen extends StatefulWidget {
   });
   final RequirementGateway gateway;
   final String? requirementId;
-  final AddressSearch? addressSearch;
   final LocationPicker locationPicker;
   final RequirementLocationSource locationSource;
   final AddressLookup? locationLookup;
@@ -35,8 +33,6 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
   List<String> _units = [];
   final _budget = TextEditingController();
   final _notes = TextEditingController();
-  final _latitude = TextEditingController();
-  final _longitude = TextEditingController();
   List<RequirementCategory> _categories = [];
   String? _category, _unit, _error, _locationError, _unitLoadError;
   double? _capturedLatitude, _capturedLongitude, _accuracy;
@@ -62,8 +58,6 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
       _quantity,
       _budget,
       _notes,
-      _latitude,
-      _longitude,
     ]) {
       controller.dispose();
     }
@@ -94,8 +88,6 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
           _deadline = row.deadline.toLocal();
           _capturedLatitude = row.latitude;
           _capturedLongitude = row.longitude;
-          _latitude.text = row.latitude?.toStringAsFixed(6) ?? '';
-          _longitude.text = row.longitude?.toStringAsFixed(6) ?? '';
         }
       });
     } on Object catch (error) {
@@ -196,8 +188,6 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
           _capturedLatitude = picked.latitude;
           _capturedLongitude = picked.longitude;
           _accuracy = null;
-          _latitude.text = picked.latitude.toStringAsFixed(6);
-          _longitude.text = picked.longitude.toStringAsFixed(6);
         });
       }
     } on LocationCaptureException catch (error) {
@@ -223,8 +213,6 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
         _capturedLatitude = position.latitude;
         _capturedLongitude = position.longitude;
         _accuracy = position.accuracy;
-        _latitude.text = position.latitude.toStringAsFixed(6);
-        _longitude.text = position.longitude.toStringAsFixed(6);
       });
     } on LocationCaptureException catch (error) {
       if (mounted) setState(() => _locationError = error.message);
@@ -266,7 +254,7 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
       setState(() => _error = 'Deadline must be in the future.');
       return;
     }
-    if (_latitude.text.isEmpty || _longitude.text.isEmpty) {
+    if (_capturedLatitude == null || _capturedLongitude == null) {
       setState(() => _locationError = 'Choose a delivery location on the map before saving.');
       return;
     }
@@ -281,8 +269,8 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
         unit: _unit!,
         maximumBudget: num.parse(_budget.text.trim()),
         deadline: _deadline,
-        latitude: double.parse(_latitude.text),
-        longitude: double.parse(_longitude.text),
+        latitude: _capturedLatitude!,
+        longitude: _capturedLongitude!,
         notes: _notes.text,
       );
       final row = _editing
@@ -426,15 +414,6 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
                             : _editing
                             ? 'Save changes'
                             : 'Save draft',
-                      ),
-                    ),
-                    Opacity(
-                      opacity: 0,
-                      child: Column(
-                        children: [
-                          SizedBox(height: 24, child: TextFormField(key: const Key('requirement-latitude'), controller: _latitude)),
-                          SizedBox(height: 24, child: TextFormField(key: const Key('requirement-longitude'), controller: _longitude)),
-                        ],
                       ),
                     ),
                     const SizedBox(height: 24),

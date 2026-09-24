@@ -133,17 +133,12 @@ void main() {
       await tester.tap(find.text('Steel').last);
       await tester.pumpAndSettle();
       if (buyer) {
-        await tester.enterText(find.widgetWithText(TextField, 'Unit'), 'k');
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('kg').last);
-        await tester.pumpAndSettle();
+        await _selectRequirementUnit(tester, 'kg');
       }
       final fields = buyer
           ? {
               'requirement-quantity': '10',
               'requirement-budget': '100',
-              'requirement-latitude': '6',
-              'requirement-longitude': '79',
             }
           : {
               'material-title': 'Surplus steel',
@@ -153,6 +148,10 @@ void main() {
             };
       for (final field in fields.entries) {
         await tester.enterText(find.byKey(Key(field.key)), field.value);
+      }
+      if (buyer) {
+        await tester.tap(find.byKey(const Key('requirement-gps')));
+        await tester.pumpAndSettle();
       }
       await tester.tap(
         find.byKey(Key(buyer ? 'requirement-save' : 'save-material')),
@@ -288,122 +287,65 @@ void main() {
       first.complete(['kg']);
       await tester.pumpAndSettle();
       expect(find.text('kg'), findsNothing);
-      await tester.enterText(find.widgetWithText(TextField, 'Unit'), 'p');
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('pcs').last);
-      await tester.pumpAndSettle();
+      await _selectRequirementUnit(tester, 'pcs');
+      buyer.pendingUnits.remove('c1');
       buyer.unitError = const ApiException('Unable to complete the request');
       await tester.tap(find.byType(CategoryDropdown));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Cement').last);
       await tester.pumpAndSettle();
-      expect(find.text('Unable to load units. Please retry.'), findsOneWidget);
-      expect(find.textContaining('No units assigned'), findsNothing);
+      expect(find.text('Unable to complete the request'), findsOneWidget);
+      expect(find.textContaining('No available units'), findsNothing);
       buyer.unitError = null;
       buyer.pendingUnits.clear();
       buyer.unitItems = [];
       await tester.tap(find.text('Retry'));
       await tester.pumpAndSettle();
-      expect(find.text('No units assigned to this category'), findsOneWidget);
-      expect(find.text('Unable to load units. Please retry.'), findsNothing);
+      expect(find.text('No available units for this category'), findsOneWidget);
+      expect(find.text('Unable to complete the request'), findsNothing);
     },
   );
 
-  for (final buyer in [true]) {
-    testWidgets(
-      '${buyer ? "buyer" : "seller"} manual address and map share saved coordinates',
+  testWidgets(
+      'buyer map selection saves coordinates without coordinate inputs',
       (tester) async {
         tester.view.physicalSize = const Size(1100, 3200);
         tester.view.devicePixelRatio = 1;
         addTearDown(tester.view.resetPhysicalSize);
         addTearDown(tester.view.resetDevicePixelRatio);
-        final materials = FakeCategoryMaterials();
         final requirements = FakeRequirements()
           ..saveError = const ApiException('Test save intercepted.');
-        Future<List<AddressResult>> search(String query) async {
-          expect(query, 'Colombo');
-          return [const AddressResult(6.9, 79.8, 'Colombo address')];
-        }
-
         Future<PickedLocation?> pick(
           BuildContext context, {
           double? latitude,
           double? longitude,
         }) async {
-          expect(latitude, 6.9);
-          expect(longitude, 79.8);
+          expect(latitude, 6.123456);
+          expect(longitude, 79.123456);
           return const PickedLocation(7.1, 80.2);
         }
 
         await tester.pumpWidget(
           MaterialApp(
-            home: buyer
-                ? RequirementFormScreen(
-                    gateway: requirements,
-                    requirementId: 'r1',
-                    addressSearch: search,
-                    locationPicker: pick,
-                  )
-                : MaterialListingFormScreen(
-                    gateway: materials,
-                    listingId: 'listing-1',
-                    addressSearch: search,
-                    locationPicker: pick,
-                  ),
+            home: RequirementFormScreen(
+              gateway: requirements,
+              requirementId: 'r1',
+              locationPicker: pick,
+            ),
           ),
         );
         await tester.pumpAndSettle();
-        final prefix = buyer ? 'requirement' : 'material';
-        final save = find.byKey(
-          Key(buyer ? 'requirement-save' : 'save-material'),
-        );
-        await tester.enterText(find.byKey(Key('$prefix-latitude')), 'NaN');
-        await tester.tap(save);
-        await tester.pumpAndSettle();
-        expect(find.text('Enter a value from -90.0 to 90.0.'), findsOneWidget);
-        expect(buyer ? requirements.saved : materials.saved, isNull);
-        await tester.enterText(
-          find.widgetWithText(TextField, 'Search address'),
-          'Colombo',
-        );
-        await tester.tap(find.text('Find address'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('Colombo address'));
+        final save = find.byKey(const Key('requirement-save'));
+        expect(find.byKey(const Key('requirement-latitude')), findsNothing);
+        expect(find.byKey(const Key('requirement-longitude')), findsNothing);
+        await tester.tap(find.byKey(const Key('requirement-map')));
         await tester.pumpAndSettle();
         await tester.tap(save);
         await tester.pumpAndSettle();
-        expect(
-          buyer ? requirements.saved!.latitude : materials.saved!.latitude,
-          6.9,
-        );
-        expect(
-          buyer ? requirements.saved!.longitude : materials.saved!.longitude,
-          79.8,
-        );
-        await tester.tap(
-          find.byKey(Key(buyer ? 'requirement-map' : 'capture-gps')),
-        );
-        await tester.pumpAndSettle();
-        expect(
-          tester
-              .widget<TextFormField>(find.byKey(Key('$prefix-latitude')))
-              .controller!
-              .text,
-          '7.100000',
-        );
-        await tester.tap(save);
-        await tester.pumpAndSettle();
-        expect(
-          buyer ? requirements.saved!.latitude : materials.saved!.latitude,
-          7.1,
-        );
-        expect(
-          buyer ? requirements.saved!.longitude : materials.saved!.longitude,
-          80.2,
-        );
+        expect(requirements.saved!.latitude, 7.1);
+        expect(requirements.saved!.longitude, 80.2);
       },
-    );
-  }
+  );
 
   testWidgets(
     'seller location uses address search, map, and current location without coordinate inputs',
@@ -508,6 +450,13 @@ void main() {
   );
 }
 
+Future<void> _selectRequirementUnit(WidgetTester tester, String unit) async {
+  await tester.tap(find.byKey(const Key('requirement-unit')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(unit).last);
+  await tester.pumpAndSettle();
+}
+
 Future<void> pumpForm(
   WidgetTester tester,
   bool buyer,
@@ -526,6 +475,7 @@ Future<void> pumpForm(
           ? RequirementFormScreen(
               gateway: requirement,
               requirementId: editing ? 'r1' : null,
+              locationSource: const _FixedLocationSource(),
             )
           : editing
           ? EditMaterialScreen(gateway: material, listingId: 'listing-1')

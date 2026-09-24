@@ -54,10 +54,12 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
   final _quantityController = TextEditingController();
   String? _unit;
   final _priceController = TextEditingController();
+  final _addressController = TextEditingController();
   final List<String> _photoUrls = [];
   final List<_SelectedPhoto> _selectedPhotos = [];
   late final _media = widget.media ?? MaterialMedia();
-  bool _mediaBusy = false, _locating = false;
+  bool _mediaBusy = false, _locating = false, _addressBusy = false;
+  List<AddressResult> _addressResults = [];
   double? _accuracy;
   String _condition = 'GOOD';
   DateTime _availableUntil = DateTime.now().add(const Duration(days: 7));
@@ -79,6 +81,7 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
     _descriptionController.dispose();
     _quantityController.dispose();
     _priceController.dispose();
+    _addressController.dispose();
     super.dispose();
   }
 
@@ -234,6 +237,46 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
       if (mounted) _showMessage('Unable to choose a location. Please retry.');
     } finally {
       if (mounted) setState(() => _locating = false);
+    }
+  }
+
+  Future<void> _captureGps() async {
+    if (_locating || _isSaving) return;
+    setState(() => _locating = true);
+    try {
+      final position = await widget.locationSource.capture();
+      if (!mounted) return;
+      setState(() {
+        _accuracy = position.accuracy;
+        _latitude = position.latitude;
+        _longitude = position.longitude;
+      });
+    } on LocationCaptureException catch (error) {
+      if (mounted) _showMessage(error.message);
+    } on Object {
+      if (mounted) _showMessage('Unable to capture location. Please retry.');
+    } finally {
+      if (mounted) setState(() => _locating = false);
+    }
+  }
+
+  Future<void> _searchAddress() async {
+    final query = _addressController.text.trim();
+    if (query.length < 3) {
+      _showMessage('Enter at least 3 characters.');
+      return;
+    }
+    setState(() {
+      _addressBusy = true;
+      _addressResults = [];
+    });
+    try {
+      final results = await widget.addressSearch!(query);
+      if (mounted) setState(() => _addressResults = results);
+    } on Object {
+      if (mounted) _showMessage('Unable to search addresses. Please retry.');
+    } finally {
+      if (mounted) setState(() => _addressBusy = false);
     }
   }
 
@@ -441,13 +484,48 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                     )
                   else
                     const Text('No location selected yet.'),
+                  if (widget.addressSearch != null) ...[
+                    TextField(
+                      key: const Key('material-address-search'),
+                      controller: _addressController,
+                      enabled: !_isSaving && !_addressBusy,
+                      maxLength: 400,
+                      decoration: const InputDecoration(labelText: 'Search address'),
+                    ),
+                    OutlinedButton.icon(
+                      key: const Key('material-find-address'),
+                      onPressed: _isSaving || _addressBusy ? null : _searchAddress,
+                      icon: _addressBusy
+                          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Icon(Icons.search),
+                      label: Text(_addressBusy ? 'Searching addresses...' : 'Find address'),
+                    ),
+                    for (final result in _addressResults)
+                      ListTile(
+                        title: Text(result.displayName),
+                        onTap: _isSaving
+                            ? null
+                            : () => setState(() {
+                                  _latitude = result.latitude;
+                                  _longitude = result.longitude;
+                                  _accuracy = null;
+                                  _addressResults = [];
+                                }),
+                      ),
+                  ],
                   OutlinedButton.icon(
-                    key: const Key('capture-gps'),
+                    key: const Key('material-map'),
                     onPressed: _locating || _isSaving ? null : _chooseLocation,
                     icon: const Icon(Icons.map_outlined),
                     label: Text(
                       _locating ? 'Opening map...' : 'Choose location on map',
                     ),
+                  ),
+                  OutlinedButton.icon(
+                    key: const Key('capture-gps'),
+                    onPressed: _locating || _isSaving ? null : _captureGps,
+                    icon: const Icon(Icons.my_location),
+                    label: Text(_locating ? 'Getting location...' : 'Use my current location'),
                   ),
                   const Divider(),
                   Text(
