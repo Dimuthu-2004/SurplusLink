@@ -106,7 +106,9 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
         _category = listing.categoryId;
         _titleController.text = listing.title;
         _descriptionController.text = listing.description;
-        _quantityController.text = listing.quantity.toString();
+        _quantityController.text = listing.quantity == listing.quantity.roundToDouble()
+            ? listing.quantity.toStringAsFixed(0)
+            : listing.quantity.toString();
         _unit = listing.unit;
         _priceController.text = listing.unitPrice.toString();
         _condition = listing.condition;

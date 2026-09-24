@@ -14,6 +14,56 @@ import 'package:mobile/auth/auth_models.dart';
 import 'package:go_router/go_router.dart';
 
 void main() {
+  testWidgets('stock quantities and combined filters reset to ACTIVE', (
+    tester,
+  ) async {
+    final gateway = _FakeMaterialsGateway()..includeListing = true;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MyMaterialsScreen(gateway: gateway, user: sellerUser),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(gateway.lastQuery!.status, 'ACTIVE');
+    expect(find.text('Minimum price'), findsNothing);
+    expect(find.text('Maximum price'), findsNothing);
+    expect(find.text('Sort by'), findsNothing);
+    expect(find.textContaining('Total Quantity: 10 bags'), findsOneWidget);
+    expect(find.textContaining('Reserved Quantity: 2 bags'), findsOneWidget);
+    expect(find.textContaining('Remaining Stock: 8 bags'), findsOneWidget);
+    await tester.enterText(find.byKey(const Key('materials-search')), 'cement');
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const Key('materials-category-filter')),
+        matching: find.byType(DropdownButtonFormField<String>),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cement').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('materials-status-filter')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('DRAFT').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Apply filters'));
+    await tester.pumpAndSettle();
+    expect(
+      gateway.lastQuery!.toQueryParameters(),
+      containsPair('search', 'cement'),
+    );
+    expect(gateway.lastQuery!.category, 'c1');
+    expect(gateway.lastQuery!.status, 'DRAFT');
+    expect(gateway.lastQuery!.minPrice, isNull);
+    expect(gateway.lastQuery!.maxPrice, isNull);
+    await tester.tap(find.text('Clear filters'));
+    await tester.pumpAndSettle();
+    expect(gateway.lastQuery!.status, 'ACTIVE');
+    expect(gateway.lastQuery!.category, isNull);
+    expect(gateway.lastQuery!.search, isEmpty);
+    expect(find.text('All categories'), findsOneWidget);
+    expect(gateway.lastQuery!.page, 1);
+  });
+
   for (final roles in [
     [AppRole.seller],
     [AppRole.buyer],
@@ -193,7 +243,7 @@ final class _FakeMaterialsGateway implements MaterialInventoryGateway {
       title: 'Surplus cement',
       description: 'Sealed bags',
       quantity: 10,
-      reservedQuantity: 0,
+      reservedQuantity: 2,
       unit: 'bags',
       condition: 'GOOD',
       unitPrice: 100,

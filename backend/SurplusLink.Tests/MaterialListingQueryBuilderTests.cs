@@ -6,6 +6,21 @@ namespace SurplusLink.Tests;
 public sealed class MaterialListingQueryBuilderTests
 {
     [Fact]
+    public void Seller_search_category_and_status_are_intersected()
+    {
+        var tiles = Category("Tiles");
+        var other = Category("Other");
+        var expected = Listing("Blue tile", "", tiles, 12m, 1m, ListingStatus.ACTIVE, MaterialCondition.GOOD);
+        var rows = new[] { expected,
+            Listing("Blue tile", "", tiles, 12m, 1m, ListingStatus.DRAFT, MaterialCondition.GOOD),
+            Listing("Blue tile", "", other, 12m, 1m, ListingStatus.ACTIVE, MaterialCondition.GOOD),
+            Listing("Red tile", "", tiles, 12m, 1m, ListingStatus.ACTIVE, MaterialCondition.GOOD) };
+        var result = MaterialListingQueryBuilder.ApplyFilters(rows.AsQueryable(), new MaterialListingQuery {
+            Search = "blue", Category = tiles.Id.ToString(), Status = "ACTIVE" });
+        Assert.Equal(expected.Id, Assert.Single(result).Id);
+    }
+
+    [Fact]
     public void Search_matches_title_description_and_category()
     {
         var tiles = Category("Tiles");

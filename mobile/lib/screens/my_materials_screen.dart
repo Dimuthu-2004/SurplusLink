@@ -1,3 +1,4 @@
+import 'package:mobile/materials/material_quantity_display.dart';
 import 'package:mobile/widgets/dashboard_back_button.dart';
 import 'package:mobile/categories/category_filter.dart';
 import 'package:mobile/categories/material_category.dart';
@@ -27,12 +28,9 @@ class MyMaterialsScreen extends StatefulWidget {
 class _MyMaterialsScreenState extends State<MyMaterialsScreen> {
   final _searchController = TextEditingController();
   String? _category;
-  final _minPriceController = TextEditingController();
-  final _maxPriceController = TextEditingController();
   final List<MaterialListing> _listings = [];
-  String? _status;
-  String _sortBy = 'createdAt';
-  String _sortDir = 'desc';
+  String? _status = 'ACTIVE';
+  int _filterReset = 0;
   int _page = 0;
   int _totalPages = 0;
   int _totalCount = 0;
@@ -48,8 +46,6 @@ class _MyMaterialsScreenState extends State<MyMaterialsScreen> {
   @override
   void dispose() {
     _searchController.dispose();
-    _minPriceController.dispose();
-    _maxPriceController.dispose();
     super.dispose();
   }
 
@@ -58,10 +54,6 @@ class _MyMaterialsScreenState extends State<MyMaterialsScreen> {
     search: _searchController.text,
     category: _category,
     status: _status,
-    minPrice: double.tryParse(_minPriceController.text.trim()),
-    maxPrice: double.tryParse(_maxPriceController.text.trim()),
-    sortBy: _sortBy,
-    sortDir: _sortDir,
     page: page,
   );
 
@@ -129,17 +121,21 @@ class _MyMaterialsScreenState extends State<MyMaterialsScreen> {
           padding: const EdgeInsets.all(16),
           children: [
             _FilterPanel(
+              key: ValueKey(_filterReset),
+              onReset: () {
+                setState(() {
+                  _searchController.clear();
+                  _category = null;
+                  _status = 'ACTIVE';
+                  _filterReset++;
+                });
+                _load(reset: true);
+              },
               searchController: _searchController,
               loadCategories: widget.gateway.categories,
               onCategoryChanged: (value) => setState(() => _category = value),
-              minPriceController: _minPriceController,
-              maxPriceController: _maxPriceController,
               status: _status,
-              sortBy: _sortBy,
-              sortDir: _sortDir,
               onStatusChanged: (value) => setState(() => _status = value),
-              onSortByChanged: (value) => setState(() => _sortBy = value),
-              onSortDirChanged: (value) => setState(() => _sortDir = value),
               onApply: () => _load(reset: true),
             ),
             const SizedBox(height: 16),
@@ -161,7 +157,10 @@ class _MyMaterialsScreenState extends State<MyMaterialsScreen> {
                     key: Key('material-card-${listing.id}'),
                     title: Text(listing.title),
                     subtitle: Text(
-                      '${listing.categoryName} · ${listing.quantity.toStringAsFixed(2)} ${listing.unit}\n'
+                      '${listing.categoryName}\n'
+                      'Total Quantity: ${formatMaterialQuantity(listing.quantity, listing.unit)} ${listing.unit}\n'
+                      'Reserved Quantity: ${formatMaterialQuantity(listing.reservedQuantity, listing.unit)} ${listing.unit}\n'
+                      'Remaining Stock: ${formatMaterialQuantity(listing.remainingQuantity, listing.unit)} ${listing.unit}\n'
                       '${listing.status} · LKR ${listing.unitPrice.toStringAsFixed(2)}',
                     ),
                     isThreeLine: true,
@@ -199,7 +198,10 @@ class _MyMaterialsScreenState extends State<MyMaterialsScreen> {
           ],
         ),
       ),
-      bottomNavigationBar: RoleNavigation(user: widget.user, current: '/materials'),
+      bottomNavigationBar: RoleNavigation(
+        user: widget.user,
+        current: '/materials',
+      ),
     );
   }
 }
@@ -209,29 +211,20 @@ class _FilterPanel extends StatelessWidget {
     required this.searchController,
     required this.loadCategories,
     required this.onCategoryChanged,
-    required this.minPriceController,
-    required this.maxPriceController,
     required this.status,
-    required this.sortBy,
-    required this.sortDir,
     required this.onStatusChanged,
-    required this.onSortByChanged,
-    required this.onSortDirChanged,
     required this.onApply,
+    required this.onReset,
+    super.key,
   });
 
   final TextEditingController searchController;
   final Future<List<MaterialCategory>> Function() loadCategories;
   final ValueChanged<String?> onCategoryChanged;
-  final TextEditingController minPriceController;
-  final TextEditingController maxPriceController;
   final String? status;
-  final String sortBy;
-  final String sortDir;
   final ValueChanged<String?> onStatusChanged;
-  final ValueChanged<String> onSortByChanged;
-  final ValueChanged<String> onSortDirChanged;
   final VoidCallback onApply;
+  final VoidCallback onReset;
 
   @override
   Widget build(BuildContext context) => Card(
@@ -277,72 +270,8 @@ class _FilterPanel extends StatelessWidget {
             onChanged: onStatusChanged,
           ),
           const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: minPriceController,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  decoration: const InputDecoration(labelText: 'Minimum price'),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: TextField(
-                  controller: maxPriceController,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  decoration: const InputDecoration(labelText: 'Maximum price'),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: DropdownButtonFormField<String>(
-                  initialValue: sortBy,
-                  decoration: const InputDecoration(labelText: 'Sort by'),
-                  items: const [
-                    DropdownMenuItem(
-                      value: 'unitPrice',
-                      child: Text('Unit price'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'createdAt',
-                      child: Text('Created date'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'availableUntil',
-                      child: Text('Available until'),
-                    ),
-                  ],
-                  onChanged: (value) {
-                    if (value != null) onSortByChanged(value);
-                  },
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: DropdownButtonFormField<String>(
-                  initialValue: sortDir,
-                  decoration: const InputDecoration(labelText: 'Direction'),
-                  items: const [
-                    DropdownMenuItem(value: 'asc', child: Text('Ascending')),
-                    DropdownMenuItem(value: 'desc', child: Text('Descending')),
-                  ],
-                  onChanged: (value) {
-                    if (value != null) onSortDirChanged(value);
-                  },
-                ),
-              ),
-            ],
-          ),
           const SizedBox(height: 12),
+          TextButton(onPressed: onReset, child: const Text('Clear filters')),
           Align(
             alignment: Alignment.centerRight,
             child: FilledButton(
