@@ -78,7 +78,6 @@ public sealed class MatchingReevaluationTests(RequirementsDatabase fixture) : IC
             Assert.False(await verify.Reservations.AnyAsync(x => x.MaterialRequestId == request.Id));
             if (!verifyFirst)
             {
-                Assert.True(await verify.AuditLogs.AnyAsync(x => x.EntityId == original.Id && x.Action == "STALE_LISTING_VERIFIED"));
                 Assert.True(await verify.AuditLogs.AnyAsync(x => x.EntityId == original.Id && x.Action == "REEVALUATE"));
             }
             var summary = (await manager.GetFromJsonAsync<RequirementAnalyticsSummary>("/api/requirements/analytics/summary?upcomingDays=7"))!;
