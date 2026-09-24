@@ -14,6 +14,15 @@ namespace SurplusLink.Api.Data.Migrations
                 name: "CK_Matches_RejectionReason",
                 table: "Matches");
 
+            // Older route failures were persisted before a reason was required.
+            // Normalize them before enforcing the strengthened invariant.
+            migrationBuilder.Sql("""
+                UPDATE "Matches"
+                SET "RejectionReason" = 'ROUTE_UNAVAILABLE'
+                WHERE "Status" = 'ROUTE_FAILED'
+                  AND ("RejectionReason" IS NULL OR length(btrim("RejectionReason")) = 0);
+                """);
+
             migrationBuilder.AddCheckConstraint(
                 name: "CK_Matches_RejectionReason",
                 table: "Matches",
