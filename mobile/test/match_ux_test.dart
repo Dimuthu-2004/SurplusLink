@@ -65,7 +65,7 @@ class DetailsFake extends FakeMatches {
 }
 
 Future<void> showDetails(WidgetTester tester, DetailsFake gateway) async {
-  await tester.binding.setSurfaceSize(const Size(800, 1800));
+  await tester.binding.setSurfaceSize(const Size(800, 3000));
   addTearDown(() => tester.binding.setSurfaceSize(null));
   await tester.pumpWidget(
     MaterialApp(
@@ -172,12 +172,9 @@ void main() {
         DetailsFake()..value = sample(workflow: 'MATCHING'),
       );
       expect(find.text('Bricks'), findsOneWidget);
-      expect(
-        find.text('Estimated material cost: LKR 1,200.00'),
-        findsOneWidget,
-      );
-      expect(find.text('500 available / 400 required'), findsOneWidget);
-      expect(find.text('LKR 1,200.00 / LKR 2,000.00'), findsOneWidget);
+      expect(find.text('LKR 1,200.00'), findsOneWidget);
+      expect(find.text('500 Pcs'), findsOneWidget);
+      expect(find.text('LKR 2,000.00'), findsOneWidget);
       expect(find.text('Matching and evaluation in progress.'), findsOneWidget);
       expect(find.text('Waiting for manager approval'), findsNothing);
       expect(find.textContaining('technical-match'), findsNothing);
@@ -246,7 +243,7 @@ void main() {
     await tester.tap(find.text('Next'));
     await tester.pumpAndSettle();
     expect(fake.historyPages, [1, 2]);
-    expect(find.text('Delivery route failed'), findsOneWidget);
+    expect(find.text('Delivery route failed'), findsNWidgets(2));
     expect(find.textContaining('22 Sep 2026, 4:59 PM'), findsOneWidget);
   });
   for (final entry in <Object, String>{
