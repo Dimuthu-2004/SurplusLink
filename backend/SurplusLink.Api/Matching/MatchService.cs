@@ -251,7 +251,7 @@ public sealed partial class MatchService(SurplusLinkDbContext db)
                 "Listing not found.");
 
         if (request.Status is not
-            (BuyerRequestStatus.OPEN or BuyerRequestStatus.MATCHING))
+            (BuyerRequestStatus.OPEN or BuyerRequestStatus.MATCHING or BuyerRequestStatus.MATCH_FOUND))
         {
             throw new MatchException(
                 409,
@@ -268,7 +268,7 @@ public sealed partial class MatchService(SurplusLinkDbContext db)
         if (await db.Reservations.AnyAsync(x => x.MaterialRequestId == requirementId, ct) ||
             await db.AgentWorkflows.AnyAsync(x => x.MaterialRequestId == requirementId &&
                 (x.Status == AgentWorkflowStatus.RUNNING || x.Status == AgentWorkflowStatus.PENDING_APPROVAL ||
-                 x.Status == AgentWorkflowStatus.APPROVED || x.Status == AgentWorkflowStatus.COMPLETED), ct))
+                 x.Status == AgentWorkflowStatus.APPROVED), ct))
             throw new MatchException(409, "A workflow or reservation protects this requirement's candidates.");
 
         var existing = await db.Matches.SingleOrDefaultAsync(x =>

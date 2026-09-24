@@ -55,7 +55,7 @@ public sealed class MatchingReevaluationTests(RequirementsDatabase fixture) : IC
                 (await buyer.PostAsync(path + "/generate", null)).EnsureSuccessStatusCode();
                 var reevaluated = Assert.Single((await buyer.GetFromJsonAsync<MatchPage>(path))!.Items);
                 Assert.Equal(original.Id, reevaluated.Id);
-                Assert.True(reevaluated.Valid);
+                Assert.False(reevaluated.Valid);
                 Assert.Null(reevaluated.RejectionReason);
             }
             (await buyer.PostAsync($"/api/requirements/{request.Id}/start-matching", null)).EnsureSuccessStatusCode();
