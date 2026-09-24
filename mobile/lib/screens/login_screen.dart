@@ -3,7 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:mobile/auth/auth_controller.dart';
 import 'package:mobile/routing/app_router.dart';
 import 'package:mobile/widgets/auth_error_message.dart';
-import 'package:mobile/widgets/auth_scaffold.dart';
+import 'package:mobile/widgets/login_scaffold.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({required this.authController, super.key});
@@ -38,7 +38,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   @override
-  Widget build(BuildContext context) => AuthScaffold(
+  Widget build(BuildContext context) => LoginScaffold(
     title: 'Welcome to SurplusLink',
     subtitle: 'Sign in to continue.',
     child: AnimatedBuilder(
