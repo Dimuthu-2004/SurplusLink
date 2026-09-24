@@ -182,7 +182,7 @@ void main() {
       );
     },
   );
-  testWidgets('GPS denial keeps the form ready for map selection', (
+  testWidgets('GPS denial allows manual coordinates to save a draft', (
     tester,
   ) async {
     final gateway = FakeRequirements();
@@ -203,11 +203,21 @@ void main() {
     await tester.tap(find.byKey(const Key('requirement-save')));
     await tester.pumpAndSettle();
     expect(
-      find.text('Choose a delivery location on the map before saving.'),
+      find.text('Enter a value from -90.0 to 90.0.'),
       findsOneWidget,
     );
-    expect(find.byKey(const Key('requirement-map')), findsOneWidget);
-    expect(gateway.saves, 0);
+    await tester.enterText(
+      find.byKey(const Key('requirement-latitude')),
+      '6',
+    );
+    await tester.enterText(
+      find.byKey(const Key('requirement-longitude')),
+      '79',
+    );
+    await tester.tap(find.byKey(const Key('requirement-save')));
+    await tester.pumpAndSettle();
+    expect(find.text('Requirement Details'), findsOneWidget);
+    expect(gateway.saves, 1);
     expect(
       tester
           .widget<TextFormField>(find.byKey(const Key('requirement-quantity')))

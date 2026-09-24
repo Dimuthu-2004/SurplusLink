@@ -12,6 +12,7 @@ class ManualLocationFields extends StatefulWidget {
     this.requiredLocation = false,
     this.showCoordinateFields = true,
     this.emphasizeSearchAction = false,
+    this.maxDecimalPlaces,
     super.key,
   });
   final TextEditingController latitude, longitude;
@@ -22,6 +23,7 @@ class ManualLocationFields extends StatefulWidget {
       requiredLocation,
       showCoordinateFields,
       emphasizeSearchAction;
+  final int? maxDecimalPlaces;
   @override
   State<ManualLocationFields> createState() => _ManualLocationFieldsState();
 }
@@ -95,9 +97,16 @@ class _ManualLocationFieldsState extends State<ManualLocationFields> {
       return null;
     }
     final value = double.tryParse(text?.trim() ?? '');
-    return value == null || !value.isFinite || value < -limit || value > limit
-        ? 'Enter a value from -$limit to $limit.'
-        : null;
+    if (value == null || !value.isFinite || value < -limit || value > limit) {
+      return 'Enter a value from -$limit to $limit.';
+    }
+    final decimal = text!.trim().split('.');
+    if (maxDecimalPlaces != null &&
+        decimal.length == 2 &&
+        decimal[1].length > maxDecimalPlaces!) {
+      return 'Use at most $maxDecimalPlaces decimal places.';
+    }
+    return null;
   }
 
   @override

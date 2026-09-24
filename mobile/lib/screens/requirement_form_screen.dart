@@ -8,11 +8,13 @@ import 'package:mobile/requirements/requirement_location.dart';
 import 'package:mobile/requirements/requirement_models.dart';
 import 'package:mobile/requirements/requirement_widgets.dart';
 import 'package:mobile/widgets/location_picker.dart';
+import 'package:mobile/widgets/manual_location_fields.dart';
 
 class RequirementFormScreen extends StatefulWidget {
   const RequirementFormScreen({
     required this.gateway,
     this.requirementId,
+    this.addressSearch,
     this.locationPicker = showLocationPicker,
     this.locationSource = const DeviceRequirementLocation(),
     this.locationLookup,
@@ -20,6 +22,7 @@ class RequirementFormScreen extends StatefulWidget {
   });
   final RequirementGateway gateway;
   final String? requirementId;
+  final AddressSearch? addressSearch;
   final LocationPicker locationPicker;
   final RequirementLocationSource locationSource;
   final AddressLookup? locationLookup;
@@ -33,6 +36,8 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
   List<String> _units = [];
   final _budget = TextEditingController();
   final _notes = TextEditingController();
+  final _latitude = TextEditingController();
+  final _longitude = TextEditingController();
   List<RequirementCategory> _categories = [];
   String? _category, _unit, _error, _locationError, _unitLoadError;
   double? _capturedLatitude, _capturedLongitude, _accuracy;
@@ -58,6 +63,8 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
       _quantity,
       _budget,
       _notes,
+      _latitude,
+      _longitude,
     ]) {
       controller.dispose();
     }
@@ -88,6 +95,8 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
           _deadline = row.deadline.toLocal();
           _capturedLatitude = row.latitude;
           _capturedLongitude = row.longitude;
+          _latitude.text = row.latitude?.toStringAsFixed(6) ?? '';
+          _longitude.text = row.longitude?.toStringAsFixed(6) ?? '';
         }
       });
     } on Object catch (error) {
@@ -188,6 +197,8 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
           _capturedLatitude = picked.latitude;
           _capturedLongitude = picked.longitude;
           _accuracy = null;
+          _latitude.text = picked.latitude.toStringAsFixed(6);
+          _longitude.text = picked.longitude.toStringAsFixed(6);
         });
       }
     } on LocationCaptureException catch (error) {
@@ -213,6 +224,8 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
         _capturedLatitude = position.latitude;
         _capturedLongitude = position.longitude;
         _accuracy = position.accuracy;
+        _latitude.text = position.latitude.toStringAsFixed(6);
+        _longitude.text = position.longitude.toStringAsFixed(6);
       });
     } on LocationCaptureException catch (error) {
       if (mounted) setState(() => _locationError = error.message);
@@ -221,6 +234,21 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
     } finally {
       if (mounted) setState(() => _locating = false);
     }
+  }
+
+  void _onManualLocationChanged() {
+    final latitude = double.tryParse(_latitude.text.trim());
+    final longitude = double.tryParse(_longitude.text.trim());
+    setState(() {
+      _capturedLatitude = latitude != null && latitude >= -90 && latitude <= 90
+          ? latitude
+          : null;
+      _capturedLongitude = longitude != null && longitude >= -180 && longitude <= 180
+          ? longitude
+          : null;
+      _accuracy = null;
+      _locationError = null;
+    });
   }
 
   String? _positive(String? raw, int decimals, int integerDigits) {
@@ -255,7 +283,7 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
       return;
     }
     if (_capturedLatitude == null || _capturedLongitude == null) {
-      setState(() => _locationError = 'Choose a delivery location on the map before saving.');
+      setState(() => _locationError = 'Enter a delivery location, search for an address, or choose one on the map.');
       return;
     }
     setState(() {
@@ -375,6 +403,17 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
                       style: TextStyle(fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 8),
+                    ManualLocationFields(
+                      latitude: _latitude,
+                      longitude: _longitude,
+                      onChanged: _onManualLocationChanged,
+                      prefix: 'requirement',
+                      search: widget.addressSearch,
+                      enabled: !_saving && !_locating,
+                      requiredLocation: true,
+                      maxDecimalPlaces: 6,
+                      emphasizeSearchAction: true,
+                    ),
                     OutlinedButton.icon(
                       key: const Key('requirement-gps'),
                       onPressed: _saving || _locating ? null : _captureGps,
