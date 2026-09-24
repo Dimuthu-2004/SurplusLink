@@ -31,6 +31,13 @@ namespace SurplusLink.Api.Data.Migrations
                 );
                 """);
 
+                    // Fresh databases have no historical rows to infer units from.
+                    migrationBuilder.Sql("""
+                        UPDATE "Categories"
+                        SET "AllowedUnits" = ARRAY['pcs', 'm', 'm2', 'm3', 'kg', 'g', 'l', 'bag', 'box', 'set', 'roll', 'sheet', 'tonne', 'pair']
+                        WHERE cardinality("AllowedUnits") = 0;
+                        """);
+
         }
 
         /// <inheritdoc />

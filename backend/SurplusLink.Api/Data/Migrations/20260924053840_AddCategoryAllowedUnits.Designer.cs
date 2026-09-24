@@ -462,7 +462,7 @@ namespace SurplusLink.Api.Data.Migrations
                         new
                         {
                             Id = new Guid("00000000-0000-0000-0000-000000000101"),
-                            AllowedUnits = new string[0],
+                            AllowedUnits = new[] { "pcs", "m", "m2", "m3", "kg", "g", "l", "bag", "box", "set", "roll", "sheet", "tonne", "pair" },
                             CreatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = "Cement",
                             UpdatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
@@ -470,7 +470,7 @@ namespace SurplusLink.Api.Data.Migrations
                         new
                         {
                             Id = new Guid("00000000-0000-0000-0000-000000000102"),
-                            AllowedUnits = new string[0],
+                            AllowedUnits = new[] { "pcs", "m", "m2", "m3", "kg", "g", "l", "bag", "box", "set", "roll", "sheet", "tonne", "pair" },
                             CreatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = "Steel",
                             UpdatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
@@ -478,7 +478,7 @@ namespace SurplusLink.Api.Data.Migrations
                         new
                         {
                             Id = new Guid("00000000-0000-0000-0000-000000000103"),
-                            AllowedUnits = new string[0],
+                            AllowedUnits = new[] { "pcs", "m", "m2", "m3", "kg", "g", "l", "bag", "box", "set", "roll", "sheet", "tonne", "pair" },
                             CreatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = "Timber",
                             UpdatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
@@ -486,7 +486,7 @@ namespace SurplusLink.Api.Data.Migrations
                         new
                         {
                             Id = new Guid("00000000-0000-0000-0000-000000000104"),
-                            AllowedUnits = new string[0],
+                            AllowedUnits = new[] { "pcs", "m", "m2", "m3", "kg", "g", "l", "bag", "box", "set", "roll", "sheet", "tonne", "pair" },
                             CreatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = "Bricks",
                             UpdatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
@@ -494,7 +494,7 @@ namespace SurplusLink.Api.Data.Migrations
                         new
                         {
                             Id = new Guid("00000000-0000-0000-0000-000000000105"),
-                            AllowedUnits = new string[0],
+                            AllowedUnits = new[] { "pcs", "m", "m2", "m3", "kg", "g", "l", "bag", "box", "set", "roll", "sheet", "tonne", "pair" },
                             CreatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = "Aggregates",
                             UpdatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
@@ -502,7 +502,7 @@ namespace SurplusLink.Api.Data.Migrations
                         new
                         {
                             Id = new Guid("00000000-0000-0000-0000-000000000106"),
-                            AllowedUnits = new string[0],
+                            AllowedUnits = new[] { "pcs", "m", "m2", "m3", "kg", "g", "l", "bag", "box", "set", "roll", "sheet", "tonne", "pair" },
                             CreatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = "Tiles",
                             UpdatedAtUtc = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)

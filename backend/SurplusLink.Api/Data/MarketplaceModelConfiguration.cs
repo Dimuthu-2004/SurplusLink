@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SurplusLink.Api.Materials;
 using SurplusLink.Api.Models;
 
 namespace SurplusLink.Api.Data;
@@ -413,6 +414,7 @@ public static class MarketplaceModelConfiguration
     {
         Id = Guid.Parse(id),
         Name = name,
+        AllowedUnits = MaterialUnits.Catalog.ToArray(),
         CreatedAtUtc = timestamp,
         UpdatedAtUtc = timestamp
     };
