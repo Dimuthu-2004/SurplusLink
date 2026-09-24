@@ -489,7 +489,12 @@ public sealed class MaterialInventoryService(SurplusLinkDbContext dbContext) : I
         Action = action
     });
 
-    private static string NormalizedName(string name) => string.Join(" ", name.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+    private static string NormalizedName(string name)
+    {
+        var collapsed = string.Join(" ", name.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        if (collapsed.Length == 0) return collapsed;
+        return char.ToUpperInvariant(collapsed[0]) + collapsed[1..];
+    }
 
     private async Task<bool> CategoryNameExistsAsync(string name, Guid? excludedId, CancellationToken ct)
     {
