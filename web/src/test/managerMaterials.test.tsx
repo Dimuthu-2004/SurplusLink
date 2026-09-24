@@ -65,6 +65,34 @@ describe('manager Material UI', () => {
     );
   });
 
+  it('loads assigned units for editing, filters options and saves multiple catalog units', async () => {
+    const api = fakeApi();
+    const category: MaterialCategory = { id: 'category-1', name: 'Steel', allowedUnits: ['kg'], createdAtUtc: '', updatedAtUtc: '' };
+    vi.mocked(api.getCategories).mockResolvedValue([category]);
+    vi.mocked(api.updateCategory).mockResolvedValue({ ...category, allowedUnits: ['kg', 'box'] });
+    render(<MemoryRouter><ManagerCategoriesPage api={api} /></MemoryRouter>);
+    const visitor = userEvent.setup();
+    await visitor.click(await screen.findByRole('button', { name: 'Edit' }));
+    expect(screen.getByRole('button', { name: 'Remove kg' })).toBeInTheDocument();
+    await visitor.type(screen.getByRole('combobox', { name: 'Edit allowed units' }), 'bo');
+    expect(screen.queryByRole('option', { name: 'kg' })).not.toBeInTheDocument();
+    await visitor.keyboard('{Enter}');
+    await visitor.click(screen.getByRole('button', { name: /^Save$/ }));
+    await waitFor(() => expect(api.updateCategory).toHaveBeenCalledWith('category-1', 'Steel', ['kg', 'box']));
+    expect(await screen.findByText('Units: kg, box')).toBeInTheDocument();
+  });
+
+  it('blocks category creation when the catalog fails and supports retry', async () => {
+    const api = fakeApi();
+    vi.mocked(api.getUnitCatalog).mockRejectedValueOnce(new Error('Catalog unavailable'));
+    render(<MemoryRouter><ManagerCategoriesPage api={api} /></MemoryRouter>);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Catalog unavailable');
+    expect(screen.getByRole('button', { name: 'Add category' })).toBeDisabled();
+    await userEvent.click(screen.getByRole('button', { name: 'Retry categories and units' }));
+    await screen.findByText('No categories have been added.');
+    expect(screen.getByRole('button', { name: 'Add category' })).toBeEnabled();
+  });
+
   it('validates a blank category and creates a valid category', async () => {
     const api = fakeApi();
     const created: MaterialCategory = {
@@ -88,9 +116,13 @@ describe('manager Material UI', () => {
 
     await visitor.type(screen.getByLabelText('Category name'), ' Steel ');
     await visitor.click(screen.getByRole('button', { name: 'Add category' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('Select at least one allowed unit');
+    await visitor.type(screen.getByRole('combobox', { name: 'Allowed units' }), 'k');
+    await visitor.click(screen.getByRole('option', { name: 'kg' }));
+    await visitor.click(screen.getByRole('button', { name: 'Add category' }));
 
     expect(await screen.findByText('Steel')).toBeInTheDocument();
-    expect(api.createCategory).toHaveBeenCalledWith('Steel');
+    expect(api.createCategory).toHaveBeenCalledWith('Steel', ['kg']);
   });
 });
 
@@ -115,6 +147,7 @@ function fakeApi(): ManagerMaterialsApi & {
     getHistory: vi.fn().mockResolvedValue([]),
     verifyListing: vi.fn(),
     getCategories: vi.fn().mockResolvedValue([]),
+    getUnitCatalog: vi.fn().mockResolvedValue(['kg', 'box', 'm2']),
     createCategory: vi.fn(),
     updateCategory: vi.fn(),
     deleteCategory: vi.fn().mockResolvedValue(undefined),

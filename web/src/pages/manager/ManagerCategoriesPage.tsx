@@ -1,3 +1,4 @@
+import { UnitMultiSelect, unitLabel } from './UnitMultiSelect';
 import { FormEvent, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
@@ -13,6 +14,9 @@ export function ManagerCategoriesPage({
 }) {
   const [categories, setCategories] = useState<MaterialCategory[] | null>(null);
   const [name, setName] = useState('');
+  const [catalog, setCatalog] = useState<string[] | null>(null);
+  const [units, setUnits] = useState<string[]>([]);
+  const [editUnits, setEditUnits] = useState<string[]>([]);
   const [editing, setEditing] = useState<MaterialCategory | null>(null);
   const [editName, setEditName] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -21,7 +25,9 @@ export function ManagerCategoriesPage({
   const load = async () => {
     setError(null);
     try {
-      setCategories(await api.getCategories());
+      const [categories, catalog] = await Promise.all([api.getCategories(), api.getUnitCatalog()]);
+      setCategories(categories);
+      setCatalog(catalog);
     } catch (reason) {
       setError(messageFor(reason));
     }
@@ -35,12 +41,14 @@ export function ManagerCategoriesPage({
     event.preventDefault();
     const validName = validateName(name);
     if (!validName) return;
+    if (units.length === 0) { setError('Select at least one allowed unit.'); return; }
     setSaving(true);
     setError(null);
     try {
-      const created = await api.createCategory(validName);
+      const created = await api.createCategory(validName, units);
       setCategories((current) => [...(current ?? []), created].sort(byName));
       setName('');
+      setUnits([]);
     } catch (reason) {
       setError(messageFor(reason));
     } finally {
@@ -53,10 +61,11 @@ export function ManagerCategoriesPage({
     if (!editing) return;
     const validName = validateName(editName);
     if (!validName) return;
+    if (editUnits.length === 0) { setError('Select at least one allowed unit.'); return; }
     setSaving(true);
     setError(null);
     try {
-      const updated = await api.updateCategory(editing.id, validName);
+      const updated = await api.updateCategory(editing.id, validName, editUnits);
       setCategories((current) => (current ?? []).map((category) => category.id === updated.id ? updated : category).sort(byName));
       setEditing(null);
       setEditName('');
@@ -95,7 +104,7 @@ export function ManagerCategoriesPage({
         </div>
       </section>
 
-      {error && <p className="error-message" role="alert">{error}</p>}
+      {error && <p className="error-message" role="alert">{error} {catalog === null && <button type="button" onClick={() => void load()}>Retry categories and units</button>}</p>}
 
       <section className="manager-panel">
         <h2>Add category</h2>
@@ -110,7 +119,8 @@ export function ManagerCategoriesPage({
               onChange={(event) => setName(event.target.value)}
             />
           </label>
-          <button className="button button-primary" type="submit" disabled={saving}>Add category</button>
+          <UnitMultiSelect label="Allowed units" catalog={catalog ?? []} selected={units} onChange={setUnits} disabled={saving || catalog === null} />
+          <button className="button button-primary" type="submit" disabled={saving || catalog === null}>Add category</button>
         </form>
         {validation && <p className="field-error" role="alert">{validation}</p>}
       </section>
@@ -137,14 +147,15 @@ export function ManagerCategoriesPage({
                         onChange={(event) => setEditName(event.target.value)}
                       />
                     </label>
-                    <button className="button button-primary" type="submit" disabled={saving}>Save</button>
+                    <UnitMultiSelect label="Edit allowed units" catalog={catalog ?? []} selected={editUnits} onChange={setEditUnits} disabled={saving || catalog === null} />
+                    <button className="button button-primary" type="submit" disabled={saving || catalog === null}>Save</button>
                     <button className="button button-secondary" type="button" onClick={() => setEditing(null)}>Cancel</button>
                   </form>
                 ) : (
                   <>
-                    <span>{category.name}</span>
+                    <span>{category.name}<small className="requirement-id">Units: {category.allowedUnits?.map(unitLabel).join(', ') || 'Not assigned'}</small></span>
                     <div className="action-row">
-                      <button className="text-button" type="button" onClick={() => { setEditing(category); setEditName(category.name); }}>Rename</button>
+                      <button className="text-button" type="button" onClick={() => { setEditing(category); setEditName(category.name); setEditUnits(category.allowedUnits ?? []); }}>Edit</button>
                       <button className="text-button danger-text" type="button" disabled={saving} onClick={() => void remove(category)}>Delete</button>
                     </div>
                   </>

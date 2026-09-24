@@ -1,7 +1,7 @@
 import 'package:mobile/screens/material_listing_form_screen.dart';
 import 'package:mobile/widgets/location_picker.dart';
 import 'package:mobile/location/location_lookup.dart';
-import 'package:mobile/categories/seller_unit_field.dart';
+import 'package:mobile/categories/searchable_unit_field.dart';
 
 import 'dart:async';
 import 'dart:convert';
@@ -132,7 +132,7 @@ void main() {
       await tester.tap(find.text('Steel').last);
       await tester.pumpAndSettle();
       if (buyer) {
-        await tester.tap(find.byKey(const Key('requirement-unit')));
+        await tester.enterText(find.widgetWithText(TextField, 'Unit'), 'k');
         await tester.pumpAndSettle();
         await tester.tap(find.text('kg').last);
         await tester.pumpAndSettle();
@@ -241,49 +241,31 @@ void main() {
     });
   }
 
-  testWidgets(
-    'seller units normalize duplicates and allow new entry only for empty categories',
-    (tester) async {
-      final material = FakeCategoryMaterials()..units = [' KG ', 'kg', 'Kg'];
-      await pumpForm(tester, false, material, FakeRequirements());
-      await tester.tap(find.byType(CategoryDropdown));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Cement').last);
-      await tester.pumpAndSettle();
-      final dropdown = tester.widget<DropdownButton<String>>(
-        find.descendant(
-          of: find.byType(SellerUnitField),
-          matching: find.byType(DropdownButton<String>),
-        ),
-      );
-      expect(dropdown.items!.map((item) => item.value), ['kg']);
-      expect(find.widgetWithText(TextField, 'New unit'), findsNothing);
-      material.units = [];
-      await tester.tap(find.byType(CategoryDropdown));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Steel').last);
-      await tester.pumpAndSettle();
-      await tester.enterText(
-        find.widgetWithText(TextField, 'New unit'),
-        ' PCS ',
-      );
-      await tester.tap(find.text('Use new unit'));
-      await tester.pumpAndSettle();
-      expect(find.text('pcs'), findsOneWidget);
-      expect(find.widgetWithText(TextField, 'New unit'), findsNothing);
-      for (final entry in {
-        'material-title': 'Steel',
-        'material-description': 'Reusable',
-        'material-quantity': '10',
-        'material-unit-price': '20',
-      }.entries) {
-        await tester.enterText(find.byKey(Key(entry.key)), entry.value);
-      }
-      await tester.tap(find.byKey(const Key('save-material')));
-      await tester.pumpAndSettle();
-      expect(material.saved!.unit, 'pcs');
-    },
-  );
+  testWidgets('seller filters assigned units and cannot add arbitrary units', (tester) async {
+    final material = FakeCategoryMaterials()..units = [' KG ', 'kg', 'box'];
+    await pumpForm(tester, false, material, FakeRequirements());
+    await tester.tap(find.byType(CategoryDropdown)); await tester.pumpAndSettle();
+    await tester.tap(find.text('Cement').last); await tester.pumpAndSettle();
+    expect(tester.widget<SearchableUnitField>(find.byType(SearchableUnitField)).units, ['box', 'kg']);
+    await tester.enterText(find.widgetWithText(TextField, 'Unit'), 'bo'); await tester.pumpAndSettle();
+    expect(find.text('box'), findsOneWidget); expect(find.text('kg'), findsNothing);
+    await tester.tap(find.text('box')); await tester.pumpAndSettle();
+    expect(find.widgetWithText(TextField, 'New unit'), findsNothing);
+    for (final entry in {'material-title': 'Steel', 'material-description': 'Reusable', 'material-quantity': '10', 'material-unit-price': '20'}.entries) {
+      await tester.enterText(find.byKey(Key(entry.key)), entry.value);
+    }
+    await tester.tap(find.byKey(const Key('save-material'))); await tester.pumpAndSettle();
+    expect(material.saved!.unit, 'box');
+    material.saved = null;
+    await tester.enterText(find.widgetWithText(TextField, 'Unit'), 'arbitrary');
+    await tester.tap(find.byKey(const Key('save-material'))); await tester.pumpAndSettle();
+    expect(material.saved, isNull);
+    material.units = [];
+    await tester.tap(find.byType(CategoryDropdown)); await tester.pumpAndSettle();
+    await tester.tap(find.text('Steel').last); await tester.pumpAndSettle();
+    expect(find.textContaining('Ask a manager'), findsOneWidget);
+    expect(find.widgetWithText(TextField, 'New unit'), findsNothing);
+  });
 
   testWidgets(
     'buyer ignores stale units and shows a retryable unit error separately from empty results',
@@ -305,7 +287,7 @@ void main() {
       first.complete(['kg']);
       await tester.pumpAndSettle();
       expect(find.text('kg'), findsNothing);
-      await tester.tap(find.byKey(const Key('requirement-unit')));
+      await tester.enterText(find.widgetWithText(TextField, 'Unit'), 'p');
       await tester.pumpAndSettle();
       await tester.tap(find.text('pcs').last);
       await tester.pumpAndSettle();
@@ -315,13 +297,13 @@ void main() {
       await tester.tap(find.text('Cement').last);
       await tester.pumpAndSettle();
       expect(find.text('Unable to load units. Please retry.'), findsOneWidget);
-      expect(find.textContaining('No available units'), findsNothing);
+      expect(find.textContaining('No units assigned'), findsNothing);
       buyer.unitError = null;
       buyer.pendingUnits.clear();
       buyer.unitItems = [];
       await tester.tap(find.text('Retry'));
       await tester.pumpAndSettle();
-      expect(find.text('No available units for this category'), findsOneWidget);
+      expect(find.text('No units assigned to this category'), findsOneWidget);
       expect(find.text('Unable to load units. Please retry.'), findsNothing);
     },
   );
