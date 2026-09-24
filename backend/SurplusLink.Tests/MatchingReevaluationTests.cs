@@ -83,8 +83,8 @@ public sealed class MatchingReevaluationTests(RequirementsDatabase fixture) : IC
             var summary = (await manager.GetFromJsonAsync<RequirementAnalyticsSummary>("/api/requirements/analytics/summary?upcomingDays=7"))!;
             Assert.Contains(summary.UpcomingDeadlines, x => x.Id == request.Id);
             Assert.DoesNotContain(summary.UpcomingDeadlines, x => x.Id == listing.Id);
-            // An approval recommendation is protected even before reservation.
-            Assert.Equal(HttpStatusCode.Conflict, (await buyer.PostAsync(path + "/generate", null)).StatusCode);
+            // A completed informational run remains refreshable until the buyer selects a match.
+            Assert.Equal(HttpStatusCode.OK, (await buyer.PostAsync(path + "/generate", null)).StatusCode);
         }
     }
 
