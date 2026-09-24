@@ -50,6 +50,7 @@ class RecommendedMatch {
       rejected == true || status == 'REJECTED' || rejectionReason != null;
   double? get estimatedMaterialCost =>
       (quantity != null && unitPrice != null) ? quantity! * unitPrice! : null;
+  bool get isSelectable => valid == true && status == 'ROUTED' && !isRejected;
 
   factory RecommendedMatch.fromJson(Map<String, dynamic> json) =>
       RecommendedMatch(
@@ -140,7 +141,7 @@ class MatchPage<T> {
     T Function(Map<String, dynamic>) parse,
   ) {
     final items = json['items'];
-    if (items is! List || items.any((x) => x is! Map<String, dynamic>)) {
+    if (items is! List || items.any((x) => x is! Map)) {
       throw const FormatException('Invalid match page.');
     }
     int integer(String key, int minimum) {
@@ -152,7 +153,9 @@ class MatchPage<T> {
     }
 
     return MatchPage(
-      items: items.cast<Map<String, dynamic>>().map(parse).toList(),
+      items: items
+          .map((item) => parse(Map<String, dynamic>.from(item as Map)))
+          .toList(),
       total: integer('total', 0),
       page: integer('page', 1),
       pageSize: integer('pageSize', 1),

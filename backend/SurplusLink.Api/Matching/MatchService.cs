@@ -42,7 +42,7 @@ public sealed partial class MatchService(SurplusLinkDbContext db)
                 x.Distance,
                 x.EstimatedTransportCost,
                 x.Status.ToString(),
-                x.Status != MatchStatus.REJECTED,
+                x.Status == MatchStatus.ROUTED,
                 x.Status == MatchStatus.REJECTED,
                 x.RejectionReason,
                 x.CreatedAtUtc,
@@ -207,7 +207,7 @@ public sealed partial class MatchService(SurplusLinkDbContext db)
                 ? null
                 : (double)failure / count,
             await rows.CountAsync(
-                x => x.Status != MatchStatus.REJECTED,
+                x => x.Status == MatchStatus.ROUTED,
                 ct),
             await rows.CountAsync(
                 x => x.Status == MatchStatus.REJECTED,
@@ -251,7 +251,7 @@ public sealed partial class MatchService(SurplusLinkDbContext db)
                 "Listing not found.");
 
         if (request.Status is not
-            (BuyerRequestStatus.OPEN or BuyerRequestStatus.MATCHING))
+            (BuyerRequestStatus.OPEN or BuyerRequestStatus.MATCHING or BuyerRequestStatus.MATCH_FOUND))
         {
             throw new MatchException(
                 409,
@@ -268,7 +268,7 @@ public sealed partial class MatchService(SurplusLinkDbContext db)
         if (await db.Reservations.AnyAsync(x => x.MaterialRequestId == requirementId, ct) ||
             await db.AgentWorkflows.AnyAsync(x => x.MaterialRequestId == requirementId &&
                 (x.Status == AgentWorkflowStatus.RUNNING || x.Status == AgentWorkflowStatus.PENDING_APPROVAL ||
-                 x.Status == AgentWorkflowStatus.APPROVED || x.Status == AgentWorkflowStatus.COMPLETED), ct))
+                 x.Status == AgentWorkflowStatus.APPROVED), ct))
             throw new MatchException(409, "A workflow or reservation protects this requirement's candidates.");
 
         var existing = await db.Matches.SingleOrDefaultAsync(x =>
@@ -405,6 +405,7 @@ public sealed partial class MatchService(SurplusLinkDbContext db)
         match.Status = succeeded
             ? MatchStatus.ROUTED
             : MatchStatus.ROUTE_FAILED;
+        match.RejectionReason = succeeded ? null : "ROUTE_UNAVAILABLE";
 
         Audit(
             match,

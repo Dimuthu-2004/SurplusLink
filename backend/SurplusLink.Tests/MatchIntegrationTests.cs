@@ -263,6 +263,8 @@ public sealed class MatchIntegrationTests(RequirementsDatabase fixture) : IClass
         var failed = await buyer.PostAsync(detailPath + "/route", null);
         var failedMatch = (await failed.Content.ReadFromJsonAsync<MatchResponse>())!;
         Assert.Equal("ROUTE_FAILED", failedMatch.Status);
+        Assert.False(failedMatch.Valid);
+        Assert.Equal("ROUTE_UNAVAILABLE", failedMatch.RejectionReason);
         Assert.Null(failedMatch.Distance); Assert.Null(failedMatch.DurationMinutes);
         (await buyer.PostAsync($"/api/requirements/{request.Id}/start-matching", null)).EnsureSuccessStatusCode();
         Assert.Equal(HttpStatusCode.Conflict, (await buyer.PostAsync(path + "/generate", null)).StatusCode);

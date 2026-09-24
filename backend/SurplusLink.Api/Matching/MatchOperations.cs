@@ -83,6 +83,7 @@ public sealed partial class MatchService
             match.DurationMinutes = success ? estimate!.Route.DurationMinutes : null;
             match.EstimatedTransportCost = success ? estimate!.EstimatedTransportCost : null;
             match.Status = success ? MatchStatus.ROUTED : MatchStatus.ROUTE_FAILED;
+            match.RejectionReason = success ? null : "ROUTE_UNAVAILABLE";
             Audit(match, actor, success ? "ROUTE_SUCCEEDED" : "ROUTE_FAILED");
             if (success && (listing.UnitPrice * request.RequiredQuantity + match.EstimatedTransportCost > request.MaximumBudget ||
                 match.DurationMinutes > (decimal)(request.Deadline - DateTime.UtcNow).TotalMinutes))
@@ -105,10 +106,10 @@ public sealed partial class MatchService
             $"SELECT 1 FROM \"MaterialRequests\" WHERE \"Id\" = {id} FOR UPDATE", ct);
         var request = await db.BuyerRequests.SingleAsync(x => x.Id == id, ct);
         await db.Entry(request).ReloadAsync(ct);
-        if (request.Status != BuyerRequestStatus.OPEN || request.Deadline <= DateTime.UtcNow ||
+        if (request.Status is not (BuyerRequestStatus.OPEN or BuyerRequestStatus.MATCH_FOUND) || request.Deadline <= DateTime.UtcNow ||
             await db.AgentWorkflows.AnyAsync(x => x.MaterialRequestId == id &&
                 (x.Status == AgentWorkflowStatus.RUNNING || x.Status == AgentWorkflowStatus.PENDING_APPROVAL ||
-                 x.Status == AgentWorkflowStatus.APPROVED || x.Status == AgentWorkflowStatus.COMPLETED), ct))
+                 x.Status == AgentWorkflowStatus.APPROVED), ct))
             throw new MatchException(409, "Candidate preparation requires an OPEN requirement with no active workflow.");
         return request;
     }
@@ -123,7 +124,7 @@ public sealed partial class MatchService
         ?? (listing.UnitPrice * request.RequiredQuantity > request.MaximumBudget ? "BUDGET_EXCEEDED" : null);
 
     private static MatchResponse Response(MaterialMatch x) => new(x.Id, x.MaterialRequestId, x.ListingId,
-        x.Score, x.Distance, x.EstimatedTransportCost, x.Status.ToString(), x.Status != MatchStatus.REJECTED,
+        x.Score, x.Distance, x.EstimatedTransportCost, x.Status.ToString(), x.Status == MatchStatus.ROUTED,
         x.Status == MatchStatus.REJECTED, x.RejectionReason, x.CreatedAtUtc, x.DurationMinutes,
         x.Listing.Title, x.Listing.Category.Name, x.Listing.SellerId, x.MaterialRequest.RequiredQuantity, x.Listing.Unit, x.Listing.UnitPrice,
         x.Listing.AvailableUntil, x.MaterialRequest.Deadline, x.Listing.Quantity - x.Listing.ReservedQuantity,

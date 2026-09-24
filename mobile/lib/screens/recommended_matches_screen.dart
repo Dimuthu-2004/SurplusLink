@@ -169,7 +169,7 @@ class _RecommendedMatchesScreenState extends State<RecommendedMatchesScreen> {
                     '${routingSummary(match)}\n'
                     'Transport estimate: ${formatCurrency(match.estimatedTransportCost)} • Total cost: ${formatCurrency((match.estimatedMaterialCost ?? 0) + (match.estimatedTransportCost ?? 0))}',
                   ),
-                  trailing: match.requirementStatus == 'MATCH_FOUND' && !match.isRejected && match.status == 'ROUTED'
+                  trailing: match.requirementStatus == 'MATCH_FOUND' && match.isSelectable
                       ? FilledButton(onPressed: _selecting ? null : () => _selectMatch(match), child: const Text('Select'))
                       : const Icon(Icons.chevron_right),
                   onTap: () => context.push(

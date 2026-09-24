@@ -93,7 +93,7 @@ class Recommendation(Contract):
 
 class WorkflowResponse(Contract):
     workflowId: UUID
-    status: Literal["PENDING_APPROVAL", "REVISION_REQUESTED", "REJECTED", "FAILED"]
+    status: Literal["MATCH_FOUND", "REJECTED", "FAILED"]
     validation: ValidationResult
     recommendation: Recommendation | None = None
     steps: tuple[StepTrace, ...]
@@ -101,10 +101,10 @@ class WorkflowResponse(Contract):
 
     @model_validator(mode="after")
     def approval_gate(self):
-        pending = self.status == "PENDING_APPROVAL"
-        if pending != self.validation.valid or pending != self.validation.requiresApproval:
-            raise ValueError("Invalid approval gate.")
-        if pending:
+        match_found = self.status == "MATCH_FOUND"
+        if match_found != self.validation.valid or match_found != self.validation.requiresApproval:
+            raise ValueError("Invalid match-selection gate.")
+        if match_found:
             if self.recommendation is None or self.validation.recommendedMatchId != self.recommendation.matchId:
                 raise ValueError("Missing validated recommendation.")
         elif self.recommendation is not None or self.validation.recommendedMatchId is not None:
@@ -241,7 +241,7 @@ class WorkflowOrchestrator:
             if error:
                 result = dict(status="FAILED", errorCode=error)
             self.steps.append(StepTrace(sequence=len(self.steps) + 1, stage=stage,
-                status="FAILED" if error or result.get("status") in ("FAILED", "REJECTED", "REVISION_REQUESTED") else "COMPLETED",
+                status="FAILED" if error or result.get("status") in ("FAILED", "REJECTED") else "COMPLETED",
                 output=output, errorCode=error or result.get("errorCode"), retryCount=attempt,
                 startedAtUtc=started, completedAtUtc=datetime.now(timezone.utc),
                 durationMilliseconds=round((perf_counter() - tick) * 1000), toolCalls=tools))
@@ -253,7 +253,7 @@ class WorkflowOrchestrator:
             "buyerRequest": state["request"].buyerRequest,
             "objective": state["request"].objective,
         })
-        return (dict(planner=result) if result.status == "ok" else dict(status="REVISION_REQUESTED", errorCode="INVALID_REQUIREMENT"),
+        return (dict(planner=result) if result.status == "ok" else dict(status="REJECTED", errorCode="INVALID_REQUIREMENT"),
                 result.model_dump(mode="json"), ())
 
     async def _matching(self, state):
@@ -261,7 +261,7 @@ class WorkflowOrchestrator:
         criteria = {k: fields[k] for k in ("buyerUserId", "categoryId", "category", "requiredQuantity", "unit", "maximumBudget", "deadline")}
         tools = SnapshotTools(state["request"].listings)
         result = await asyncio.to_thread(MaterialMatchingAgent(tools).match, criteria)
-        return (dict(matching=result) if result.status == "ok" else dict(status="REVISION_REQUESTED", errorCode="NO_MATCHING_CANDIDATE"),
+        return (dict(matching=result) if result.status == "ok" else dict(status="REJECTED", errorCode="NO_MATCHING_CANDIDATE"),
                 result.model_dump(mode="json"), tuple(tools.traces))
 
     async def _logistics(self, state):
@@ -295,7 +295,7 @@ class WorkflowOrchestrator:
             transportCost=route.estimatedTransportCost if route else None, deliveryFeasible=route.deliveryFeasible if route else None)
         validation, calls = await ValidationAgent(self.validation_tools, timeout_seconds=self.limits.toolTimeoutSeconds,
                                                   max_retries=self.limits.maxRetries).validate(value)
-        result = dict(validation=validation, status="PENDING_APPROVAL" if validation.valid else "REVISION_REQUESTED")
+        result = dict(validation=validation, status="MATCH_FOUND" if validation.valid else "REJECTED")
         if any(call.errorCode for call in calls):
             result.update(status="FAILED", errorCode="VALIDATION_TOOLS_FAILED")
         if validation.valid:

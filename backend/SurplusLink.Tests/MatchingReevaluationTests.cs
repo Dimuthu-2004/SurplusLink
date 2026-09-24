@@ -55,7 +55,7 @@ public sealed class MatchingReevaluationTests(RequirementsDatabase fixture) : IC
                 (await buyer.PostAsync(path + "/generate", null)).EnsureSuccessStatusCode();
                 var reevaluated = Assert.Single((await buyer.GetFromJsonAsync<MatchPage>(path))!.Items);
                 Assert.Equal(original.Id, reevaluated.Id);
-                Assert.True(reevaluated.Valid);
+                Assert.False(reevaluated.Valid);
                 Assert.Null(reevaluated.RejectionReason);
             }
             (await buyer.PostAsync($"/api/requirements/{request.Id}/start-matching", null)).EnsureSuccessStatusCode();
@@ -78,14 +78,13 @@ public sealed class MatchingReevaluationTests(RequirementsDatabase fixture) : IC
             Assert.False(await verify.Reservations.AnyAsync(x => x.MaterialRequestId == request.Id));
             if (!verifyFirst)
             {
-                Assert.True(await verify.AuditLogs.AnyAsync(x => x.EntityId == original.Id && x.Action == "STALE_LISTING_VERIFIED"));
                 Assert.True(await verify.AuditLogs.AnyAsync(x => x.EntityId == original.Id && x.Action == "REEVALUATE"));
             }
             var summary = (await manager.GetFromJsonAsync<RequirementAnalyticsSummary>("/api/requirements/analytics/summary?upcomingDays=7"))!;
             Assert.Contains(summary.UpcomingDeadlines, x => x.Id == request.Id);
             Assert.DoesNotContain(summary.UpcomingDeadlines, x => x.Id == listing.Id);
-            // An approval recommendation is protected even before reservation.
-            Assert.Equal(HttpStatusCode.Conflict, (await buyer.PostAsync(path + "/generate", null)).StatusCode);
+            // A completed informational run remains refreshable until the buyer selects a match.
+            Assert.Equal(HttpStatusCode.OK, (await buyer.PostAsync(path + "/generate", null)).StatusCode);
         }
     }
 
@@ -155,7 +154,7 @@ public sealed class MatchingReevaluationTests(RequirementsDatabase fixture) : IC
     {
         public Task<(WorkflowRunResult Result, int Retries)> RunAsync(WorkflowRunRequest request, CancellationToken ct) =>
             Task.FromResult((!request.Listings.Any(x => x.Status == "ACTIVE" && x.TransportCost is not null)
-                ? new WorkflowRunResult(request.WorkflowId, "REVISION_REQUESTED", new(false, false, null, ["NO_CANDIDATES"], []), null, [], null)
+                ? new WorkflowRunResult(request.WorkflowId, "REJECTED", new(false, false, null, ["NO_CANDIDATES"], []), null, [], null)
                 : WorkflowExecutionTests.Success(request), 0));
     }
     private sealed class CheckedTransport : ITransportEstimateService

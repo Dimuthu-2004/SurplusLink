@@ -26,7 +26,7 @@ public sealed class WorkflowExecutionTests
         var steps = new[] { "PLANNER", "MATCHING", "LOGISTICS", "VALIDATION" }.Select((name, index) =>
             new WorkflowStepTrace(index + 1, name, "COMPLETED", empty, null, 0, now, now, 1,
                 name == "VALIDATION" ? calls : [])).ToArray();
-        return new(request.WorkflowId, "PENDING_APPROVAL", new(true, true, row.MatchId, [], []),
+        return new(request.WorkflowId, "MATCH_FOUND", new(true, true, row.MatchId, [], []),
             new(row.MatchId, row.ListingId, .85m, row.DistanceKm!.Value, row.TransportCost!.Value), steps, null);
     }
 
@@ -199,13 +199,13 @@ public sealed class WorkflowPersistenceTests(RequirementsDatabase fixture) : ICl
     {
         var id = await Seed();
         using var db = fixture.Context();
-        var client = new FakeClient(request => new(request.WorkflowId, "REVISION_REQUESTED",
+        var client = new FakeClient(request => new(request.WorkflowId, "REJECTED",
             new(false, false, null, ["TOTAL_COST_EXCEEDS_BUDGET_OR_UNKNOWN"], []), null, [], null));
         Assert.True(await new WorkflowQueueProcessor(db, client, new DemoTransport(), Options.Create(new WorkflowExecutionOptions())).ProcessNextAsync(default));
         var row = await db.AgentWorkflows.SingleAsync(x => x.MaterialRequestId == id);
-        Assert.Equal(AgentWorkflowStatus.REVISION_REQUESTED, row.Status);
+        Assert.Equal(AgentWorkflowStatus.REJECTED, row.Status);
         Assert.Null(row.MaterialMatchId);
-        Assert.Equal(BuyerRequestStatus.OPEN, (await db.BuyerRequests.FindAsync(id))!.Status);
+        Assert.Equal(BuyerRequestStatus.MATCH_FOUND, (await db.BuyerRequests.FindAsync(id))!.Status);
         Assert.Equal(0, await db.Reservations.CountAsync(x => x.MaterialRequestId == id));
         var approval = await Assert.ThrowsAsync<AgentWorkflowException>(() => new AgentWorkflowService(db).ApproveAsync(row.Id, fixture.Manager, null, default));
         Assert.Equal(409, approval.StatusCode);

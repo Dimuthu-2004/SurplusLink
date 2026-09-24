@@ -188,7 +188,9 @@ public static class MarketplaceModelConfiguration
                 table.HasCheckConstraint("CK_Matches_Distance", "\"Distance\" IS NULL OR \"Distance\" >= 0");
                 table.HasCheckConstraint("CK_Matches_TransportCost", "\"EstimatedTransportCost\" IS NULL OR \"EstimatedTransportCost\" >= 0");
                 table.HasCheckConstraint("CK_Matches_Status", "\"Status\" IN ('GENERATED', 'RANKED', 'ROUTED', 'ROUTE_FAILED', 'REJECTED')");
-                table.HasCheckConstraint("CK_Matches_RejectionReason", "(\"Status\" = 'REJECTED' AND length(btrim(\"RejectionReason\")) > 0 AND \"RejectionReason\" IS NOT NULL) OR (\"Status\" <> 'REJECTED' AND \"RejectionReason\" IS NULL)");
+                // A failed route is retained as a non-selectable candidate, so it
+                // carries the same required explanation as a deterministic rejection.
+                table.HasCheckConstraint("CK_Matches_RejectionReason", "(\"Status\" IN ('REJECTED', 'ROUTE_FAILED') AND length(btrim(\"RejectionReason\")) > 0 AND \"RejectionReason\" IS NOT NULL) OR (\"Status\" NOT IN ('REJECTED', 'ROUTE_FAILED') AND \"RejectionReason\" IS NULL)");
             });
             entity.HasKey(match => match.Id).HasName("PK_Matches");
             entity.Property(match => match.Score).HasPrecision(5, 4);
