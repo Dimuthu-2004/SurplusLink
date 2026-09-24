@@ -1,3 +1,4 @@
+import { formatMaterialQuantity } from '../../features/materials/quantityFormat';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { InventoryAnalyticsWidget } from '../../features/materials/InventoryAnalyticsWidget';
@@ -205,7 +206,7 @@ export function ManagerListingsPage({
                     <td>{listing.title}</td>
                     <td>{listing.categoryName}</td>
                     <td><span className="status-badge">{listing.status.replaceAll('_', ' ')}</span></td>
-                    <td>{listing.quantity - listing.reservedQuantity} {listing.unit}</td>
+                    <td>{formatMaterialQuantity(listing.quantity - listing.reservedQuantity, listing.unit)} {listing.unit}</td>
                     <td>{formatPrice(listing.unitPrice)}</td>
                     <td>{formatDate(listing.availableUntil)}</td>
                     <td><Link className="text-button" to={`/app/manager/materials/${listing.id}`}>Review</Link></td>

@@ -1,3 +1,4 @@
+import 'package:mobile/materials/material_quantity_display.dart';
 import 'package:mobile/widgets/location_card.dart';
 import 'package:mobile/location/location_lookup.dart';
 import 'package:mobile/widgets/dashboard_back_button.dart';
@@ -315,13 +316,13 @@ class _DetailsTable extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Quantity: ${listing.quantity.toStringAsFixed(2)} ${listing.unit}',
+            'Quantity: ${formatMaterialQuantity(listing.quantity, listing.unit)} ${listing.unit}',
           ),
           Text(
-            'Reserved: ${listing.reservedQuantity.toStringAsFixed(2)} ${listing.unit}',
+            'Reserved: ${formatMaterialQuantity(listing.reservedQuantity, listing.unit)} ${listing.unit}',
           ),
           Text(
-            'Remaining: ${listing.remainingQuantity.toStringAsFixed(2)} ${listing.unit}',
+            'Remaining: ${formatMaterialQuantity(listing.remainingQuantity, listing.unit)} ${listing.unit}',
           ),
           Text('Unit price: Rs. ${listing.unitPrice.toStringAsFixed(2)}'),
           Text(

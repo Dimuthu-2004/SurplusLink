@@ -1,3 +1,4 @@
+using Npgsql;
 using Microsoft.EntityFrameworkCore;
 using SurplusLink.Api.Data;
 using SurplusLink.Api.Models;
@@ -336,15 +337,15 @@ public sealed class MaterialInventoryService(SurplusLinkDbContext dbContext) : I
     public async Task<MaterialCategoryResponse> CreateCategoryAsync(MaterialCategoryRequest request, CancellationToken cancellationToken)
     {
         var name = NormalizedName(request.Name);
-        if (await dbContext.Categories.AnyAsync(category => category.Name == name, cancellationToken))
+        if (await CategoryNameExistsAsync(name, null, cancellationToken))
         {
-            throw new MaterialOperationException(MaterialOperationError.Conflict, "A material category with that name already exists.");
+            throw new MaterialOperationException(MaterialOperationError.Conflict, "A category with this name already exists.");
         }
 
         var units = MaterialUnits.ValidateAllowed(request.AllowedUnits, await GetUnitCatalogAsync(cancellationToken));
         var category = new Category { Id = Guid.NewGuid(), Name = name, AllowedUnits = units };
         dbContext.Categories.Add(category);
-        await dbContext.SaveChangesAsync(cancellationToken);
+        await SaveCategoryChangesAsync(cancellationToken);
         return ToResponse(category);
     }
 
@@ -356,14 +357,14 @@ public sealed class MaterialInventoryService(SurplusLinkDbContext dbContext) : I
         var category = await dbContext.Categories.SingleOrDefaultAsync(item => item.Id == categoryId, cancellationToken)
             ?? throw new MaterialOperationException(MaterialOperationError.NotFound, "Material category was not found.");
         var name = NormalizedName(request.Name);
-        if (await dbContext.Categories.AnyAsync(item => item.Id != categoryId && item.Name == name, cancellationToken))
+        if (await CategoryNameExistsAsync(name, categoryId, cancellationToken))
         {
-            throw new MaterialOperationException(MaterialOperationError.Conflict, "A material category with that name already exists.");
+            throw new MaterialOperationException(MaterialOperationError.Conflict, "A category with this name already exists.");
         }
 
         category.AllowedUnits = MaterialUnits.ValidateAllowed(request.AllowedUnits, await GetUnitCatalogAsync(cancellationToken));
         category.Name = name;
-        await dbContext.SaveChangesAsync(cancellationToken);
+        await SaveCategoryChangesAsync(cancellationToken);
         return ToResponse(category);
     }
 
@@ -371,15 +372,17 @@ public sealed class MaterialInventoryService(SurplusLinkDbContext dbContext) : I
     {
         var category = await dbContext.Categories.SingleOrDefaultAsync(item => item.Id == categoryId, cancellationToken)
             ?? throw new MaterialOperationException(MaterialOperationError.NotFound, "Material category was not found.");
-        var inUse = await dbContext.Listings.AnyAsync(item => item.CategoryId == categoryId, cancellationToken)
-            || await dbContext.BuyerRequests.AnyAsync(item => item.CategoryId == categoryId, cancellationToken);
+        var inUse = await dbContext.Listings.AnyAsync(item => item.CategoryId == categoryId, cancellationToken);
         if (inUse)
         {
-            throw new MaterialOperationException(MaterialOperationError.Conflict, "A category used by a listing or material request cannot be deleted.");
+            throw new MaterialOperationException(MaterialOperationError.Conflict, "This category cannot be deleted because material listings are using it.");
         }
 
+        if (await dbContext.BuyerRequests.AnyAsync(item => item.CategoryId == categoryId, cancellationToken))
+            throw new MaterialOperationException(MaterialOperationError.Conflict, "A category used by a material request cannot be deleted.");
+
         dbContext.Categories.Remove(category);
-        await dbContext.SaveChangesAsync(cancellationToken);
+        await SaveCategoryChangesAsync(cancellationToken);
     }
 
     private static IQueryable<Listing> RestrictToReadableListings(IQueryable<Listing> listings, MaterialActor actor)
@@ -486,7 +489,35 @@ public sealed class MaterialInventoryService(SurplusLinkDbContext dbContext) : I
         Action = action
     });
 
-    private static string NormalizedName(string name) => name.Trim();
+    private static string NormalizedName(string name)
+    {
+        var collapsed = string.Join(" ", name.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        if (collapsed.Length == 0) return collapsed;
+        return char.ToUpperInvariant(collapsed[0]) + collapsed[1..];
+    }
+
+    private async Task<bool> CategoryNameExistsAsync(string name, Guid? excludedId, CancellationToken ct)
+    {
+        var names = await dbContext.Categories.Where(x => x.Id != excludedId).Select(x => x.Name).ToListAsync(ct);
+        return names.Any(existing => string.Equals(NormalizedName(existing), name, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private async Task SaveCategoryChangesAsync(CancellationToken ct)
+    {
+        try { await dbContext.SaveChangesAsync(ct); }
+        catch (DbUpdateException exception) when (exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation, ConstraintName: "UX_Categories_Name" })
+        {
+            throw new MaterialOperationException(MaterialOperationError.Conflict, "A category with this name already exists.");
+        }
+        catch (DbUpdateException exception) when (exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.ForeignKeyViolation, ConstraintName: "FK_Listings_Categories_CategoryId" })
+        {
+            throw new MaterialOperationException(MaterialOperationError.Conflict, "This category cannot be deleted because material listings are using it.");
+        }
+        catch (DbUpdateException exception) when (exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.ForeignKeyViolation, ConstraintName: "FK_MaterialRequests_Categories_CategoryId" })
+        {
+            throw new MaterialOperationException(MaterialOperationError.Conflict, "A category used by a material request cannot be deleted.");
+        }
+    }
 
     private static MaterialListingResponse ToResponse(Listing listing) => new(
         listing.Id,

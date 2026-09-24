@@ -1,3 +1,4 @@
+import { formatMaterialQuantity } from '../../features/materials/quantityFormat';
 import { environment } from '../../config/environment';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
@@ -90,8 +91,8 @@ export function ManagerMaterialDetailsPage({
           <Detail label="Seller email" value={listing.seller?.email || 'Not provided'} />
           <Detail label="Seller phone" value={listing.seller?.phoneNumber || 'Not provided'} />
           <Detail label="Condition" value={listing.condition} />
-          <Detail label="Quantity" value={`${listing.quantity} ${listing.unit}`} />
-          <Detail label="Reserved" value={`${listing.reservedQuantity} ${listing.unit}`} />
+          <Detail label="Quantity" value={`${formatMaterialQuantity(listing.quantity, listing.unit)} ${listing.unit}`} />
+          <Detail label="Reserved" value={`${formatMaterialQuantity(listing.reservedQuantity, listing.unit)} ${listing.unit}`} />
           <Detail label="Unit price" value={formatPrice(listing.unitPrice)} />
           <Detail label="Available until" value={formatDate(listing.availableUntil)} />
           <Detail label="Created" value={formatDate(listing.createdAtUtc)} />

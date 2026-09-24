@@ -34,6 +34,24 @@ const listing: MaterialListing = {
 };
 
 describe('manager Material UI', () => {
+  it('shows server duplicate and in-use category messages without removing the category', async () => {
+    const api = fakeApi();
+    vi.mocked(api.getCategories).mockResolvedValue([{ id: 'c1', name: 'Tiles', allowedUnits: ['pcs'], createdAtUtc: '', updatedAtUtc: '' }]);
+    vi.mocked(api.updateCategory).mockRejectedValue(new Error('A category with this name already exists.'));
+    vi.mocked(api.deleteCategory).mockRejectedValue(new Error('This category cannot be deleted because material listings are using it.'));
+    render(<MemoryRouter><ManagerCategoriesPage api={api} /></MemoryRouter>);
+    const visitor = userEvent.setup();
+    await visitor.click(await screen.findByRole('button', { name: 'Edit' }));
+    await visitor.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('A category with this name already exists.');
+    await visitor.click(screen.getByRole('button', { name: 'Cancel' }));
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    await visitor.click(screen.getByRole('button', { name: 'Delete' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('This category cannot be deleted because material listings are using it.');
+    expect(screen.getByText('Tiles')).toBeInTheDocument();
+    confirm.mockRestore();
+  });
+
   it('applies search and sorting filters and loads the next page', async () => {
     const api = fakeApi();
     api.listListings
