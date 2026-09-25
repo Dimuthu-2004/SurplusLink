@@ -43,25 +43,25 @@ export function AnalyticsChart({ title, values, initialView = 'bars' }: {
   </section>;
 }
 
-export function AnalyticsMetric({ label, value, detail }: { label: string; value: string | number; detail?: string }) {
-  const numeric = typeof value === 'number' ? value : Number(value);
-  const previous = useRef(numeric);
-  const [display, setDisplay] = useState(Number.isFinite(numeric) ? numeric : value);
+export function AnalyticsMetric({ label, value, detail, tone = 'progress' }: { label: string; value: string | number; detail?: string; tone?: 'success' | 'pending' | 'failed' | 'progress' }) {
+  const numeric = typeof value === 'number' ? value : NaN;
+  const previous = useRef(0);
+  const [display, setDisplay] = useState<string | number>(Number.isFinite(numeric) ? 0 : value);
   useEffect(() => {
     if (!Number.isFinite(numeric)) { setDisplay(value); return; }
-    if (previous.current === numeric) return;
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) { setDisplay(numeric); previous.current = numeric; return; }
     const startValue = previous.current;
-    previous.current = numeric;
     const started = performance.now();
-    const duration = 650;
     let frame = 0;
     const tick = (now: number) => {
-      const progress = Math.min(1, (now - started) / duration);
-      setDisplay(Math.round(startValue + (numeric - startValue) * (1 - Math.pow(1 - progress, 3))));
+      const progress = Math.min(1, (now - started) / 650);
+      const next = startValue + (numeric - startValue) * (1 - Math.pow(1 - progress, 3));
+      previous.current = next;
+      setDisplay(progress === 1 ? numeric : Math.round(next));
       if (progress < 1) frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
   }, [numeric, value]);
-  return <div className="analytics-metric"><span>{label}</span><strong>{display}</strong>{detail && <small>{detail}</small>}</div>;
+  return <div className="analytics-metric" data-tone={tone}><span>{label}</span><strong aria-label={String(value)}><span aria-hidden="true">{typeof display === 'number' ? new Intl.NumberFormat().format(display) : display}</span><span className="sr-only">{value}</span></strong>{detail && <small>{detail}</small>}</div>;
 }

@@ -38,11 +38,11 @@ export function ManagerRequirementDetailsPage({ api = managerRequirementsApi, wo
           <div><dt>Required quantity</dt><dd>{requirementNumber(row.requiredQuantity)} {row.unit}</dd></div>
           <div><dt>Maximum budget</dt><dd>{requirementNumber(row.maximumBudget, 2)}</dd></div>
           <div><dt>Deadline (local time)</dt><dd>{requirementDate(row.deadline)}</dd></div>
-          <div><dt>Delivery coordinates</dt><dd>{row.latitude === null || row.longitude === null ? 'Not recorded' : row.latitude + ', ' + row.longitude}</dd></div>
+          <div><dt>Delivery location</dt><dd>{row.deliveryAddress?.trim() || 'Address unavailable'}</dd></div>
           <div><dt>Created</dt><dd>{requirementDate(row.createdAt)}</dd></div>
           <div><dt>Last updated</dt><dd>{requirementDate(row.updatedAt)}</dd></div>
         </dl>
-        <small className="requirement-id" title={row.id}>Request reference: {row.id.slice(0, 8)}</small><small className="requirement-id" title={row.buyerId}>Buyer reference: {row.buyerId.slice(0, 8)}</small><h3>Notes</h3><p className="requirement-notes">{row.notes || 'No notes added.'}</p>
+        <small className="requirement-id" title={row.id}>Request reference: {row.id.slice(0, 8)}</small><h3>Notes</h3><p className="requirement-notes">{row.notes || 'No notes added.'}</p>
         <p className="muted">Manager access is read-only. Buyers manage their own requirements.</p>
       </>}
       <nav className="action-row" aria-label="Requirement views">

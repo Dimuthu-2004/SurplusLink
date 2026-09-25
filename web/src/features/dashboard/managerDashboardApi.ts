@@ -6,6 +6,8 @@ import { managerWorkflowsApi } from '../workflows/managerWorkflowsApi';
 // The portfolio summary differs from the per-requirement comparison summary.
 export interface MatchAnalyticsSummary {
   total: number;
+  validCount?: number;
+  rejectedCount?: number;
   averageScore: number | null;
   averageDistance: number | null;
   topRejectionReasons: { reason: string; count: number }[];
@@ -16,6 +18,7 @@ export interface MatchAnalyticsSummary {
 }
 
 export const managerDashboardApi = {
+  approvals: () => managerWorkflowsApi.list({ search: '', status: 'PENDING_APPROVAL', sortBy: 'startedAt', sortDir: 'desc', page: 1, pageSize: 1 }),
   inventory: () => managerMaterialsApi.getAnalytics(),
   requirements: () => managerRequirementsApi.summary(7),
   matches: async () => (await apiClient.get<MatchAnalyticsSummary>('/api/matches/analytics/summary')).data,

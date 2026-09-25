@@ -30,7 +30,7 @@ const requirements: RequirementAnalytics = {
   averageMaximumBudget: 400, averageQuantityByUnit: [],
 };
 const matches: MatchAnalyticsSummary = {
-  total: 23, averageScore: 0.81, averageDistance: 14.25,
+  validCount: 15, rejectedCount: 8, total: 23, averageScore: 0.81, averageDistance: 14.25,
   topRejectionReasons: [{ reason: 'BUDGET_EXCEEDED', count: 6 }],
   routeSuccessCount: 10, routeFailureCount: 2, routeSuccessRate: 10 / 12, routeFailureRate: 2 / 12,
 };
@@ -57,6 +57,9 @@ it('loads the manager dashboard from authenticated summaries, isolates errors, r
     calls.push(config.url!);
     await gate;
     switch (config.url) {
+      case '/api/workflows':
+        expect(config.params.status).toBe('PENDING_APPROVAL');
+        return respond({ total: 6, items: [], page: 1, pageSize: 1, totalPages: 6 });
       case '/api/materials/analytics/summary':
         return respond(empty ? { ...inventory, activeCount: 0, listingsByCategory: [], listingsByStatus: [] } : inventory);
       case '/api/requirements/analytics/summary':
@@ -75,16 +78,16 @@ it('loads the manager dashboard from authenticated summaries, isolates errors, r
 
   render(<MemoryRouter initialEntries={['/app/manager']}><AuthProvider><App /></AuthProvider></MemoryRouter>);
   await screen.findByRole('heading', { name: 'Manager Dashboard' });
-  expect(screen.getAllByRole('status')).toHaveLength(4);
+  expect(screen.getAllByRole('status')).toHaveLength(5);
   expect(screen.queryByText('Active listings')).not.toBeInTheDocument();
   expect(screen.getByRole('link', { name: 'Manager Dashboard' })).toHaveAttribute('aria-current', 'page');
   expect(screen.getByRole('link', { name: 'Material listings' })).toHaveAttribute('href', '/app/manager/materials');
-  await waitFor(() => expect(calls).toHaveLength(4));
+  await waitFor(() => expect(calls).toHaveLength(5));
   await act(async () => { release(); await gate; });
 
   expect(await screen.findByRole('alert')).toHaveTextContent('Match analytics is temporarily unavailable.');
   expect(calls.slice().sort()).toEqual([
-    '/api/materials/analytics/summary', '/api/requirements/analytics/summary',
+    '/api/workflows', '/api/materials/analytics/summary', '/api/requirements/analytics/summary',
     '/api/matches/analytics/summary', '/api/transactions/analytics/summary',
   ].sort());
   expect(screen.queryByText('Average match score')).not.toBeInTheDocument();
@@ -93,21 +96,29 @@ it('loads the manager dashboard from authenticated summaries, isolates errors, r
   expect(within(screen.getByRole('table', { name: 'Listing totals by category' })).getByRole('row', { name: 'Steel 19' })).toBeInTheDocument();
   metric('Expiring soon', '0');
   metric('Open requirements', '17');
-  metric('Pending approval', '7');
+  metric('Requirements awaiting approval', '7');
   metric('Upcoming requirement deadlines', '12');
   expect(screen.getByRole('link', { name: 'View buyer requirements' })).toHaveAttribute('href', '/app/manager/requirements');
   expect(screen.queryByRole('table', { name: 'Upcoming requirement deadlines' })).not.toBeInTheDocument();
   metric('Pending approvals', '8');
   metric('Approved transactions', '13');
+  metric('Pending Match / Requirement Approvals', '6');
+  metric('Pending Listing Approvals', '0');
+  expect(screen.getByRole('link', { name: /Pending Listing Approvals/ })).toHaveAttribute('href', '/app/manager/materials?status=PENDING_VERIFICATION');
+  expect(screen.getByRole('link', { name: /Pending Match \/ Requirement Approvals/ })).toHaveAttribute('href', '/app/manager/approvals');
+  for (const label of ['Total Users', 'Sellers', 'Buyers', 'Dual-role Users', 'Managers']) metric(label, 'Unavailable');
+  expect(screen.queryByText('manager-1')).not.toBeInTheDocument();
 
   failMatches = false;
   const visitor = userEvent.setup();
   await visitor.click(screen.getByRole('button', { name: 'Retry matches' }));
   await screen.findByRole('table', { name: 'Top rejection reasons' });
   metric('Route failures', '2');
+  metric('Valid matches', '15');
+  metric('Rejected matches', '8');
   expect(screen.getByRole('row', { name: 'Budget Exceeded 6' })).toBeInTheDocument();
-  expect(calls).toHaveLength(5);
-  expect(calls[4]).toBe('/api/matches/analytics/summary');
+  expect(calls).toHaveLength(6);
+  expect(calls[5]).toBe('/api/matches/analytics/summary');
   expect(screen.queryByRole('alert')).not.toBeInTheDocument();
 
   empty = true;
@@ -120,12 +131,12 @@ it('loads the manager dashboard from authenticated summaries, isolates errors, r
   expect(screen.getByText('No matches yet.')).toBeInTheDocument();
   expect(screen.getByText('No rejection reasons recorded.')).toBeInTheDocument();
   metric('Active listings', '0');
-  metric('Pending approval', '0');
+  metric('Requirements awaiting approval', '0');
   metric('Route failures', '2');
   expect(screen.queryByText('BUDGET_EXCEEDED')).not.toBeInTheDocument();
 });
 
 function metric(label: string, value: string) {
   const card = screen.getByText(label, { selector: '.analytics-metric > span' }).parentElement!;
-  expect(within(card).getByText(value, { selector: 'strong' })).toBeInTheDocument();
+  expect(within(card).getByLabelText(value, { selector: 'strong' })).toBeInTheDocument();
 }

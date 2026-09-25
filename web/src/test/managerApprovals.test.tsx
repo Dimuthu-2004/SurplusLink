@@ -38,12 +38,12 @@ it('shows readable summary and validation, with technical output collapsed and n
     validationJson: JSON.stringify({ valid: false, warnings: ['ROUTE_ESTIMATE_ONLY'], violations: ['BUDGET_EXCEEDED'] }),
   });
   renderDetails(client);
-  expect(await screen.findByRole('link', { name: 'Steel offcuts' })).toHaveAttribute('href', '/app/manager/materials/listing-1');
+  expect(await screen.findByText('No current valid recommendation is available.')).toBeInTheDocument();
+  expect(screen.queryByRole('link', { name: 'Steel offcuts' })).not.toBeInTheDocument();
   expect(await screen.findByRole('link', { name: 'Steel request' })).toHaveAttribute('href', '/app/manager/requirements/request-1');
   expect(screen.getByText('12 kg')).toBeInTheDocument();
   expect(screen.getByText('1,500')).toBeInTheDocument();
-  expect(screen.getByText('4 km')).toBeInTheDocument();
-  expect(screen.getByText('0', { selector: 'dd' })).toBeInTheDocument();
+  expect(screen.queryByText('4 km')).not.toBeInTheDocument();
   expect(screen.getByText('Budget Exceeded')).toBeInTheDocument();
   expect(screen.getByText('Route Estimate Only')).toBeInTheDocument();
   const technical = screen.getByText('Technical details').closest('details')!;
@@ -62,6 +62,6 @@ it.each(['COMPLETED', 'REJECTED', 'APPROVED', 'FAILED', 'REVISION_REQUESTED'] as
   await screen.findByRole('heading', { name: 'Review summary' });
   expect(screen.queryByRole('heading', { name: 'Manager decision' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument();
-  expect(screen.getByText('No recommendation recorded.')).toBeInTheDocument();
-  expect(screen.getAllByText('Not available').length).toBeGreaterThan(0);
+  expect(await screen.findByText('No current valid recommendation is available.')).toBeInTheDocument();
+  expect(screen.queryByText('Current valid match')).not.toBeInTheDocument();
 });

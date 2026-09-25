@@ -1,3 +1,4 @@
+import { apiClient } from '../../api/apiClient';
 import { useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { managerRequirementsApi } from '../../features/requirements/managerRequirementsApi';
@@ -38,8 +39,27 @@ export function WorkflowSummary({ workflow }: { workflow: Workflow }) {
   const output = jsonObject(workflow.outputJson);
   const recommendation = object(output.recommendation);
   const validation = jsonObject(workflow.validationJson);
-  const listingId = typeof recommendation.listingId === 'string' ? recommendation.listingId : null;
-  const material = useRequirementResource(useCallback(() => listingId ? managerMaterialsApi.getListing(listingId) : Promise.resolve(null), [listingId]));
+  const recommendedId = typeof validation.recommendedMatchId === 'string' ? validation.recommendedMatchId : null;
+  const current = useRequirementResource(useCallback(async () => {
+    if (!recommendedId || validation.valid !== true || messages(validation.violations).length > 0 || !workflow.materialRequestId ||
+      !['PENDING_APPROVAL', 'COMPLETED'].includes(workflow.status)) return null;
+    const [matchResponse, requirement] = await Promise.all([
+      apiClient.get<CurrentMatch>('/api/matches/' + encodeURIComponent(recommendedId)),
+      managerRequirementsApi.get(workflow.materialRequestId),
+    ]);
+    const match = matchResponse.data;
+    if (match.id !== recommendedId || match.requirementId !== requirement.id ||
+      requirement.workflowId !== workflow.id || !['MATCH_FOUND', 'PENDING_APPROVAL'].includes(requirement.status) ||
+      !match.valid || match.rejected || match.rejectionReason || match.status !== 'ROUTED' ||
+      (workflow.materialMatchId && workflow.materialMatchId !== recommendedId) ||
+      (recommendation.matchId && recommendation.matchId !== recommendedId) ||
+      (output.selectedMatchId && output.selectedMatchId !== recommendedId)) return null;
+    const listing = await managerMaterialsApi.getListing(match.listingId);
+    if (listing.id !== match.listingId || (recommendation.listingId && recommendation.listingId !== listing.id) || listing.status !== 'ACTIVE' || !(Date.parse(listing.availableUntil) > Date.now()) ||
+      !(Date.parse(requirement.deadline) > Date.now())) return null;
+    return { match, listing };
+  }, [recommendedId, workflow, validation.valid]));
+  const selected = !current.loading && !current.error ? current.data : null;
   const warnings = messages(validation.warnings ?? object(output.validation).warnings);
   const violations = messages(validation.violations ?? object(output.validation).violations);
   const row = request.data;
@@ -47,19 +67,36 @@ export function WorkflowSummary({ workflow }: { workflow: Workflow }) {
   const requestLabel = typeof objective === 'string' && objective.trim() ? objective : row ? `${row.category ?? 'Material'} request` : 'View buyer request';
   return <>
     <dl className="detail-grid">
-      <div><dt>Material</dt><dd>{material.data ? <Link to={'/app/manager/materials/' + material.data.id}>{material.data.title}</Link> : material.loading ? 'Loading material...' : 'Material details unavailable'}</dd></div>
       <div><dt>Buyer / request</dt><dd>{workflow.materialRequestId ? <Link to={'/app/manager/requirements/' + workflow.materialRequestId}>{requestLabel}</Link> : 'No linked request'}</dd><small className="muted">Buyer name unavailable</small></div>
       <div><dt>Required quantity</dt><dd>{row ? `${requirementNumber(row.requiredQuantity)} ${row.unit}` : 'Not available'}</dd></div>
       <div><dt>Maximum budget (LKR)</dt><dd>{number(row?.maximumBudget)}</dd></div>
-      <div><dt>Route distance</dt><dd>{number(recommendation.distanceKm, ' km')}</dd></div>
-      <div><dt>Transport cost (LKR)</dt><dd>{number(recommendation.transportCost)}</dd></div>
     </dl>
     {request.error && <p className="muted">Request summary unavailable. <button className="text-button" onClick={request.reload}>Retry request summary</button></p>}
-    {material.error && <p className="muted">Material name unavailable. <button className="text-button" onClick={material.reload}>Retry material name</button></p>}
-    <h3>Recommendation</h3>
-    <p>{typeof output.recommendation === 'string' ? output.recommendation : listingId ? 'Recommended material selected for this request.' : 'No recommendation recorded.'}</p>
+    <section className="recommendation-card" aria-label="Current recommendation">
+      <h3>Recommendation</h3>
+      {current.loading ? <p role="status">Checking current recommendation...</p> : current.error ?
+        <p className="error-message" role="alert">Recommendation could not be verified. <button className="text-button" onClick={current.reload}>Retry recommendation</button></p> : selected ? <>
+        <p className="eyebrow">Current valid match</p>
+        <dl className="detail-grid">
+          <div><dt>Material</dt><dd><Link to={'/app/manager/materials/' + selected.listing.id}>{selected.listing.title}</Link></dd></div>
+          <div><dt>Seller / business</dt><dd>{selected.listing.seller?.businessName || selected.listing.seller?.fullName || 'Seller details unavailable'}</dd></div>
+          <div><dt>Score</dt><dd>{number(selected.match.score * 100, '%')}</dd></div>
+          <div><dt>Route distance</dt><dd>{number(selected.match.distance, ' km')}</dd></div>
+          <div><dt>Delivery duration</dt><dd>{number(selected.match.durationMinutes, ' min')}</dd></div>
+          <div><dt>Unit price (LKR)</dt><dd>{number(selected.listing.unitPrice)} / {selected.listing.unit}</dd></div>
+          <div><dt>Transport cost (LKR)</dt><dd>{number(selected.match.estimatedTransportCost)}</dd></div>
+        </dl>
+        <h4>Recommendation reason</h4><p>{typeof recommendation.reason === 'string' && recommendation.reason.trim() ? recommendation.reason : 'Recommendation reason unavailable.'}</p>
+      </> : <p className="empty-state">No current valid recommendation is available.</p>}
+    </section>
     <h3>Warnings and violations</h3>
     {warnings.length + violations.length > 0 ? <ul>{violations.map((text, index) => <li key={'v' + index}><strong>Violation:</strong> {text}</li>)}{warnings.map((text, index) => <li key={'w' + index}><strong>Warning:</strong> {text}</li>)}</ul> : <p>{Array.isArray(validation.warnings) && Array.isArray(validation.violations) ? 'None recorded.' : 'No warning or violation details recorded.'}</p>}
     {workflow.errorJson && <p className="error-message">Workflow error: {typeof jsonObject(workflow.errorJson).code === 'string' ? statusLabel(jsonObject(workflow.errorJson).code as string) : 'See Technical details.'}</p>}
   </>;
+}
+
+interface CurrentMatch {
+  id: string; requirementId: string; listingId: string; valid: boolean; rejected: boolean;
+  rejectionReason: string | null; status: string; score: number; distance: number | null;
+  durationMinutes: number | null; estimatedTransportCost: number | null;
 }

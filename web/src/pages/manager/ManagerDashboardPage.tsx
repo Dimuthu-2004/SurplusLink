@@ -16,12 +16,19 @@ export function ManagerDashboardPage() {
         </div>
       </header>
 
+      <section className="manager-panel" aria-label="Community">
+        <p className="eyebrow">People powering reuse</p><h2>Community</h2>
+        <div className="analytics-metrics">{['Total Users', 'Sellers', 'Buyers', 'Dual-role Users', 'Managers'].map(label =>
+          <AnalyticsMetric key={label} label={label} value="Unavailable" />)}</div>
+        <p className="muted">User analytics are not available from the current service.</p>
+      </section>
       <div className="dashboard-grid">
         <AnalyticsPanel title="Inventory" load={managerDashboardApi.inventory}>
           {(data) => <>
             <div className="analytics-metrics">
-              <AnalyticsMetric label="Active listings" value={requirementNumber(data.activeCount)} />
-              <AnalyticsMetric label="Expiring soon" value={requirementNumber(data.expiringListings.length)} />
+              <AnalyticsMetric label="Active listings" value={data.activeCount} tone="success" />
+              <Link className="approval-card" to="/app/manager/materials?status=PENDING_VERIFICATION"><AnalyticsMetric label="Pending Listing Approvals" value={data.listingsByStatus.find(item => item.key === 'PENDING_VERIFICATION')?.count ?? 0} tone="pending" detail="Review listings" /></Link>
+              <AnalyticsMetric label="Expiring soon" value={data.expiringListings.length} tone="pending" />
             </div>
             <h3>Category totals</h3>
             <p className="muted">Listing counts across all statuses.</p>
@@ -43,11 +50,11 @@ export function ManagerDashboardPage() {
         <AnalyticsPanel title="Buyer requirements" load={managerDashboardApi.requirements}>
           {(data) => <>
             <div className="analytics-metrics">
-              <AnalyticsMetric label="Open requirements" value={requirementNumber(data.openCount)} />
-              <AnalyticsMetric label="Pending approval" value={
+              <AnalyticsMetric label="Open requirements" value={data.openCount} />
+              <AnalyticsMetric label="Requirements awaiting approval" tone="pending" value={
                 requirementNumber(data.countsByStatus.find((item) => item.status === 'PENDING_APPROVAL')?.count ?? 0)
               } />
-              <AnalyticsMetric label="Upcoming requirement deadlines" value={requirementNumber(data.upcomingDeadlineCount)} detail="Next 7 days" />
+              <AnalyticsMetric label="Upcoming requirement deadlines" value={data.upcomingDeadlineCount} detail="Next 7 days" />
             </div>
             {data.total === 0 && <p className="empty-state">No buyer requirements yet.</p>}
             <Link className="back-link" to="/app/manager/requirements">View buyer requirements</Link>
@@ -57,7 +64,11 @@ export function ManagerDashboardPage() {
         <AnalyticsPanel title="Matches" load={managerDashboardApi.matches}>
           {(data) => <>
             <div className="analytics-metrics">
-              <AnalyticsMetric label="Route failures" value={requirementNumber(data.routeFailureCount)} />
+              <AnalyticsMetric label="Valid matches" value={data.validCount ?? 'Unavailable'} tone="success" />
+              <AnalyticsMetric label="Rejected matches" value={data.rejectedCount ?? 'Unavailable'} tone="failed" />
+              <AnalyticsMetric label="Route failures" value={data.routeFailureCount} tone="failed" />
+              <AnalyticsMetric label="Average match score" value={data.averageScore == null ? 'Unavailable' : `${requirementNumber(data.averageScore * 100, 1)}%`} />
+              <AnalyticsMetric label="Average route distance" value={data.averageDistance == null ? 'Unavailable' : `${requirementNumber(data.averageDistance, 2)} km`} />
             </div>
             {data.total === 0 && <p className="empty-state">No matches yet.</p>}
             <h3>Top rejection reasons</h3>
@@ -75,11 +86,14 @@ export function ManagerDashboardPage() {
           </>}
         </AnalyticsPanel>
 
+        <AnalyticsPanel title="Approval queue" load={managerDashboardApi.approvals}>
+          {data => <Link className="approval-card" to="/app/manager/approvals"><AnalyticsMetric label="Pending Match / Requirement Approvals" value={data.total} tone="pending" detail="Review buyer-confirmed workflows" /></Link>}
+        </AnalyticsPanel>
         <AnalyticsPanel title="Transactions" load={managerDashboardApi.transactions}>
           {(data) => <>
             <div className="analytics-metrics">
-              <AnalyticsMetric label="Pending approvals" value={requirementNumber(data.pendingApprovalCount)} />
-              <AnalyticsMetric label="Approved transactions" value={requirementNumber(data.approvedCount)} />
+              <AnalyticsMetric label="Pending approvals" value={data.pendingApprovalCount} tone="pending" />
+              <AnalyticsMetric label="Approved transactions" value={data.approvedCount} tone="success" />
             </div>
             <Link className="back-link" to="/app/manager/approvals">Review pending approvals</Link>
             {data.pendingApprovalCount + data.approvedCount + data.rejectedCount + data.completionCount === 0 && (
@@ -131,7 +145,7 @@ function AnalyticsPanel<T>({ title, load, children }: {
           {state.error ? 'Retry' : 'Refresh'} {title.toLowerCase()}
         </button>
       </div>
-      {state.loading && <p role="status">Loading {title.toLowerCase()}…</p>}
+      {state.loading && <p className="analytics-loading" role="status">Loading {title.toLowerCase()}…</p>}
       {state.error && <p className="error-message" role="alert">{state.error}</p>}
       {state.data !== null && children(state.data)}
     </section>

@@ -198,3 +198,17 @@ describe('protected manager requirement routes', () => {
     expect(spy).not.toHaveBeenCalled(); expect(detail).not.toHaveBeenCalled(); expect(history).not.toHaveBeenCalled();
   });
 });
+it.each([
+  ['12 Harbour Road, Colombo', '12 Harbour Road, Colombo'],
+  [null, 'Address unavailable'], ['', 'Address unavailable'], ['   ', 'Address unavailable'],
+])('shows readable delivery location and never coordinates (%s)', async (address, expected) => {
+  const api = fakeApi();
+  api.get.mockResolvedValue({ ...row, deliveryAddress: address });
+  render(<MemoryRouter initialEntries={['/requirements/' + row.id]}><Routes>
+    <Route path="/requirements/:requirementId" element={<ManagerRequirementDetailsPage api={api} />} />
+  </Routes></MemoryRouter>);
+  expect(await screen.findByText(expected)).toBeInTheDocument();
+  expect(screen.getByText('Delivery location')).toBeInTheDocument();
+  expect(screen.queryByText('6.9, 79.8')).not.toBeInTheDocument();
+  expect(screen.queryByText(/Buyer reference/)).not.toBeInTheDocument();
+});
