@@ -17,10 +17,19 @@ export interface MatchAnalyticsSummary {
   routeFailureRate: number | null;
 }
 
+export interface UserSummary {
+  totalUsers: number;
+  buyers: number;
+  sellers: number;
+  dualRoleUsers: number;
+  managers: number;
+}
+
 export const managerDashboardApi = {
   approvals: () => managerWorkflowsApi.list({ search: '', status: 'PENDING_APPROVAL', sortBy: 'startedAt', sortDir: 'desc', page: 1, pageSize: 1 }),
   inventory: () => managerMaterialsApi.getAnalytics(),
   requirements: () => managerRequirementsApi.summary(7),
   matches: async () => (await apiClient.get<MatchAnalyticsSummary>('/api/matches/analytics/summary')).data,
   transactions: () => managerWorkflowsApi.transactionAnalytics(),
+  usersSummary: async () => (await apiClient.get<UserSummary>('/api/users/summary')).data,
 };

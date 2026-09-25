@@ -212,7 +212,9 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db)
     }
 
     private async Task<AgentWorkflow?> LoadAsync(Guid id, CancellationToken ct) =>
-        await db.AgentWorkflows.AsNoTracking().Include(x => x.Steps).ThenInclude(x => x.ToolCalls)
+        await db.AgentWorkflows.AsNoTracking()
+            .Include(x => x.MaterialRequest)
+            .Include(x => x.Steps).ThenInclude(x => x.ToolCalls)
             .Include(x => x.Approvals).SingleOrDefaultAsync(x => x.Id == id, ct);
 
     private async Task UpdateParticipationAsync(AgentWorkflow workflow, Guid actor, OfferStatus offerStatus,
@@ -261,7 +263,10 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db)
         workflow.InputJson, workflow.OutputJson, workflow.ValidationJson, workflow.ErrorJson, workflow.Decision,
         workflow.RetryCount, workflow.StartedAtUtc, workflow.CompletedAtUtc,
         workflow.Steps.OrderBy(x => x.Sequence).Select(ToStep).ToArray(),
-        workflow.Approvals.OrderBy(x => x.DecidedAtUtc).Select(ToApproval).ToArray());
+        workflow.Approvals.OrderBy(x => x.DecidedAtUtc).Select(ToApproval).ToArray(),
+        workflow.MaterialRequest?.RecommendationReason ?? (workflow.MaterialMatchId.HasValue || (workflow.MaterialRequest?.RecommendedMatchId.HasValue ?? false)
+            ? "Highest deterministic final score among valid routed candidates; ties use condition, total estimated cost, distance, then listing ID."
+            : null));
 
     private static AgentStepResponse ToStep(AgentStep step) => new(
         step.Id, step.Sequence, step.Stage, step.Status, step.InputJson, step.OutputJson, step.ValidationJson,

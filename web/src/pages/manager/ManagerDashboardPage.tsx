@@ -6,6 +6,25 @@ import { managerDashboardApi } from '../../features/dashboard/managerDashboardAp
 import { requirementNumber } from '../../features/requirements/requirementUi';
 
 export function ManagerDashboardPage() {
+  const [userSummary, setUserSummary] = useState<{
+    data: { totalUsers: number; sellers: number; buyers: number; dualRoleUsers: number; managers: number } | null;
+    error: string | null;
+    loading: boolean;
+  }>({ data: null, error: null, loading: true });
+
+  useEffect(() => {
+    let active = true;
+    managerDashboardApi.usersSummary().then(
+      (data) => {
+        if (active) setUserSummary({ data, error: null, loading: false });
+      },
+      (error: unknown) => {
+        if (active) setUserSummary({ data: null, error: normalizeApiError(error).message, loading: false });
+      }
+    );
+    return () => { active = false; };
+  }, []);
+
   return (
     <div className="manager-page manager-dashboard">
       <header className="page-heading">
@@ -16,11 +35,35 @@ export function ManagerDashboardPage() {
         </div>
       </header>
 
-      <section className="manager-panel" aria-label="Community">
-        <p className="eyebrow">People powering reuse</p><h2>Community</h2>
-        <div className="analytics-metrics">{['Total Users', 'Sellers', 'Buyers', 'Dual-role Users', 'Managers'].map(label =>
-          <AnalyticsMetric key={label} label={label} value="Unavailable" />)}</div>
-        <p className="muted">User analytics are not available from the current service.</p>
+      <section className="manager-panel" aria-label="Community" aria-busy={userSummary.loading}>
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">People powering reuse</p>
+            <h2>Community</h2>
+          </div>
+          <button type="button" className="button button-secondary" disabled={userSummary.loading}
+            onClick={() => {
+              setUserSummary((prev) => ({ ...prev, loading: true, error: null }));
+              managerDashboardApi.usersSummary().then(
+                (data) => setUserSummary({ data, error: null, loading: false }),
+                (error) => setUserSummary({ data: null, error: normalizeApiError(error).message, loading: false })
+              );
+            }}>
+            {userSummary.error ? 'Retry' : 'Refresh'} community
+          </button>
+        </div>
+        
+        {userSummary.loading && <p className="analytics-loading" role="status">Loading community stats…</p>}
+        {userSummary.error && <p className="error-message" role="alert">{userSummary.error}</p>}
+        {userSummary.data && (
+          <div className="analytics-metrics">
+            <AnalyticsMetric label="Total Users" value={userSummary.data.totalUsers} />
+            <AnalyticsMetric label="Sellers" value={userSummary.data.sellers} />
+            <AnalyticsMetric label="Buyers" value={userSummary.data.buyers} />
+            <AnalyticsMetric label="Dual-role Users" value={userSummary.data.dualRoleUsers} />
+            <AnalyticsMetric label="Managers" value={userSummary.data.managers} />
+          </div>
+        )}
       </section>
       <div className="dashboard-grid">
         <AnalyticsPanel title="Inventory" load={managerDashboardApi.inventory}>
