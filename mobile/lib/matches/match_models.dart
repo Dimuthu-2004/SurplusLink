@@ -29,7 +29,7 @@ class RecommendedMatch {
     this.latitude,
     this.longitude,
     this.sellerAddress,
-    this.aiRecommended = false,
+    this.recommendedMatchId,
   });
   final String id, requirementId, listingId, status;
   final double score;
@@ -44,7 +44,8 @@ class RecommendedMatch {
   final String? requirementStatus;
   final String? sellerName, sellerBusinessName, condition, sellerAddress;
   final double? latitude, longitude;
-  final bool aiRecommended;
+  final String? recommendedMatchId;
+  bool get aiRecommended => id == recommendedMatchId;
 
   bool get isRejected =>
       rejected == true || status == 'REJECTED' || rejectionReason != null;
@@ -87,7 +88,7 @@ class RecommendedMatch {
         latitude: _number(json, 'latitude', optional: true),
         longitude: _number(json, 'longitude', optional: true),
         sellerAddress: _optionalString(json, 'sellerAddress'),
-        aiRecommended: _boolean(json, 'aiRecommended') ?? false,
+        recommendedMatchId: _optionalString(json, 'recommendedMatchId'),
       );
 }
 

@@ -170,7 +170,7 @@ void main() {
   testWidgets(
     'AI badge has subtle animated outline and supports reduced motion',
     (tester) async {
-      final fake = SelectionFake()..value = candidate({'aiRecommended': true});
+      final fake = SelectionFake()..value = candidate({'recommendedMatchId': 'm1'});
       await show(tester, fake);
       expect(find.text('AI Recommended'), findsOneWidget);
       BoxDecoration decoration() =>

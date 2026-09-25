@@ -74,7 +74,9 @@ public sealed record MatchResponse(
     decimal? Latitude = null,
     decimal? Longitude = null,
     string? SellerAddress = null,
-    bool AiRecommended = false
+    bool AiRecommended = false,
+    Guid? RecommendedMatchId = null,
+    string? RecommendationReason = null
 );
 
 public sealed record MatchPage(
@@ -82,7 +84,9 @@ public sealed record MatchPage(
     int Total,
     int TotalPages,
     int Page,
-    int PageSize
+    int PageSize,
+    Guid? RecommendedMatchId = null,
+    string? RecommendationReason = null
 );
 
 public sealed record MatchHistoryEntry(

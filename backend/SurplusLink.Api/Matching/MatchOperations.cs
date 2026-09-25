@@ -13,6 +13,9 @@ public sealed partial class MatchService
             .Include(x => x.MaterialRequest).SingleOrDefaultAsync(x => x.Id == id, ct)
             ?? throw new MatchException(404, "Match not found.");
         await AuthorizeRequirement(match.MaterialRequestId, actor, manager, ct);
+        var recommendation = await MatchRecommendation.RefreshAsync(db, match.MaterialRequestId, ct);
+        match.MaterialRequest.RecommendedMatchId = recommendation.RecommendedMatchId;
+        match.MaterialRequest.RecommendationReason = recommendation.RecommendationReason;
         return Response(match);
     }
 
@@ -44,12 +47,16 @@ public sealed partial class MatchService
         foreach (var match in matches)
         {
             var reason = EligibilityReason(request, match.Listing);
-            if (reason is not null) { match.Status = MatchStatus.REJECTED; match.RejectionReason = reason; Audit(match, actor, "REJECT"); continue; }
-            // Both distance and total cost reduce the score; unavailable routing
-            // earns no route score and never turns into a zero-distance success.
-            var cost = match.Listing.UnitPrice * request.RequiredQuantity + (match.EstimatedTransportCost ?? 0);
-            match.Score = Math.Round(Math.Clamp(.5m + .3m * Math.Max(0, 1 - cost / request.MaximumBudget) +
-                (match.Distance is decimal distance ? .2m / (1 + distance / 100) : 0), 0, 1), 4);
+            if (match.Status == MatchStatus.ROUTED &&
+                match.Listing.UnitPrice * request.RequiredQuantity + match.EstimatedTransportCost > request.MaximumBudget)
+                reason ??= "TOTAL_COST_EXCEEDS_BUDGET";
+            if (match.Status == MatchStatus.ROUTED &&
+                match.DurationMinutes > (decimal)(request.Deadline - DateTime.UtcNow).TotalMinutes)
+                reason ??= "DELIVERY_DEADLINE_EXCEEDED";
+            if (reason is not null) { match.Score = 0; match.Status = MatchStatus.REJECTED; match.RejectionReason = reason; Audit(match, actor, "REJECT"); continue; }
+            match.Score = match.Status == MatchStatus.ROUTED
+                ? MatchScoring.Score(match.Listing.Condition.ToString(), match.Listing.UnitPrice * request.RequiredQuantity,
+                    request.MaximumBudget, match.Distance, match.EstimatedTransportCost) : 0;
             if (match.Status == MatchStatus.GENERATED) match.Status = MatchStatus.RANKED;
             Audit(match, actor, "RANK");
         }
@@ -78,7 +85,7 @@ public sealed partial class MatchService
             if (listing.Latitude is decimal lat && listing.Longitude is decimal lon &&
                 request.Latitude is decimal buyerLat && request.Longitude is decimal buyerLon)
                 estimate = await transport.EstimateAsync(new(lat, lon, buyerLat, buyerLon), ct);
-            var success = estimate is { Route.Success: true, EstimatedTransportCost: >= 0, ErrorCode: null };
+            var success = estimate is { Route.Success: true, Route.DistanceKm: >= 0, Route.DurationMinutes: >= 0, EstimatedTransportCost: >= 0, ErrorCode: null };
             match.Distance = success ? estimate!.Route.DistanceKm : null;
             match.DurationMinutes = success ? estimate!.Route.DurationMinutes : null;
             match.EstimatedTransportCost = success ? estimate!.EstimatedTransportCost : null;
@@ -94,6 +101,9 @@ public sealed partial class MatchService
                 Audit(match, actor, "REJECT");
             }
         }
+        match.Score = match.Status == MatchStatus.ROUTED
+            ? MatchScoring.Score(listing.Condition.ToString(), listing.UnitPrice * request.RequiredQuantity,
+                request.MaximumBudget, match.Distance, match.EstimatedTransportCost) : 0;
         await Save(ct);
         await tx.CommitAsync(ct);
         return await GetAsync(id, actor, manager, ct);
@@ -124,11 +134,13 @@ public sealed partial class MatchService
         ?? (listing.UnitPrice * request.RequiredQuantity > request.MaximumBudget ? "BUDGET_EXCEEDED" : null);
 
     private static MatchResponse Response(MaterialMatch x) => new(x.Id, x.MaterialRequestId, x.ListingId,
-        x.Score, x.Distance, x.EstimatedTransportCost, x.Status.ToString(), x.Status == MatchStatus.ROUTED,
+        x.Score, x.Distance, x.EstimatedTransportCost, x.Status.ToString(), MatchRecommendation.InvalidReason(x.MaterialRequest, x, DateTime.UtcNow) is null,
         x.Status == MatchStatus.REJECTED, x.RejectionReason, x.CreatedAtUtc, x.DurationMinutes,
         x.Listing.Title, x.Listing.Category.Name, x.Listing.SellerId, x.MaterialRequest.RequiredQuantity, x.Listing.Unit, x.Listing.UnitPrice,
         x.Listing.AvailableUntil, x.MaterialRequest.Deadline, x.Listing.Quantity - x.Listing.ReservedQuantity,
         x.MaterialRequest.MaximumBudget, x.MaterialRequest.Status.ToString(),
         x.Listing.Seller.FullName, x.Listing.Seller.BusinessName, x.Listing.Condition.ToString(),
-        x.Listing.Latitude, x.Listing.Longitude, x.Listing.Seller.Address, false);
+        x.Listing.Latitude, x.Listing.Longitude, x.Listing.Seller.Address,
+        x.Id == x.MaterialRequest.RecommendedMatchId,
+        x.MaterialRequest.RecommendedMatchId, x.MaterialRequest.RecommendationReason);
 }

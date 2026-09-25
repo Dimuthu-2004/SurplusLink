@@ -23,57 +23,17 @@ public sealed partial class MatchService(SurplusLinkDbContext db)
             manager,
             ct);
 
+        var recommendation = await MatchRecommendation.RefreshAsync(db, requirementId, ct);
         var rows = MatchQueryBuilder.Filter(
-            db.Matches
-                .AsNoTracking()
-                .Where(x => x.MaterialRequestId == requirementId),
-            query);
-
+            db.Matches.AsNoTracking().Where(x => x.MaterialRequestId == requirementId), query);
         var total = await rows.CountAsync(ct);
-
-        var items = await MatchQueryBuilder.Sort(rows, query)
-            .Skip((query.Page - 1) * query.PageSize)
-            .Take(query.PageSize)
-            .Select(x => new MatchResponse(
-                x.Id,
-                x.MaterialRequestId,
-                x.ListingId,
-                x.Score,
-                x.Distance,
-                x.EstimatedTransportCost,
-                x.Status.ToString(),
-                x.Status == MatchStatus.ROUTED,
-                x.Status == MatchStatus.REJECTED,
-                x.RejectionReason,
-                x.CreatedAtUtc,
-                x.DurationMinutes,
-                x.Listing.Title,
-                x.Listing.Category.Name,
-                x.Listing.SellerId,
-                x.MaterialRequest.RequiredQuantity,
-                x.Listing.Unit,
-                x.Listing.UnitPrice,
-                x.Listing.AvailableUntil,
-                x.MaterialRequest.Deadline,
-                x.Listing.Quantity - x.Listing.ReservedQuantity,
-                x.MaterialRequest.MaximumBudget,
-                x.MaterialRequest.Status.ToString(),
-                x.Listing.Seller.FullName,
-                x.Listing.Seller.BusinessName,
-                x.Listing.Condition.ToString(),
-                x.Listing.Latitude,
-                x.Listing.Longitude,
-                x.Listing.Seller.Address,
-                db.AgentWorkflows.Any(w => w.MaterialRequestId == x.MaterialRequestId &&
-                    w.MaterialMatchId == x.Id && w.Status == AgentWorkflowStatus.COMPLETED)))
-            .ToListAsync(ct);
-
-        return new MatchPage(
-            items,
-            total,
-            Pages(total, query.PageSize),
-            query.Page,
-            query.PageSize);
+        var matches = await MatchQueryBuilder.Sort(rows, query)
+            .Skip((query.Page - 1) * query.PageSize).Take(query.PageSize)
+            .Include(x => x.Listing).ThenInclude(x => x.Category)
+            .Include(x => x.Listing).ThenInclude(x => x.Seller)
+            .Include(x => x.MaterialRequest).ToListAsync(ct);
+        return new MatchPage(matches.Select(Response).ToArray(), total, Pages(total, query.PageSize),
+            query.Page, query.PageSize, recommendation.RecommendedMatchId, recommendation.RecommendationReason);
     }
 
     public async Task<MatchHistoryPage> HistoryAsync(
@@ -401,6 +361,11 @@ public sealed partial class MatchService(SurplusLinkDbContext db)
 
         match.Distance = distance;
         match.EstimatedTransportCost = estimatedTransportCost;
+        if (!succeeded)
+        {
+            match.DurationMinutes = null;
+            match.Score = 0;
+        }
 
         match.Status = succeeded
             ? MatchStatus.ROUTED
@@ -516,7 +481,15 @@ public sealed partial class MatchService(SurplusLinkDbContext db)
     {
         try
         {
+            var requirements = db.ChangeTracker.Entries<MaterialMatch>()
+                .Where(x => x.State is EntityState.Added or EntityState.Modified)
+                .Select(x => x.Entity.MaterialRequestId).Distinct().ToArray();
+            await using var transaction = db.Database.CurrentTransaction is null
+                ? await db.Database.BeginTransactionAsync(ct) : null;
             await db.SaveChangesAsync(ct);
+            foreach (var requirementId in requirements)
+                await MatchRecommendation.RefreshAsync(db, requirementId, ct);
+            if (transaction is not null) await transaction.CommitAsync(ct);
         }
         catch (DbUpdateConcurrencyException)
         {

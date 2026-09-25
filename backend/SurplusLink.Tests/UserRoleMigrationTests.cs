@@ -27,6 +27,8 @@ public sealed class UserRoleMigrationTests(RequirementsDatabase fixture) : IClas
         var rollback = await Assert.ThrowsAsync<PostgresException>(() => migrator.MigrateAsync("20260918072804_AddUserContactProfile"));
         Assert.Contains("every user must have exactly one role", rollback.MessageText);
         Assert.Equal(2, await db.Set<UserRoleAssignment>().CountAsync(x => x.UserId == fixture.Buyer));
-        Assert.Equal(fixture.Buyer, (await db.BuyerRequests.FindAsync(fixture.LegacyRequest))!.BuyerId);
+        // The refused rollback may already have removed columns from newer migrations.
+        Assert.Equal(fixture.Buyer, await db.BuyerRequests.Where(x => x.Id == fixture.LegacyRequest)
+            .Select(x => x.BuyerId).SingleAsync());
     }
 }

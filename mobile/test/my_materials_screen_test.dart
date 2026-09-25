@@ -164,12 +164,15 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('open-my-materials')),
+      200,
+    );
     await tester.drag(
       find.byKey(const Key('home-dashboard-scroll')),
-      const Offset(0, -900),
+      const Offset(0, -150),
     );
-    await tester.pump();
-    await tester.ensureVisible(find.byKey(const Key('open-my-materials')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('open-my-materials')));
     await tester.pumpAndSettle();
     await tester.ensureVisible(
@@ -187,12 +190,15 @@ void main() {
     await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('home-dashboard-scroll')), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('open-my-requirements')),
+      200,
+    );
     await tester.drag(
       find.byKey(const Key('home-dashboard-scroll')),
-      const Offset(0, -900),
+      const Offset(0, -150),
     );
-    await tester.pump();
-    await tester.ensureVisible(find.byKey(const Key('open-my-requirements')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('open-my-requirements')));
     await tester.pumpAndSettle();
     expect(find.text('My Requirements'), findsOneWidget);

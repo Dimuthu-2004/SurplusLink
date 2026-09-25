@@ -30,6 +30,10 @@ public sealed class BuyerRequest : AuditableEntity
 
     public uint Version { get; set; }
 
+    public Guid? RecommendedMatchId { get; set; }
+
+    public string? RecommendationReason { get; set; }
+
     public User Buyer { get; set; } = null!;
 
     public Category Category { get; set; } = null!;
