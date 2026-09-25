@@ -1,6 +1,6 @@
 import { formatMaterialQuantity } from '../../features/materials/quantityFormat';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { InventoryAnalyticsWidget } from '../../features/materials/InventoryAnalyticsWidget';
 import {
   managerMaterialsApi,
@@ -26,8 +26,10 @@ export function ManagerListingsPage({
 }: {
   api?: ManagerMaterialsApi;
 }) {
-  const [draft, setDraft] = useState(defaults);
-  const [filters, setFilters] = useState(defaults);
+  const [params] = useSearchParams();
+  const initial = { ...defaults, status: params.get('status') === 'PENDING_VERIFICATION' ? 'PENDING_VERIFICATION' : '' };
+  const [draft, setDraft] = useState<Omit<ListingSearch, 'page' | 'pageSize'>>(initial);
+  const [filters, setFilters] = useState<Omit<ListingSearch, 'page' | 'pageSize'>>(initial);
   const [page, setPage] = useState(1);
   const [categories, setCategories] = useState<MaterialCategory[]>([]);
   const [result, setResult] = useState<PagedListings | null>(null);

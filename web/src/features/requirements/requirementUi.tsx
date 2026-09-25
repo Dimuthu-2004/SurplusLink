@@ -33,7 +33,7 @@ export function statusLabel(value: string) {
   return value.toLowerCase().split('_').map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
 }
 export function RequirementBadge({ status }: { status: string }) {
-  return <span className="status-badge">{statusLabel(status)}</span>;
+  return <span className="status-badge" data-status={status}>{statusLabel(status)}</span>;
 }
 export function requirementDate(value: string) {
   const date = new Date(value);
