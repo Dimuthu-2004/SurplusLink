@@ -44,7 +44,8 @@ public sealed record AgentWorkflowResponse(
     [property: JsonConverter(typeof(JsonStringEnumConverter))] AgentWorkflowStatus Status,
     string CurrentStage, string InputJson, string OutputJson, string ValidationJson, string? ErrorJson,
     string? Decision, int RetryCount, DateTime StartedAtUtc, DateTime? CompletedAtUtc,
-    IReadOnlyList<AgentStepResponse> Steps, IReadOnlyList<ApprovalResponse> Approvals);
+    IReadOnlyList<AgentStepResponse> Steps, IReadOnlyList<ApprovalResponse> Approvals,
+    string? RecommendationReason = null);
 
 public sealed record AgentWorkflowListItem(Guid Id, Guid? MaterialRequestId, Guid? MaterialMatchId,
     [property: JsonConverter(typeof(JsonStringEnumConverter))] AgentWorkflowStatus Status, string CurrentStage,

@@ -19,6 +19,7 @@ export interface AgentStep {
 export interface Approval { id: string; decidedByUserId: string; decision: string; note: string; decidedAtUtc: string }
 export interface Workflow extends WorkflowListItem {
   inputJson: string; outputJson: string; validationJson: string; decision: string | null; steps: AgentStep[]; approvals: Approval[];
+  recommendationReason?: string | null;
 }
 export interface WorkflowPage { items: WorkflowListItem[]; total: number; page: number; pageSize: number; totalPages: number }
 export interface WorkflowQuery { search: string; status: string; sortBy: 'startedAt' | 'status' | 'stage'; sortDir: 'asc' | 'desc'; page: number; pageSize: number }

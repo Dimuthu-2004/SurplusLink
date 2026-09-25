@@ -25,7 +25,7 @@ it('resolves buyer-confirmed recommendation IDs against current APIs and preserv
   show();
   expect(await screen.findByRole('link', { name: 'Steel offcuts' })).toHaveAttribute('href', '/app/manager/materials/listing');
   expect(apiClient.get).toHaveBeenCalledWith('/api/matches/match');
-  for (const text of ['Circular Metals', '85%', '4 km', '10 min', '0', 'Recommendation reason unavailable.']) expect(screen.getByText(text)).toBeInTheDocument();
+  for (const text of ['Circular Metals', '85%', '4 km', '10 min', '0', 'Highest deterministic final score among valid routed candidates; ties use condition, total estimated cost, distance, then listing ID.']) expect(screen.getByText(text)).toBeInTheDocument();
 });
 it.each([
   { valid: false }, { rejected: true }, { status: 'ROUTE_FAILED' }, { status: 'REJECTED' },

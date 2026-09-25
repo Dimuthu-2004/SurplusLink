@@ -142,5 +142,8 @@ public sealed partial class MatchService
         x.Listing.Seller.FullName, x.Listing.Seller.BusinessName, x.Listing.Condition.ToString(),
         x.Listing.Latitude, x.Listing.Longitude, x.Listing.Seller.Address,
         x.Id == x.MaterialRequest.RecommendedMatchId,
-        x.MaterialRequest.RecommendedMatchId, x.MaterialRequest.RecommendationReason);
+        x.MaterialRequest.RecommendedMatchId,
+        x.MaterialRequest.RecommendationReason ?? (x.Id == x.MaterialRequest.RecommendedMatchId
+            ? "Highest deterministic final score among valid routed candidates; ties use condition, total estimated cost, distance, then listing ID."
+            : null));
 }

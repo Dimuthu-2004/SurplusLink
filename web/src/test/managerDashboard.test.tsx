@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor, within } from '@testing-library/react';
+﻿import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AxiosError } from 'axios';
 import { MemoryRouter } from 'react-router-dom';
@@ -38,6 +38,8 @@ const transactions: TransactionAnalytics = {
   pendingApprovalCount: 8, approvedCount: 13, rejectedCount: 3, completionCount: 5,
   reservedQuantity: 60, completedValue: 500, completionRate: 5 / 21,
 };
+const users = { totalUsers: 150, sellers: 60, buyers: 50, dualRoleUsers: 20, managers: 5 };
+
 const originalAdapter = apiClient.defaults.adapter;
 afterEach(() => { apiClient.defaults.adapter = originalAdapter; });
 
@@ -72,23 +74,25 @@ it('loads the manager dashboard from authenticated summaries, isolates errors, r
         return respond(empty ? { ...matches, total: 0, averageScore: null, averageDistance: null, topRejectionReasons: [] } : matches);
       case '/api/transactions/analytics/summary':
         return respond(empty ? { ...transactions, pendingApprovalCount: 0, approvedCount: 0, rejectedCount: 0, completionCount: 0 } : transactions);
+      case '/api/users/summary':
+        return respond(empty ? { totalUsers: 0, sellers: 0, buyers: 0, dualRoleUsers: 0, managers: 0 } : users);
       default: throw new Error('Unexpected dashboard request: ' + config.url);
     }
   };
 
   render(<MemoryRouter initialEntries={['/app/manager']}><AuthProvider><App /></AuthProvider></MemoryRouter>);
   await screen.findByRole('heading', { name: 'Manager Dashboard' });
-  expect(screen.getAllByRole('status')).toHaveLength(5);
+  expect(screen.getAllByRole('status')).toHaveLength(6);
   expect(screen.queryByText('Active listings')).not.toBeInTheDocument();
   expect(screen.getByRole('link', { name: 'Manager Dashboard' })).toHaveAttribute('aria-current', 'page');
   expect(screen.getByRole('link', { name: 'Material listings' })).toHaveAttribute('href', '/app/manager/materials');
-  await waitFor(() => expect(calls).toHaveLength(5));
+  await waitFor(() => expect(calls).toHaveLength(6));
   await act(async () => { release(); await gate; });
 
   expect(await screen.findByRole('alert')).toHaveTextContent('Match analytics is temporarily unavailable.');
   expect(calls.slice().sort()).toEqual([
     '/api/workflows', '/api/materials/analytics/summary', '/api/requirements/analytics/summary',
-    '/api/matches/analytics/summary', '/api/transactions/analytics/summary',
+    '/api/matches/analytics/summary', '/api/transactions/analytics/summary', '/api/users/summary'
   ].sort());
   expect(screen.queryByText('Average match score')).not.toBeInTheDocument();
   expect(screen.queryByText('Rejected transactions')).not.toBeInTheDocument();
@@ -106,7 +110,11 @@ it('loads the manager dashboard from authenticated summaries, isolates errors, r
   metric('Pending Listing Approvals', '0');
   expect(screen.getByRole('link', { name: /Pending Listing Approvals/ })).toHaveAttribute('href', '/app/manager/materials?status=PENDING_VERIFICATION');
   expect(screen.getByRole('link', { name: /Pending Match \/ Requirement Approvals/ })).toHaveAttribute('href', '/app/manager/approvals');
-  for (const label of ['Total Users', 'Sellers', 'Buyers', 'Dual-role Users', 'Managers']) metric(label, 'Unavailable');
+  metric('Total Users', '150');
+  metric('Sellers', '60');
+  metric('Buyers', '50');
+  metric('Dual-role Users', '20');
+  metric('Managers', '5');
   expect(screen.queryByText('manager-1')).not.toBeInTheDocument();
 
   failMatches = false;
@@ -117,12 +125,12 @@ it('loads the manager dashboard from authenticated summaries, isolates errors, r
   metric('Valid matches', '15');
   metric('Rejected matches', '8');
   expect(screen.getByRole('row', { name: 'Budget Exceeded 6' })).toBeInTheDocument();
-  expect(calls).toHaveLength(6);
-  expect(calls[5]).toBe('/api/matches/analytics/summary');
+  expect(calls).toHaveLength(7);
+  expect(calls[6]).toBe('/api/matches/analytics/summary');
   expect(screen.queryByRole('alert')).not.toBeInTheDocument();
 
   empty = true;
-  for (const title of ['inventory', 'buyer requirements', 'matches', 'transactions']) {
+  for (const title of ['inventory', 'buyer requirements', 'matches', 'transactions', 'community']) {
     await visitor.click(screen.getByRole('button', { name: 'Refresh ' + title }));
   }
   expect(await screen.findByText('No transactions yet.')).toBeInTheDocument();
@@ -133,6 +141,8 @@ it('loads the manager dashboard from authenticated summaries, isolates errors, r
   metric('Active listings', '0');
   metric('Requirements awaiting approval', '0');
   metric('Route failures', '2');
+  metric('Total Users', '0');
+  metric('Sellers', '0');
   expect(screen.queryByText('BUDGET_EXCEEDED')).not.toBeInTheDocument();
 });
 

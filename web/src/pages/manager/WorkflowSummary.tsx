@@ -65,6 +65,12 @@ export function WorkflowSummary({ workflow }: { workflow: Workflow }) {
   const row = request.data;
   const objective = jsonObject(workflow.inputJson).objective;
   const requestLabel = typeof objective === 'string' && objective.trim() ? objective : row ? `${row.category ?? 'Material'} request` : 'View buyer request';
+  const matchReason = typeof selected?.match?.recommendationReason === 'string' ? selected.match.recommendationReason.trim() : '';
+  const recReason = typeof recommendation.reason === 'string' ? recommendation.reason.trim() : typeof recommendation.recommendationReason === 'string' ? recommendation.recommendationReason.trim() : '';
+  const wfReason = typeof workflow.recommendationReason === 'string' ? workflow.recommendationReason.trim() : '';
+  const outReason = typeof output.recommendationReason === 'string' ? output.recommendationReason.trim() : '';
+  const defaultReason = selected ? 'Highest deterministic final score among valid routed candidates; ties use condition, total estimated cost, distance, then listing ID.' : 'No current recommendation available.';
+  const displayReason = matchReason || recReason || wfReason || outReason || defaultReason;
   return <>
     <dl className="detail-grid">
       <div><dt>Buyer / request</dt><dd>{workflow.materialRequestId ? <Link to={'/app/manager/requirements/' + workflow.materialRequestId}>{requestLabel}</Link> : 'No linked request'}</dd><small className="muted">Buyer name unavailable</small></div>
@@ -86,7 +92,7 @@ export function WorkflowSummary({ workflow }: { workflow: Workflow }) {
           <div><dt>Unit price (LKR)</dt><dd>{number(selected.listing.unitPrice)} / {selected.listing.unit}</dd></div>
           <div><dt>Transport cost (LKR)</dt><dd>{number(selected.match.estimatedTransportCost)}</dd></div>
         </dl>
-        <h4>Recommendation reason</h4><p>{typeof recommendation.reason === 'string' && recommendation.reason.trim() ? recommendation.reason : 'Recommendation reason unavailable.'}</p>
+        <h4>Recommendation reason</h4><p>{displayReason}</p>
       </> : <p className="empty-state">No current valid recommendation is available.</p>}
     </section>
     <h3>Warnings and violations</h3>
@@ -98,5 +104,5 @@ export function WorkflowSummary({ workflow }: { workflow: Workflow }) {
 interface CurrentMatch {
   id: string; requirementId: string; listingId: string; valid: boolean; rejected: boolean;
   rejectionReason: string | null; status: string; score: number; distance: number | null;
-  durationMinutes: number | null; estimatedTransportCost: number | null;
+  durationMinutes: number | null; estimatedTransportCost: number | null; recommendationReason?: string | null;
 }
