@@ -37,33 +37,19 @@ class MatchRepository implements MatchGateway {
 
   @override
   Future<RecommendedMatch> get(String requirementId, String matchId) async {
-    // The shared API has no GET /matches/{id}; resolve deep links through its scoped list.
-    var page = 1;
-    while (true) {
-      final result = await list(
-        requirementId,
-        MatchQuery(
-          page: page,
-          pageSize: 100,
-          sortBy: 'createdAt',
-          sortDir: 'asc',
-        ),
-      );
-      for (final match in result.items) {
-        if (match.id == matchId && match.requirementId == requirementId) {
-          return match;
-        }
-      }
-      if (result.page != page) {
-        throw const FormatException('Unexpected match page.');
-      }
-      if (page >= result.totalPages || result.items.isEmpty) break;
-      page++;
-    }
-    throw const ApiException(
-      'This match is no longer available for this requirement.',
-      statusCode: 404,
+    final match = RecommendedMatch.fromJson(
+      await _api.getJson(
+        '/api/matches/${Uri.encodeComponent(matchId)}',
+        authenticated: true,
+      ),
     );
+    if (match.requirementId != requirementId) {
+      throw const ApiException(
+        'This match is no longer available for this requirement.',
+        statusCode: 404,
+      );
+    }
+    return match;
   }
 
   @override

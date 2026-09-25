@@ -70,14 +70,14 @@ void main() {
     expect(result.items.single.estimatedTransportCost, 1000);
   });
   test(
-    'details resolve later pages and history uses documented GET endpoint',
+    'details use the single-match endpoint and history uses its documented GET endpoint',
     () async {
       final paths = <String>[];
       final repository = repo((request) async {
         expect(request.method, 'GET');
         paths.add(request.url.path);
-        final page = int.parse(request.url.queryParameters['page']!);
         if (request.url.path.endsWith('/history')) {
+          final page = int.parse(request.url.queryParameters['page']!);
           return http.Response(
             jsonEncode(
               pageJson([
@@ -92,16 +92,10 @@ void main() {
             200,
           );
         }
+        expect(request.url.path, '/api/matches/m1');
+        expect(request.url.query, isEmpty);
         return http.Response(
-          jsonEncode(
-            pageJson(
-              [
-                page == 1 ? {...matchJson, 'id': 'other'} : matchJson,
-              ],
-              page: page,
-              totalPages: 2,
-            ),
-          ),
+          jsonEncode(matchJson),
           200,
         );
       });
@@ -111,12 +105,20 @@ void main() {
         'SUCCEEDED',
       );
       expect(paths, [
-        '/api/matches/requirement/r1',
-        '/api/matches/requirement/r1',
+        '/api/matches/m1',
         '/api/matches/m1/history',
       ]);
     },
   );
+  test('details do not parse unrelated rows from the requirement match list',
+      () async {
+    final repository = repo((request) async {
+      expect(request.url.path, '/api/matches/m1');
+      return http.Response(jsonEncode(matchJson), 200);
+    });
+
+    expect((await repository.get('r1', 'm1')).id, 'm1');
+  });
   test(
     'missing matches and malformed successful payloads are errors',
     () async {
