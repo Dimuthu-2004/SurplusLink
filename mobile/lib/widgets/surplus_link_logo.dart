@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
 
 class SurplusLinkLogo extends StatelessWidget {
-  const SurplusLinkLogo({this.size = 36, this.showWordmark = true, super.key});
+  const SurplusLinkLogo({
+    this.size = 36,
+    this.showWordmark = true,
+    this.foregroundColor,
+    super.key,
+  });
 
   final double size;
   final bool showWordmark;
+  final Color? foregroundColor;
 
   @override
   Widget build(BuildContext context) => Row(
@@ -20,7 +26,7 @@ class SurplusLinkLogo extends StatelessWidget {
           errorBuilder: (_, _, _) => Container(
             width: size,
             height: size,
-            color: const Color(0xFF0B1F3A),
+            color: foregroundColor ?? const Color(0xFF0B1F3A),
             alignment: Alignment.center,
             child: Icon(Icons.recycling, size: size * .62, color: Colors.white),
           ),

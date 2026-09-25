@@ -26,8 +26,8 @@ void main() {
 
     await _pumpApp(tester, gateway);
 
-    expect(find.text('Buyer home'), findsOneWidget);
-    expect(find.text(buyerUser.email), findsOneWidget);
+    expect(find.text('Buyer'), findsOneWidget);
+    expect(find.text('buyer'), findsOneWidget);
   });
 
   testWidgets('successful login navigates to seller home', (tester) async {
@@ -45,7 +45,7 @@ void main() {
     await tester.tap(find.byKey(const Key('login-submit')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Seller home'), findsOneWidget);
+    expect(find.text('Seller'), findsOneWidget);
   });
 
   for (final choice in [
@@ -115,10 +115,10 @@ void main() {
       expect(
         find.text(
           choice == 'Both'
-              ? 'Marketplace Home'
+              ? 'Dual role · Buyer + Seller'
               : choice == 'Sell surplus materials'
-              ? 'Seller home'
-              : 'Buyer home',
+              ? 'Seller'
+              : 'Buyer',
         ),
         findsOneWidget,
       );
