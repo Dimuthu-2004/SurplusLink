@@ -7,6 +7,7 @@ from typing import Any, Literal, Mapping, TypedDict, cast
 from langgraph.graph import END, START, StateGraph
 from pydantic import ValidationError
 
+from app.agents.match_scoring import condition_rank
 from app.agents.matching_schemas import (
     Candidate,
     CandidateExclusion,
@@ -145,7 +146,7 @@ class MaterialMatchingAgent:
 
         # The repository order is not an input to policy.  Make equal scores stable
         # across providers and repeat executions before the orchestrator selects one.
-        candidates.sort(key=lambda candidate: (-candidate.basicFitScore, candidate.listingId))
+        candidates.sort(key=lambda candidate: (-candidate.basicFitScore, -condition_rank(candidate.condition), candidate.unitPrice, candidate.listingId))
         if not candidates:
             return {
                 "response": self._failure(
@@ -188,11 +189,9 @@ class MaterialMatchingAgent:
     def _candidate(listing: MaterialListingRecord, request: MatchingRequest) -> Candidate:
         total_cost = listing.unit_price * request.requiredQuantity
         budget_headroom = (request.maximumBudget - total_cost) / request.maximumBudget
-        quantity_headroom = min(
-            (listing.available_quantity - request.requiredQuantity) / request.requiredQuantity,
-            Decimal("1"),
-        )
-        score = round(float(50 + (30 * budget_headroom) + (20 * quantity_headroom)), 2)
+        # Preliminary score only: routing is required for the final score.
+        score = round(float(Decimal("50") * condition_rank(listing.condition) / 4
+                            + Decimal("30") * budget_headroom), 2)
         return Candidate(
             listingId=listing.listing_id,
             availableQuantity=listing.available_quantity,

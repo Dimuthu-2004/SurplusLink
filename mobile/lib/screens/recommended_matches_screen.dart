@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:mobile/matches/match_formatters.dart';
 import 'package:mobile/matches/match_gateway.dart';
 import 'package:mobile/matches/match_models.dart';
 import 'package:mobile/matches/match_widgets.dart';
@@ -60,22 +59,12 @@ class _RecommendedMatchesScreenState extends State<RecommendedMatchesScreen> {
     }
   }
 
-  Future<void> _selectMatch(RecommendedMatch match) async {
-    if (_selecting) return;
-    setState(() { _selecting = true; _error = null; });
-    try {
-      await widget.gateway.select(widget.requirementId, match.id);
-      if (mounted) context.go('/requirements/${widget.requirementId}');
-    } on Object catch (error) {
-      if (mounted) setState(() => _error = matchError(error));
-    } finally {
-      if (mounted) setState(() => _selecting = false);
-    }
-  }
-
   Future<void> _changeSelection() async {
     if (_selecting) return;
-    setState(() { _selecting = true; _error = null; });
+    setState(() {
+      _selecting = true;
+      _error = null;
+    });
     try {
       await widget.gateway.cancelPendingApproval(widget.requirementId);
       await _load(page: 1);
@@ -98,10 +87,12 @@ class _RecommendedMatchesScreenState extends State<RecommendedMatchesScreen> {
       onRefresh: () => _load(),
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         children: [
-          const Text('AI highlights a recommendation, but only your one selected valid match is sent for manager approval. No material is reserved by this choice.'),
-          const SizedBox(height: 12),
+          const Text(
+            'AI highlights a recommendation, but only your one selected valid match is sent for manager approval. No material is reserved by this choice.',
+          ),
+          const SizedBox(height: 8),
           _select('Eligibility', 'match-eligibility', _eligibility, const {
             'all': 'All matches',
             'valid': 'Not rejected',
@@ -125,14 +116,16 @@ class _RecommendedMatchesScreenState extends State<RecommendedMatchesScreen> {
             'desc': 'Descending',
             'asc': 'Ascending',
           }, (value) => _direction = value),
-          const SizedBox(height: 16),
+          const SizedBox(height: 10),
           if (_loading)
             const Center(child: CircularProgressIndicator())
           else if (_error != null)
             MatchErrorBox(_error!, onRetry: () => _load())
           else if (_data case final data?) ...[
             Text('${data.total} matches found'),
-            if (data.items.any((match) => match.requirementStatus == 'PENDING_APPROVAL'))
+            if (data.items.any(
+              (match) => match.requirementStatus == 'PENDING_APPROVAL',
+            ))
               Padding(
                 padding: const EdgeInsets.only(top: 8),
                 child: OutlinedButton.icon(
@@ -148,33 +141,12 @@ class _RecommendedMatchesScreenState extends State<RecommendedMatchesScreen> {
                   'No matches found. Try other filters or check again after matching runs.',
                 ),
               ),
+            const SizedBox(height: 6),
             for (final match in data.items)
-              Card(
-                color: match.aiRecommended ? Theme.of(context).colorScheme.secondaryContainer : null,
-                child: ListTile(
-                  key: Key('match-${match.id}'),
-                  title: Text(
-                    'Score ${(match.score * 100).toStringAsFixed(1)}%',
-                  ),
-                  subtitle: Text(
-                    '${match.aiRecommended ? 'AI recommendation\n' : ''}'
-                    'Material: ${match.materialTitle ?? 'Not recorded'}\n'
-                    'Seller/business: ${match.sellerBusinessName ?? match.sellerName ?? match.sellerId ?? 'Not recorded'}\n'
-                    'Condition: ${match.condition ?? 'Not recorded'}\n'
-                    'Available: ${formatQuantity(match.availableQuantity)} ${formatUnit(match.unit)}\n'
-                    'Unit price: ${formatCurrency(match.unitPrice)} • Material value: ${formatCurrency(match.estimatedMaterialCost)}\n'
-                    'Location/address: ${match.sellerAddress ?? (match.latitude != null && match.longitude != null ? '${match.latitude!.toStringAsFixed(5)}, ${match.longitude!.toStringAsFixed(5)}' : 'Not recorded')}\n'
-                    '${readableMatchStatus(match.status)}\n'
-                    '${match.quantity == null ? '' : '${formatQuantity(match.quantity)} ${formatUnit(match.unit)} ? '}'
-                    '${routingSummary(match)}\n'
-                    'Transport estimate: ${formatCurrency(match.estimatedTransportCost)} • Total cost: ${formatCurrency((match.estimatedMaterialCost ?? 0) + (match.estimatedTransportCost ?? 0))}',
-                  ),
-                  trailing: match.requirementStatus == 'MATCH_FOUND' && match.isSelectable
-                      ? FilledButton(onPressed: _selecting ? null : () => _selectMatch(match), child: const Text('Select'))
-                      : const Icon(Icons.chevron_right),
-                  onTap: () => context.push(
-                    '/requirements/${widget.requirementId}/matches/${match.id}',
-                  ),
+              MatchListCard(
+                match: match,
+                onTap: () => context.push(
+                  '/requirements/${widget.requirementId}/matches/${match.id}',
                 ),
               ),
             MatchPagination(
@@ -196,7 +168,7 @@ class _RecommendedMatchesScreenState extends State<RecommendedMatchesScreen> {
     Map<String, String> choices,
     ValueChanged<String> change,
   ) => Padding(
-    padding: const EdgeInsets.only(bottom: 10),
+    padding: const EdgeInsets.only(bottom: 8),
     child: DropdownButtonFormField<String>(
       key: Key(key),
       initialValue: value,

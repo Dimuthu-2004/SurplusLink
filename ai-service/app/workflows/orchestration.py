@@ -14,6 +14,7 @@ from pydantic import AwareDatetime, Field, model_validator
 from app.agents.logistics import LogisticsAgent
 from app.agents.logistics_schemas import Contract, Latitude, Longitude, Measurement
 from app.agents.material_matching import MaterialMatchingAgent
+from app.agents.match_scoring import condition_rank, score_breakdown
 from app.agents.requirement_planner import RequirementPlannerAgent
 from app.agents.validation import DeterministicValidationTools, ToolTrace, ValidationAgent, ValidationInput, ValidationResult
 from app.materials.read_boundary import MaterialListingRecord
@@ -275,11 +276,26 @@ class WorkflowOrchestrator:
 
     async def _validation(self, state):
         evaluations = []
+        valid = []
         for candidate in state["matching"].candidates:
             result, output, calls = await self._validate_candidate(state, candidate)
-            evaluations.append(dict(listingId=candidate.listingId, **output))
-            if result["validation"].valid or result["status"] == "FAILED":
-                return result, dict(**output, candidates=evaluations), calls
+            # Eligibility is per candidate; recommendation belongs only to the winner.
+            evaluation = {k: v for k, v in output.items() if k not in ("recommendedMatchId", "requiresApproval")}
+            evaluations.append(dict(listingId=candidate.listingId, **evaluation))
+            if result["status"] != "FAILED" and result["validation"].valid:
+                rec = result["recommendation"]
+                total = output["scoreBreakdown"]["totalEstimatedCost"]
+                valid.append(((-rec.score, -condition_rank(candidate.condition), total,
+                               rec.distanceKm, candidate.listingId), result, output, calls))
+        if valid:
+            _, result, output, calls = min(valid, key=lambda item: item[0])
+            output = dict(output, recommendationReason=(
+                "Highest deterministic final score among valid routed candidates; ties use "
+                "condition, total estimated cost, distance, then listing ID."))
+        else:
+            result["errorCode"] = result.get("errorCode", "NO_VALID_SELECTABLE_CANDIDATE")
+            output = dict(output, recommendationReason="No valid selectable candidate; see candidates[].violations.")
+        # Only the selected candidate's tool calls/validation form the result gate.
         return result, dict(**output, candidates=evaluations), calls
 
     async def _validate_candidate(self, state, candidate):
@@ -298,7 +314,11 @@ class WorkflowOrchestrator:
         result = dict(validation=validation, status="MATCH_FOUND" if validation.valid else "REJECTED")
         if any(call.errorCode for call in calls):
             result.update(status="FAILED", errorCode="VALIDATION_TOOLS_FAILED")
+        output = validation.model_dump(mode="json")
         if validation.valid:
+            breakdown = score_breakdown(row.condition, row.unitPrice * criteria.requiredQuantity,
+                                        criteria.maximumBudget, value.distanceKm, value.transportCost)
+            output["scoreBreakdown"] = breakdown
             result["recommendation"] = Recommendation(matchId=row.matchId, listingId=row.listingId,
-                score=Decimal(str(candidate.basicFitScore)) / 100, distanceKm=value.distanceKm, transportCost=value.transportCost)
-        return result, validation.model_dump(mode="json"), calls
+                score=breakdown["score"], distanceKm=value.distanceKm, transportCost=value.transportCost)
+        return result, output, calls

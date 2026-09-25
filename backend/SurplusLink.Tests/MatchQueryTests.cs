@@ -22,6 +22,7 @@ public sealed class MatchQueryTests
         var rows = Enumerable.Range(1, 4).Select(i => new MaterialMatch
         {
             Id = Guid.Parse($"00000000-0000-0000-0000-{i:000000000000}"),
+            Listing = new Listing(), MaterialRequest = new BuyerRequest(),
             Score = i == 4 ? 0.2m : i / 10m,
             Distance = i == 1 ? null : i == 4 ? 2 : i,
             EstimatedTransportCost = i == 1 ? null : i == 4 ? 2 : i,

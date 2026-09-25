@@ -14,6 +14,56 @@ namespace SurplusLink.Tests;
 public sealed class MatchingReevaluationTests(RequirementsDatabase fixture) : IClassFixture<RequirementsDatabase>
 {
     [PostgresFact]
+    public async Task Recommendation_is_persisted_returned_and_changes_after_ranking_or_stock_changes()
+    {
+        using var db = fixture.Context();
+        var category = (await db.Categories.FirstAsync()).Id;
+        var request = new BuyerRequest { Id = Guid.NewGuid(), BuyerId = fixture.Buyer, CategoryId = category,
+            RequiredQuantity = 10, MaximumBudget = 2000, Unit = "kg", Deadline = DateTime.UtcNow.AddDays(2),
+            Status = BuyerRequestStatus.MATCH_FOUND };
+        MaterialMatch Candidate(MaterialCondition condition) => new()
+        {
+            Id = Guid.NewGuid(), MaterialRequest = request, Status = MatchStatus.ROUTED,
+            Distance = 10, DurationMinutes = 30, EstimatedTransportCost = 500,
+            Listing = new Listing { Id = Guid.NewGuid(), SellerId = fixture.Seller, CategoryId = category,
+                Title = "Scoring regression", Quantity = 20, Unit = "kg", UnitPrice = 100, Condition = condition,
+                Status = ListingStatus.ACTIVE, AvailableUntil = DateTime.UtcNow.AddDays(5) }
+        };
+        var poor = Candidate(MaterialCondition.POOR);
+        var excellent = Candidate(MaterialCondition.EXCELLENT);
+        db.AddRange(poor, excellent);
+        await db.SaveChangesAsync();
+        db.AgentWorkflows.Add(new AgentWorkflow { Id = Guid.NewGuid(), MaterialRequestId = request.Id,
+            MaterialMatchId = poor.Id, Status = AgentWorkflowStatus.COMPLETED, StartedAtUtc = DateTime.UtcNow });
+        await db.SaveChangesAsync();
+        db.AgentWorkflows.Add(new AgentWorkflow { Id = Guid.NewGuid(), MaterialRequestId = request.Id,
+            MaterialMatchId = excellent.Id, Status = AgentWorkflowStatus.COMPLETED, StartedAtUtc = DateTime.UtcNow });
+        await db.SaveChangesAsync();
+        var service = new MatchService(db);
+        var page = await service.RankCandidatesAsync(request.Id, fixture.Buyer, false, default);
+        Assert.Equal(excellent.Id, page.RecommendedMatchId);
+        Assert.Equal(page.RecommendedMatchId, Assert.Single(page.Items, x => x.AiRecommended).Id);
+        Assert.Equal(page.RecommendedMatchId, (await db.BuyerRequests.AsNoTracking().SingleAsync(x => x.Id == request.Id)).RecommendedMatchId);
+        var detail = await service.GetAsync(excellent.Id, fixture.Buyer, false, default);
+        Assert.True(detail.AiRecommended);
+        Assert.Equal(excellent.Id, detail.RecommendedMatchId);
+        poor.Listing.Condition = MaterialCondition.NEW;
+        poor.Listing.UnitPrice = 50;
+        await db.SaveChangesAsync();
+        page = await service.RankCandidatesAsync(request.Id, fixture.Buyer, false, default);
+        Assert.Equal(poor.Id, page.RecommendedMatchId);
+        Assert.Equal(poor.Id, Assert.Single(page.Items, x => x.AiRecommended).Id);
+        poor.Listing.Status = ListingStatus.DRAFT;
+        excellent.Listing.Quantity = 9;
+        await db.SaveChangesAsync();
+        page = await service.ListAsync(request.Id, fixture.Buyer, false, new(), default);
+        Assert.DoesNotContain(page.Items, x => x.AiRecommended);
+        Assert.Null(page.RecommendedMatchId);
+        Assert.Contains("INSUFFICIENT_QUANTITY", page.RecommendationReason);
+        Assert.Contains("LISTING_NOT_ACTIVE", page.RecommendationReason);
+    }
+
+    [PostgresFact]
     public async Task Both_verification_orders_reuse_candidates_and_publish_routes_to_buyer_and_manager()
     {
         foreach (var verifyFirst in new[] { false, true })

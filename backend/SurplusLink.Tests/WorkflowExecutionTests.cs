@@ -27,7 +27,15 @@ public sealed class WorkflowExecutionTests
             new WorkflowStepTrace(index + 1, name, "COMPLETED", empty, null, 0, now, now, 1,
                 name == "VALIDATION" ? calls : [])).ToArray();
         return new(request.WorkflowId, "MATCH_FOUND", new(true, true, row.MatchId, [], []),
-            new(row.MatchId, row.ListingId, .85m, row.DistanceKm!.Value, row.TransportCost!.Value), steps, null);
+            new(row.MatchId, row.ListingId, TestScore(request, row), row.DistanceKm!.Value, row.TransportCost!.Value), steps, null);
+    }
+
+    private static decimal TestScore(WorkflowRunRequest request, WorkflowListingSnapshot row)
+    {
+        var criteria = JsonSerializer.SerializeToElement(request.BuyerRequest);
+        return criteria.TryGetProperty("requiredQuantity", out var quantity)
+            ? SurplusLink.Api.Matching.MatchScoring.Score(row.Condition, row.UnitPrice * quantity.GetDecimal(),
+                criteria.GetProperty("maximumBudget").GetDecimal(), row.DistanceKm, row.TransportCost) : .85m;
     }
 
     private static WorkflowRunRequest Request() => new(Guid.NewGuid(), new { }, [new(Guid.NewGuid(), Guid.NewGuid(),

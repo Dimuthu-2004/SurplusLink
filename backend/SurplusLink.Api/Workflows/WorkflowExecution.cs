@@ -107,6 +107,7 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
             var snapshot = await SnapshotAsync(workflow, request, budget.Token);
             var (result, retries) = await client.RunAsync(snapshot, budget.Token);
             ValidateResult(snapshot, result);
+            ValidateSelection(request, snapshot, result);
             // Recheck authoritative stock/prices before publishing an approval recommendation.
             if (result.Recommendation is { } recommendation)
             {
@@ -135,6 +136,7 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
         db.AuditLogs.Add(new AuditLog { Id = Guid.NewGuid(), EntityId = workflow.Id, EntityType = nameof(AgentWorkflow),
             Action = "WORKFLOW_" + workflow.Status });
         await db.SaveChangesAsync(stop);
+        await MatchRecommendation.RefreshAsync(db, request.Id, stop);
         await tx.CommitAsync(stop);
         return true;
     }
@@ -159,17 +161,39 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
                 listing.Latitude.HasValue && listing.Longitude.HasValue && request.Latitude.HasValue && request.Longitude.HasValue)
                 estimate = await transport.EstimateAsync(new RouteRequest(listing.Latitude.Value, listing.Longitude.Value,
                     request.Latitude.Value, request.Longitude.Value), ct);
+            var routed = estimate is { Route.Success: true, Route.DistanceKm: >= 0, Route.DurationMinutes: >= 0,
+                EstimatedTransportCost: >= 0, ErrorCode: null };
             rows.Add(new(existing.GetValueOrDefault(listing.Id, Guid.NewGuid()), listing.Id, listing.SellerId,
                 listing.CategoryId, listing.Quantity - listing.ReservedQuantity, listing.Unit, listing.UnitPrice,
                 listing.Condition.ToString(), listing.Status.ToString(), listing.AvailableUntil, listing.Latitude,
-                listing.Longitude, estimate?.Route.DistanceKm, estimate?.Route.DurationMinutes,
-                estimate?.EstimatedTransportCost, estimate?.ErrorCode));
+                listing.Longitude, routed ? estimate!.Route.DistanceKm : null, routed ? estimate!.Route.DurationMinutes : null,
+                routed ? estimate!.EstimatedTransportCost : null, routed ? null : "ROUTE_UNAVAILABLE"));
         }
         return new(workflow.Id, new { id = request.Id, buyerId = request.BuyerId, categoryId = request.CategoryId,
             requiredQuantity = request.RequiredQuantity, unit = request.Unit, maximumBudget = request.MaximumBudget,
             deadline = request.Deadline, latitude = request.Latitude, longitude = request.Longitude,
             notes = request.Notes, status = request.Status.ToString() }, rows,
             request.Title.Length <= 2000 ? request.Title : request.Title[..2000]);
+    }
+
+    internal static void ValidateSelection(BuyerRequest request, WorkflowRunRequest snapshot, WorkflowRunResult result)
+    {
+        if (result.Recommendation is not { } recommendation) return;
+        var now = DateTime.UtcNow;
+        var winner = snapshot.Listings.Where(x => x.SellerId != request.BuyerId && x.CategoryId == request.CategoryId &&
+                x.Status == "ACTIVE" && x.AvailableUntil > now && x.AvailableUntil.Date >= request.Deadline.Date &&
+                string.Equals(x.Unit, request.Unit, StringComparison.OrdinalIgnoreCase) &&
+                x.AvailableQuantity >= request.RequiredQuantity && request.Deadline > now &&
+                x.RoutingError is null && x.DistanceKm is >= 0 && x.DurationMinutes is >= 0 && x.TransportCost is >= 0 &&
+                x.DurationMinutes <= (decimal)(request.Deadline - now).TotalMinutes &&
+                x.UnitPrice * request.RequiredQuantity + x.TransportCost <= request.MaximumBudget)
+            .Select(x => new { Row = x, Score = MatchScoring.Score(x.Condition, x.UnitPrice * request.RequiredQuantity,
+                request.MaximumBudget, x.DistanceKm, x.TransportCost) })
+            .OrderByDescending(x => x.Score).ThenByDescending(x => MatchScoring.ConditionRank(x.Row.Condition))
+            .ThenBy(x => x.Row.UnitPrice * request.RequiredQuantity + x.Row.TransportCost)
+            .ThenBy(x => x.Row.DistanceKm).ThenBy(x => x.Row.ListingId.ToString(), StringComparer.Ordinal).FirstOrDefault();
+        if (winner is null || winner.Row.MatchId != recommendation.MatchId || winner.Score != recommendation.Score)
+            throw new JsonException("Recommendation must follow deterministic ranking of valid routed candidates.");
     }
 
     internal static bool StillEligible(BuyerRequest request, Listing listing, decimal transportCost) =>
@@ -229,6 +253,8 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
         var rec = result.Recommendation ?? throw new JsonException("Missing recommendation.");
         var listing = input.Listings.SingleOrDefault(x => x.ListingId == rec.ListingId && x.MatchId == rec.MatchId);
         if (listing is null || rec.MatchId != result.Validation.RecommendedMatchId || rec.Score is < 0 or > 1 ||
+            listing.RoutingError is not null || listing.DurationMinutes is null or < 0 ||
+            listing.Status != "ACTIVE" || listing.AvailableUntil <= DateTime.UtcNow ||
             rec.DistanceKm < 0 || rec.TransportCost < 0 || rec.DistanceKm != listing.DistanceKm || rec.TransportCost != listing.TransportCost)
             throw new JsonException("Recommendation must reference the trusted snapshot.");
     }
@@ -266,15 +292,15 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
             }
             if (row.DurationMinutes > (decimal)(request.Deadline - DateTime.UtcNow).TotalMinutes)
                 reason ??= "DELIVERY_DEADLINE_EXCEEDED";
-            var routeSucceeded = row.DistanceKm is not null && row.DurationMinutes is not null && row.TransportCost is not null;
+            var routeSucceeded = row.RoutingError is null && row.DistanceKm is >= 0 && row.DurationMinutes is >= 0 && row.TransportCost is >= 0;
             candidate.Status = reason is not null ? MatchStatus.REJECTED : routeSucceeded ? MatchStatus.ROUTED : MatchStatus.ROUTE_FAILED;
             candidate.RejectionReason = reason ?? (routeSucceeded ? null : "ROUTE_UNAVAILABLE");
             candidate.Distance = routeSucceeded ? row.DistanceKm : null;
             candidate.DurationMinutes = routeSucceeded ? row.DurationMinutes : null;
             candidate.EstimatedTransportCost = routeSucceeded ? row.TransportCost : null;
-            candidate.Score = Math.Round((50m + 30m * (request.MaximumBudget - row.UnitPrice * request.RequiredQuantity) /
-                request.MaximumBudget + 20m * Math.Min((row.AvailableQuantity - request.RequiredQuantity) / request.RequiredQuantity, 1m)) / 100m, 4);
-            candidate.Score = Math.Clamp(candidate.Score, 0m, 1m);
+            candidate.Score = reason is null && routeSucceeded
+                ? MatchScoring.Score(row.Condition, row.UnitPrice * request.RequiredQuantity,
+                    request.MaximumBudget, row.DistanceKm, row.TransportCost) : 0;
             if (reason is null || routeSucceeded)
                 db.AuditLogs.Add(new AuditLog { Id = Guid.NewGuid(), EntityType = nameof(MaterialMatch), EntityId = candidate.Id,
                     Action = routeSucceeded ? "ROUTE_SUCCEEDED" : "ROUTE_FAILED" });
@@ -293,8 +319,10 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
         workflow.ValidationJson = JsonSerializer.Serialize(result.Validation, AgentWorkflowClient.Json);
         workflow.ErrorJson = result.ErrorCode is null ? null : JsonSerializer.Serialize(new { code = result.ErrorCode });
         workflow.RetryCount = retries + result.Steps.Sum(x => x.RetryCount + x.ToolCalls.Sum(t => t.RetryCount));
-        if (result.Recommendation is { } recommended)
-            workflow.MaterialMatchId = recommended.MatchId;
+        workflow.MaterialMatchId = result.Recommendation?.MatchId;
+        request.RecommendedMatchId = result.Recommendation?.MatchId;
+        request.RecommendationReason = result.Recommendation is null
+            ? result.ErrorCode ?? string.Join("; ", result.Validation.Violations) : null;
         // A workflow recommendation is informative only. It must never create an
         // offer, transaction, or manager queue entry until the buyer confirms it.
         if (false && result.Recommendation is { } rec)

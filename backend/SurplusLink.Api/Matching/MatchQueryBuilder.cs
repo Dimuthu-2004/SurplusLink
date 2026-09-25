@@ -36,6 +36,13 @@ public static class MatchQueryBuilder
             "createdat" => asc ? rows.OrderBy(x => x.CreatedAtUtc) : rows.OrderByDescending(x => x.CreatedAtUtc),
             _ => throw new MatchException(400, "Unsupported match sort.")
         };
+        if (query.SortBy.Equals("score", StringComparison.OrdinalIgnoreCase))
+            ordered = ordered.ThenByDescending(x => x.Listing.Condition == MaterialCondition.NEW || x.Listing.Condition == MaterialCondition.EXCELLENT ? 4
+                : x.Listing.Condition == MaterialCondition.GOOD ? 3 : x.Listing.Condition == MaterialCondition.FAIR ? 2
+                : x.Listing.Condition == MaterialCondition.POOR ? 1 : 0)
+                .ThenBy(x => x.EstimatedTransportCost == null)
+                .ThenBy(x => x.Listing.UnitPrice * x.MaterialRequest.RequiredQuantity + x.EstimatedTransportCost)
+                .ThenBy(x => x.Distance == null).ThenBy(x => x.Distance).ThenBy(x => x.ListingId);
         return ordered.ThenBy(x => x.Id);
     }
 }
