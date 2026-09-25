@@ -4,6 +4,7 @@ import { useCallback, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { RequirementBadge, RequirementError, requirementDate, useRequirementResource } from '../../features/requirements/requirementUi';
 import { managerWorkflowsApi, type ManagerWorkflowsApi, type Workflow } from '../../features/workflows/managerWorkflowsApi';
+import { invalidateLiveData } from '../../hooks/useLiveResource';
 
 export function ManagerWorkflowDetailsPage({ api = managerWorkflowsApi }: { api?: ManagerWorkflowsApi }) {
   const { workflowId = '' } = useParams(); const load = useCallback(() => api.get(workflowId), [api, workflowId]);
@@ -13,7 +14,7 @@ export function ManagerWorkflowDetailsPage({ api = managerWorkflowsApi }: { api?
   async function decide(action: 'approve' | 'reject' | 'revise') {
     if ((action === 'reject' || action === 'revise') && !note.trim()) { setDecisionError('A note is required for rejection or a revision request.'); return; }
     setBusy(true); setDecisionError(''); setNotice('');
-    try { const result = await api[action](workflowId, note); setNote(''); setNotice(action === 'approve' ? 'Approved. A reservation outcome is shown below.' : action === 'reject' ? 'Rejected. No reservation was created.' : 'Revision requested. The buyer can restart matching after reviewing the note.'); await resource.reload(); if (result.status === 'APPROVED') setNotice('Approved. Reservation created for the matched inventory.'); }
+    try { const result = await api[action](workflowId, note); invalidateLiveData(); setNote(''); setNotice(action === 'approve' ? 'Approved. A reservation outcome is shown below.' : action === 'reject' ? 'Rejected. No reservation was created.' : 'Revision requested. The buyer can restart matching after reviewing the note.'); await resource.reload(); if (result.status === 'APPROVED') setNotice('Approved. Reservation created for the matched inventory.'); }
     catch (error) { setDecisionError(error instanceof Error ? error.message : 'Unable to save this decision.'); }
     finally { setBusy(false); }
   }

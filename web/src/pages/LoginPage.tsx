@@ -32,13 +32,13 @@ export function LoginPage() {
   return (
     <main className="auth-page">
       <aside className="auth-intro" aria-hidden="true">
-        <span className="auth-intro-mark">S</span>
+        <span className="auth-intro-mark">+</span>
         <p>THE SMARTER MATERIAL MARKETPLACE</p>
         <h2>Bring every useful material closer to its next purpose.</h2>
         <div><b>AI-assisted matching</b><span>Human-controlled decisions</span></div>
       </aside>
       <section className="auth-card" aria-labelledby="login-title">
-        <div className="auth-brand" aria-hidden="true">S</div>
+        <div className="auth-brand" aria-hidden="true">+</div>
         <p className="eyebrow">SurplusLink</p>
         <h1 id="login-title">Welcome back</h1>
         <p className="muted">Sign in to continue to your workspace.</p>

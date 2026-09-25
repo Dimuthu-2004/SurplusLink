@@ -24,7 +24,7 @@ export function AppLayout() {
     <div className={manager ? 'app-shell manager-shell' : 'app-shell'}>
       <header className="app-header">
         <Link className="brand" to={roleHomePath(user.roles)}>
-          <span className="brand-mark" aria-hidden="true">S</span>
+          <span className="brand-mark" aria-hidden="true"><AppIcon name="materials" /></span>
           SurplusLink
         </Link>
         <div className="account-summary">
