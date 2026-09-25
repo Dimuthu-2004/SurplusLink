@@ -106,6 +106,9 @@ GoRouter createAppRouter({
         path: AppRoutes.home,
         builder: (context, state) => HomeScreen(
           authController: authController,
+          requirementGateway: requirementGateway,
+          materialGateway: materialGateway,
+          offerGateway: offerGateway,
           onOpenRequirements: requirementGateway == null
               ? null
               : () => context.push(AppRoutes.requirements),
@@ -115,6 +118,12 @@ GoRouter createAppRouter({
           onOpenOffers: offerGateway == null
               ? null
               : () => context.push('/offers'),
+          onCreateRequirement: requirementGateway == null
+              ? null
+              : () => context.push('/requirements/new'),
+          onCreateMaterial: materialGateway == null
+              ? null
+              : () => context.push(AppRoutes.addMaterial),
         ),
       ),
       if (matchGateway != null) ...[

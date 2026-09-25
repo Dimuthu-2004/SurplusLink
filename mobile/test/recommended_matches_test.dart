@@ -142,7 +142,7 @@ void main() {
       expect(find.byType(RecommendedMatchesScreen), findsOneWidget);
       router.go('/home');
       await tester.pumpAndSettle();
-      expect(find.text('Marketplace Home'), findsOneWidget);
+      expect(find.textContaining('Dual role'), findsOneWidget);
     },
   );
   testWidgets('loading empty error retry and pagination keep query state', (

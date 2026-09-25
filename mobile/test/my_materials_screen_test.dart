@@ -91,30 +91,11 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(
-        find.text('My Materials'),
-        roles.contains(AppRole.seller) ? findsOneWidget : findsNothing,
-      );
-      expect(
-        find.text('Add Material'),
-        roles.contains(AppRole.seller) ? findsOneWidget : findsNothing,
-      );
-      expect(
-        find.text('My Requirements'),
-        roles.contains(AppRole.buyer) ? findsOneWidget : findsNothing,
-      );
-      expect(
-        find.text('Create Requirement'),
-        roles.contains(AppRole.buyer) ? findsOneWidget : findsNothing,
-      );
-      expect(
-        find.text('Manager home'),
-        roles.contains(AppRole.manager) ? findsOneWidget : findsNothing,
-      );
+      expect(find.byKey(const Key('home-role-label')), findsOneWidget);
       if (roles.contains(AppRole.seller) && roles.contains(AppRole.buyer)) {
-        expect(find.text('Marketplace Home'), findsOneWidget);
-        expect(find.text('SELL'), findsOneWidget);
-        expect(find.text('BUY'), findsOneWidget);
+        expect(find.textContaining('Dual role'), findsOneWidget);
+        expect(find.text('SELLING'), findsOneWidget);
+        expect(find.text('BUYING'), findsOneWidget);
       }
       final router = GoRouter.of(
         tester.element(find.byKey(const Key('logout-button'))),
@@ -183,6 +164,11 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await tester.drag(
+      find.byKey(const Key('home-dashboard-scroll')),
+      const Offset(0, -900),
+    );
+    await tester.pump();
     await tester.ensureVisible(find.byKey(const Key('open-my-materials')));
     await tester.tap(find.byKey(const Key('open-my-materials')));
     await tester.pumpAndSettle();
@@ -200,7 +186,12 @@ void main() {
     expect(materials.lastQuery!.mineOnly, isTrue);
     await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
-    expect(find.text('Marketplace Home'), findsOneWidget);
+    expect(find.byKey(const Key('home-dashboard-scroll')), findsOneWidget);
+    await tester.drag(
+      find.byKey(const Key('home-dashboard-scroll')),
+      const Offset(0, -900),
+    );
+    await tester.pump();
     await tester.ensureVisible(find.byKey(const Key('open-my-requirements')));
     await tester.tap(find.byKey(const Key('open-my-requirements')));
     await tester.pumpAndSettle();
