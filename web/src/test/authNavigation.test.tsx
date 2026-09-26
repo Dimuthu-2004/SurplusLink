@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
@@ -86,6 +86,86 @@ describe('authentication navigation', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Invalid email or password.');
   });
 
+  it('switches between the sign-in and public registration forms', async () => {
+    renderApp('/login');
+    const visitor = userEvent.setup();
+
+    expect(await screen.findByRole('heading', { name: 'Welcome back' })).toBeInTheDocument();
+    await visitor.click(panelAction());
+    expect(await screen.findByRole('heading', { name: 'Build with less waste.' })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByLabelText('Full name')).toBeEnabled());
+
+    await visitor.click(panelAction());
+    expect(await screen.findByRole('heading', { name: 'Welcome back' })).toBeInTheDocument();
+  });
+
+  it('sends the supported registration DTO and signs in the new dual-role account', async () => {
+    const client = fakeClient();
+    const storage = memoryStorage();
+    client.post.mockResolvedValue({ data: { token: 'new-account-jwt', user: { ...seller, roles: ['SELLER', 'BUYER'] } } });
+    renderApp('/login', client, storage);
+    const visitor = userEvent.setup();
+
+    await visitor.click(panelAction());
+    await waitFor(() => expect(screen.getByLabelText('Full name')).toBeEnabled());
+    await visitor.type(screen.getByLabelText('Full name'), 'Ava Builder');
+    await visitor.type(screen.getByLabelText('Email'), ' ava@example.com ');
+    await visitor.type(screen.getByLabelText('Phone number'), '+94771234567');
+    await visitor.type(screen.getByLabelText('Business name (optional)'), 'Build Better');
+    await visitor.type(screen.getByLabelText('Address'), '10 Reuse Road');
+    await visitor.type(screen.getByLabelText('Password'), 'Password123!');
+    await visitor.type(screen.getByLabelText('Confirm password'), 'Password123!');
+    await visitor.click(screen.getByRole('button', { name: 'Buy materials' }));
+    await visitor.click(screen.getByRole('button', { name: 'Sell materials' }));
+    await visitor.click(screen.getByRole('button', { name: 'Create account' }));
+
+    expect(await screen.findByRole('heading', { name: 'Seller home' })).toBeInTheDocument();
+    expect(client.post).toHaveBeenCalledWith('/api/auth/register', {
+      fullName: 'Ava Builder', email: 'ava@example.com', phoneNumber: '+94771234567',
+      businessName: 'Build Better', address: '10 Reuse Road', password: 'Password123!', roles: ['BUYER', 'SELLER'],
+    });
+    expect(storage.read()).toBe('new-account-jwt');
+  });
+
+  it('rejects a mismatched confirmation before calling public registration', async () => {
+    const client = fakeClient();
+    renderApp('/login', client);
+    const visitor = userEvent.setup();
+    await visitor.click(panelAction());
+    await waitFor(() => expect(screen.getByLabelText('Full name')).toBeEnabled());
+    await visitor.type(screen.getByLabelText('Full name'), 'Ava Builder');
+    await visitor.type(screen.getByLabelText('Email'), 'ava@example.com');
+    await visitor.type(screen.getByLabelText('Phone number'), '+94771234567');
+    await visitor.type(screen.getByLabelText('Address'), '10 Reuse Road');
+    await visitor.type(screen.getByLabelText('Password'), 'Password123!');
+    await visitor.type(screen.getByLabelText('Confirm password'), 'Different123!');
+    await visitor.click(screen.getByRole('button', { name: 'Buy materials' }));
+    await visitor.click(screen.getByRole('button', { name: 'Create account' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Passwords do not match.');
+    expect(client.post).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: /manager/i })).not.toBeInTheDocument();
+  });
+
+  it('shows server-side registration validation errors inline', async () => {
+    const client = fakeClient();
+    client.post.mockRejectedValue(new ApiError('An account with that email already exists.', 409));
+    renderApp('/login', client);
+    const visitor = userEvent.setup();
+    await visitor.click(panelAction());
+    await waitFor(() => expect(screen.getByLabelText('Full name')).toBeEnabled());
+    await visitor.type(screen.getByLabelText('Full name'), 'Ava Builder');
+    await visitor.type(screen.getByLabelText('Email'), 'ava@example.com');
+    await visitor.type(screen.getByLabelText('Phone number'), '+94771234567');
+    await visitor.type(screen.getByLabelText('Address'), '10 Reuse Road');
+    await visitor.type(screen.getByLabelText('Password'), 'Password123!');
+    await visitor.type(screen.getByLabelText('Confirm password'), 'Password123!');
+    await visitor.click(screen.getByRole('button', { name: 'Buy materials' }));
+    await visitor.click(screen.getByRole('button', { name: 'Create account' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('An account with that email already exists.');
+  });
+
   it('clears the token and returns to login on logout', async () => {
     const storage = memoryStorage('stored-jwt');
     const client = fakeClient();
@@ -137,4 +217,10 @@ function user(role: UserRole): AuthUser {
     email: `${role.toLowerCase()}@example.com`,
     roles: [role],
   };
+}
+
+function panelAction(): HTMLButtonElement {
+  const action = document.querySelector<HTMLButtonElement>('.auth-panel-action');
+  if (!action) throw new Error('Expected the desktop auth panel action.');
+  return action;
 }

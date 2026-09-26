@@ -13,6 +13,17 @@ export interface AuthResponse {
   user: AuthUser;
 }
 
+/** The public ASP.NET Core RegisterRequest contract. */
+export interface PublicRegistration {
+  fullName: string;
+  email: string;
+  phoneNumber: string;
+  businessName: string;
+  address: string;
+  password: string;
+  roles: Extract<UserRole, 'SELLER' | 'BUYER'>[];
+}
+
 export function parseUser(value: unknown): AuthUser {
   if (!isRecord(value)) {
     throw new Error('The server returned an invalid user.');

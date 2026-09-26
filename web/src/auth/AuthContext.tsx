@@ -13,7 +13,12 @@ import {
   normalizeApiError,
   registerUnauthorizedHandler,
 } from '../api/apiClient';
-import { parseAuthResponse, parseUser, type AuthUser } from './authTypes';
+import {
+  parseAuthResponse,
+  parseUser,
+  type AuthUser,
+  type PublicRegistration,
+} from './authTypes';
 import {
   sessionTokenStorage,
   type TokenStorage,
@@ -30,6 +35,7 @@ interface AuthState {
 
 interface AuthContextValue extends AuthState {
   login(email: string, password: string): Promise<boolean>;
+  register(request: PublicRegistration): Promise<boolean>;
   logout(): void;
   clearError(): void;
 }
@@ -123,10 +129,37 @@ export function AuthProvider({
     [client, storage],
   );
 
+  const register = useCallback(
+    async (request: PublicRegistration) => {
+      dispatch({ type: 'REQUEST_STARTED' });
+      try {
+        const response = await client.post('/api/auth/register', {
+          ...request,
+          fullName: request.fullName.trim(),
+          email: request.email.trim(),
+          phoneNumber: request.phoneNumber.trim(),
+          businessName: request.businessName.trim() || undefined,
+          address: request.address.trim(),
+        });
+        const session = parseAuthResponse(response.data);
+        storage.write(session.token);
+        dispatch({ type: 'AUTHENTICATED', user: session.user });
+        return true;
+      } catch (error) {
+        dispatch({
+          type: 'REQUEST_FAILED',
+          error: normalizeApiError(error).message,
+        });
+        return false;
+      }
+    },
+    [client, storage],
+  );
+
   const clearError = useCallback(() => dispatch({ type: 'CLEAR_ERROR' }), []);
   const value = useMemo(
-    () => ({ ...state, login, logout, clearError }),
-    [state, login, logout, clearError],
+    () => ({ ...state, login, register, logout, clearError }),
+    [state, login, register, logout, clearError],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
