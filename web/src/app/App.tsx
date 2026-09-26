@@ -16,18 +16,28 @@ import { RoleHomePage } from '../pages/RoleHomePage';
 import { MyOffersPage } from '../pages/MyOffersPage';
 import { OfferDetailsPage } from '../pages/OfferDetailsPage';
 import { LandingPage } from '../pages/LandingPage';
+import { BuyerMarketplacePage } from '../pages/buyer/BuyerMarketplacePage';
+import { BuyerListingDetailsPage } from '../pages/buyer/BuyerListingDetailsPage';
 import {
   GuestRoute,
   ProtectedRoute,
   MarketplaceRoute,
   RoleHomeRedirect,
   RoleRoute,
+  RootRoute,
 } from '../routing/RouteGuards';
 
 export function App() {
   return (
     <Routes>
-      <Route path="/" element={<LandingPage />} />
+      <Route
+        path="/"
+        element={
+          <RootRoute>
+            <LandingPage />
+          </RootRoute>
+        }
+      />
       <Route element={<GuestRoute />}>
         <Route path="/login" element={<LoginPage />} />
       </Route>
@@ -38,7 +48,8 @@ export function App() {
             <Route path="seller" element={<RoleHomePage role="SELLER" />} />
           </Route>
           <Route element={<RoleRoute role="BUYER" />}>
-            <Route path="buyer" element={<RoleHomePage role="BUYER" />} />
+            <Route path="buyer" element={<BuyerMarketplacePage />} />
+            <Route path="buyer/materials/:listingId" element={<BuyerListingDetailsPage />} />
           </Route>
           <Route element={<MarketplaceRoute />}>
             <Route path="offers" element={<MyOffersPage />} />

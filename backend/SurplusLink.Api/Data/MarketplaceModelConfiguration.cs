@@ -20,6 +20,7 @@ public static class MarketplaceModelConfiguration
         ConfigureAgentWorkflow(modelBuilder);
         ConfigureReservation(modelBuilder);
         ConfigureOffersAndTransactions(modelBuilder);
+        ConfigureMobileHandoff(modelBuilder);
         ConfigureAuditLog(modelBuilder);
         ConfigureTimestamps(modelBuilder);
     }
@@ -394,6 +395,44 @@ public static class MarketplaceModelConfiguration
             entity.HasOne(transaction => transaction.Offer).WithMany().HasForeignKey(transaction => transaction.OfferId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(transaction => transaction.Buyer).WithMany().HasForeignKey(transaction => transaction.BuyerId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(transaction => transaction.Seller).WithMany().HasForeignKey(transaction => transaction.SellerId).OnDelete(DeleteBehavior.Restrict);
+        });
+    }
+
+    private static void ConfigureMobileHandoff(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<MobileHandoff>(entity =>
+        {
+            entity.ToTable("MobileHandoffs");
+            entity.HasKey(handoff => handoff.Id).HasName("PK_MobileHandoffs");
+            entity.Property(handoff => handoff.Code).HasMaxLength(64).IsRequired();
+            entity.Property(handoff => handoff.Source).HasMaxLength(64).IsRequired();
+            entity.HasIndex(handoff => handoff.Code)
+                .IsUnique()
+                .HasDatabaseName("UX_MobileHandoffs_Code");
+            entity.HasIndex(handoff => handoff.UserId)
+                .HasDatabaseName("IX_MobileHandoffs_UserId");
+            entity.HasIndex(handoff => handoff.CategoryId)
+                .HasDatabaseName("IX_MobileHandoffs_CategoryId");
+            entity.HasIndex(handoff => handoff.ExpiresAt)
+                .HasDatabaseName("IX_MobileHandoffs_ExpiresAt");
+
+            entity.HasOne(handoff => handoff.User)
+                .WithMany()
+                .HasForeignKey(handoff => handoff.UserId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("FK_MobileHandoffs_Users_UserId");
+
+            entity.HasOne(handoff => handoff.Category)
+                .WithMany()
+                .HasForeignKey(handoff => handoff.CategoryId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("FK_MobileHandoffs_Categories_CategoryId");
+
+            entity.HasOne(handoff => handoff.RedeemedByUser)
+                .WithMany()
+                .HasForeignKey(handoff => handoff.RedeemedByUserId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("FK_MobileHandoffs_Users_RedeemedByUserId");
         });
     }
 

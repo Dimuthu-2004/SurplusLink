@@ -51,3 +51,14 @@ export function RoleHomeRedirect() {
   const { user } = useAuth();
   return <Navigate to={user ? roleHomePath(user.roles) : '/login'} replace />;
 }
+
+export function RootRoute({ children }: { children?: React.ReactNode }) {
+  const { status, user } = useAuth();
+  if (status === 'bootstrapping') {
+    return <FullPageStatus message="Restoring your session..." />;
+  }
+  if (status === 'authenticated' && user) {
+    return <Navigate to={roleHomePath(user.roles)} replace />;
+  }
+  return <>{children || <Outlet />}</>;
+}

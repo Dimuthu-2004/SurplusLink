@@ -4,11 +4,21 @@ import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { roleHomePath, roleLabels } from '../routing/roleRoutes';
 
+import { BuyerMarketplaceLayout } from '../pages/buyer/BuyerMarketplaceLayout';
+
 export function AppLayout() {
   const { user, logout } = useAuth();
   const location = useLocation();
   if (!user) {
     return null;
+  }
+
+  const isBuyerRoute = location.pathname.startsWith('/app/buyer');
+  const isOffersRoute = location.pathname.startsWith('/app/offers');
+  const isBuyerUser = user.roles.includes('BUYER') && !user.roles.includes('MANAGER');
+
+  if (isBuyerRoute || (isBuyerUser && isOffersRoute)) {
+    return <BuyerMarketplaceLayout />;
   }
 
   const manager = user.roles.includes('MANAGER');
