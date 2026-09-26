@@ -784,37 +784,74 @@
 .lp-timeline-track::before {
   content: "";
   position: absolute;
-  top: 1.75rem;
+  top: 2.25rem;
   left: 2rem;
   right: 2rem;
   height: 2px;
   background: var(--lp-border);
-  z-index: 0;
+  z-index: 1;
 }
 
 /* Scroll/interactive active fill line */
 .lp-timeline-progress-bar {
   position: absolute;
-  top: 1.75rem;
+  top: 2.25rem;
   left: 2rem;
   height: 2px;
+  width: var(--lp-timeline-progress, 0%);
+  max-width: calc(100% - 4rem);
   background: linear-gradient(90deg, var(--lp-accent) 0%, #f78d38 100%);
-  z-index: 1;
-  transition: width 0.4s var(--lp-ease-out);
+  z-index: 2;
+  transition: width 0.35s var(--lp-ease-out);
 }
 
 .lp-timeline-step {
   position: relative;
-  z-index: 2;
+  z-index: 3;
   cursor: pointer;
   padding: 0.5rem;
   border-radius: var(--lp-radius-md);
-  transition: transform 0.25s var(--lp-ease-out), background-color 0.25s ease;
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 0.65s var(--lp-ease-out), transform 0.65s var(--lp-ease-out), background-color 0.25s ease;
 }
+
+.lp-timeline-step.is-revealed {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Sequential stagger when revealed */
+.lp-timeline-step:nth-child(2) { transition-delay: 0.05s; }
+.lp-timeline-step:nth-child(3) { transition-delay: 0.15s; }
+.lp-timeline-step:nth-child(4) { transition-delay: 0.25s; }
+.lp-timeline-step:nth-child(5) { transition-delay: 0.35s; }
+.lp-timeline-step:nth-child(6) { transition-delay: 0.45s; }
+.lp-timeline-step:nth-child(7) { transition-delay: 0.55s; }
 
 .lp-timeline-step:hover {
   transform: translateY(-4px);
   background-color: rgba(255, 255, 255, 0.4);
+  transition-delay: 0s !important;
+  transition-duration: 0.25s;
+}
+
+/* Upcoming steps stay visible but slightly muted */
+.lp-timeline-step.is-upcoming {
+  opacity: 0.72;
+}
+
+.lp-timeline-step.is-upcoming:hover {
+  opacity: 1;
+}
+
+.lp-timeline-step.is-upcoming .lp-timeline-badge {
+  border-color: var(--lp-border);
+  background-color: rgba(255, 255, 255, 0.7);
+}
+
+.lp-timeline-step.is-upcoming p {
+  color: var(--lp-text-muted);
 }
 
 .lp-timeline-badge {
@@ -1440,13 +1477,25 @@
   }
   
   .lp-timeline-track {
-    grid-template-columns: repeat(3, 1fr);
-    row-gap: 3rem;
+    gap: 0.75rem;
   }
   
-  .lp-timeline-track::before,
-  .lp-timeline-progress-bar {
-    display: none;
+  .lp-timeline-step {
+    padding: 0.25rem;
+  }
+  
+  .lp-timeline-step h3 {
+    font-size: 0.88rem;
+  }
+  
+  .lp-timeline-step p {
+    font-size: 0.78rem;
+  }
+  
+  .lp-timeline-badge {
+    width: 3.25rem;
+    height: 3.25rem;
+    margin-bottom: 1rem;
   }
   
   .lp-bento-span-7,
@@ -1503,16 +1552,16 @@
   /* Vertical mobile timeline */
   .lp-timeline-track {
     grid-template-columns: 1fr;
-    gap: 2rem;
-    padding-left: 2rem;
+    gap: 1.75rem;
+    padding-left: 0;
     position: relative;
   }
 
   .lp-timeline-track::before {
     display: block;
-    top: 1.5rem;
-    bottom: 1.5rem;
-    left: 3.25rem;
+    top: 2.25rem;
+    bottom: 2.25rem;
+    left: calc(2.25rem - 1px);
     width: 2px;
     height: auto;
     right: auto;
@@ -1520,22 +1569,28 @@
 
   .lp-timeline-progress-bar {
     display: block;
-    top: 1.5rem;
-    left: 3.25rem;
+    top: 2.25rem;
+    left: calc(2.25rem - 1px);
     width: 2px;
+    height: var(--lp-timeline-progress, 0%);
+    max-height: calc(100% - 4.5rem);
     right: auto;
-    transition: height 0.4s var(--lp-ease-out);
+    background: linear-gradient(180deg, var(--lp-accent) 0%, #f78d38 100%);
+    transition: height 0.35s var(--lp-ease-out);
   }
   
   .lp-timeline-step {
     display: flex;
-    gap: 1.5rem;
+    gap: 1.25rem;
     align-items: flex-start;
+    padding: 0.5rem;
   }
 
   .lp-timeline-badge {
     margin-bottom: 0;
     flex-shrink: 0;
+    width: 3.5rem;
+    height: 3.5rem;
   }
   
   .lp-bento-grid {
@@ -1649,5 +1704,16 @@
     transition: none !important;
     transform: none !important;
     animation: none !important;
+  }
+
+  .lp-timeline-step {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+    transition-delay: 0s !important;
+  }
+
+  .lp-timeline-progress-bar {
+    transition: none !important;
   }
 }

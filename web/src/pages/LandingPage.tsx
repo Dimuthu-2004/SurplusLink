@@ -187,6 +187,8 @@ export function LandingPage() {
   const [activeSlide, setActiveSlide] = useState(0);
   const [activeSection, setActiveSection] = useState('top');
   const [activeWorkflowStep, setActiveWorkflowStep] = useState(0);
+  const [workflowVisible, setWorkflowVisible] = useState(false);
+  const [workflowProgress, setWorkflowProgress] = useState(0);
 
   const authenticated = status === 'authenticated' && user;
   const accountPath = user ? roleHomePath(user.roles) : '/login';
@@ -253,10 +255,40 @@ export function LandingPage() {
     };
   }, []);
 
-  // Scroll-driven workflow timeline progress tracker
+  // Scroll-driven workflow timeline progress and reveal tracker
   useEffect(() => {
     const section = document.getElementById('how-it-works');
     if (!section) return;
+
+    // Immediate check for reduced motion
+    const prefersReducedMotion = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    if (prefersReducedMotion) {
+      setWorkflowVisible(true);
+    }
+
+    // Guaranteed fallback: steps must NEVER be permanently hidden
+    const fallbackTimer = window.setTimeout(() => {
+      setWorkflowVisible(true);
+    }, 800);
+
+    if (typeof IntersectionObserver === 'undefined') {
+      setWorkflowVisible(true);
+      return () => window.clearTimeout(fallbackTimer);
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            setWorkflowVisible(true);
+            window.clearTimeout(fallbackTimer);
+          }
+        });
+      },
+      { threshold: 0.1, rootMargin: '60px 0px 60px 0px' }
+    );
+
+    observer.observe(section);
 
     let ticking = false;
     const handleScroll = () => {
@@ -264,11 +296,12 @@ export function LandingPage() {
         window.requestAnimationFrame(() => {
           const rect = section.getBoundingClientRect();
           const windowHeight = window.innerHeight;
-          const start = windowHeight * 0.75;
-          const end = -rect.height * 0.25;
+          const start = windowHeight * 0.8;
+          const end = -rect.height * 0.2;
           
           if (rect.top <= start && rect.bottom >= 0) {
             const progress = Math.min(Math.max((start - rect.top) / (start - end), 0), 1);
+            setWorkflowProgress(progress);
             const calculatedStep = Math.min(Math.floor(progress * 6), 5);
             setActiveWorkflowStep((prev) => (prev !== calculatedStep ? calculatedStep : prev));
           }
@@ -278,8 +311,13 @@ export function LandingPage() {
       }
     };
 
+    handleScroll();
     window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
+    return () => {
+      window.clearTimeout(fallbackTimer);
+      observer.disconnect();
+      window.removeEventListener('scroll', handleScroll);
+    };
   }, []);
 
   // Hero slideshow timer respecting prefers-reduced-motion
@@ -292,7 +330,7 @@ export function LandingPage() {
   }, []);
 
   // Calculate timeline progress fill percentage
-  const timelineProgressPercent = `${(activeWorkflowStep / 5) * 100}%`;
+  const timelineProgressPercent = `${workflowVisible ? Math.max(16, Math.round(Math.max(workflowProgress, activeWorkflowStep / 5) * 100)) : 0}%`;
 
   return (
     <div className="lp-wrapper">
@@ -603,11 +641,13 @@ export function LandingPage() {
             </p>
           </Reveal>
 
-          <div className="lp-timeline-track">
+          <div 
+            className={`lp-timeline-track ${workflowVisible ? 'is-revealed' : ''}`}
+            style={{ '--lp-timeline-progress': timelineProgressPercent } as React.CSSProperties}
+          >
             {/* Scroll-driven active progress bar */}
             <div 
               className="lp-timeline-progress-bar" 
-              style={{ width: timelineProgressPercent }} 
               aria-hidden="true" 
             />
 
@@ -621,11 +661,9 @@ export function LandingPage() {
                 : 'is-upcoming';
 
               return (
-                <Reveal 
+                <div 
                   key={step.num}
-                  className={`lp-timeline-step ${statusClass}`}
-                  variant="fade-up"
-                  delay={index * 80}
+                  className={`lp-timeline-step ${statusClass} ${workflowVisible ? 'is-revealed' : ''}`}
                 >
                   <div 
                     onClick={() => setActiveWorkflowStep(index)}
@@ -645,7 +683,7 @@ export function LandingPage() {
                     <h3>{step.title}</h3>
                     <p>{step.summary}</p>
                   </div>
-                </Reveal>
+                </div>
               );
             })}
           </div>
