@@ -115,7 +115,7 @@ void main() {
       expect(
         find.text(
           choice == 'Both'
-              ? 'Dual role · Buyer + Seller'
+              ? 'Buyer Mode'
               : choice == 'Sell surplus materials'
               ? 'Seller'
               : 'Buyer',

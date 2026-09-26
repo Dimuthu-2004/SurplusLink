@@ -1,3 +1,5 @@
+import 'package:mobile/marketplace/marketplace_mode_controller.dart';
+import 'package:mobile/marketplace/marketplace_mode_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile/matches/match_repository.dart';
 import 'package:http/http.dart' as http;
@@ -15,14 +17,19 @@ import 'package:mobile/offers/offer_repository.dart';
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
 
+  final marketplace = MarketplaceModeController(
+    storage: const SecureMarketplaceModeStorage(),
+  );
   final tokenStorage = SecureTokenStorage();
   final apiClient = ApiClient(
+    mutations: marketplace.mutations,
     baseUri: AppConfig.apiBaseUri,
     httpClient: http.Client(),
     tokenStorage: tokenStorage,
   );
   final authController = AuthController(
     AuthRepository(apiClient: apiClient, tokenStorage: tokenStorage),
+    marketplace: marketplace,
   );
 
   runApp(

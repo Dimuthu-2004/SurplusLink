@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:mobile/core/mutation_activity.dart';
+
 import 'package:http/http.dart' as http;
 import 'package:mobile/core/api_exception.dart';
 import 'package:mobile/core/token_storage.dart';
@@ -10,9 +12,11 @@ final class ApiClient {
     required this.baseUri,
     required this.httpClient,
     required this.tokenStorage,
+    this.mutations,
     this.timeout = const Duration(seconds: 15),
   });
 
+  final MutationActivity? mutations;
   final Uri baseUri;
   final http.Client httpClient;
   final TokenStorage tokenStorage;
@@ -89,7 +93,11 @@ final class ApiClient {
     ),
   );
 
-  Future<Map<String, dynamic>> uploadPhoto(List<int> bytes) async {
+  Future<Map<String, dynamic>> uploadPhoto(List<int> bytes) => mutations == null
+      ? _uploadPhoto(bytes)
+      : mutations!.track(() => _uploadPhoto(bytes));
+
+  Future<Map<String, dynamic>> _uploadPhoto(List<int> bytes) async {
     final token = await tokenStorage.readToken();
     if (token == null || token.isEmpty) {
       throw const ApiException('Authentication is required.', statusCode: 401);
@@ -137,6 +145,23 @@ final class ApiClient {
   }
 
   Future<Object?> _send({
+    required String method,
+    required String path,
+    required bool authenticated,
+    Map<String, dynamic>? body,
+  }) {
+    Future<Object?> request() => _sendRequest(
+      method: method,
+      path: path,
+      authenticated: authenticated,
+      body: body,
+    );
+    return method == 'GET' || mutations == null
+        ? request()
+        : mutations!.track(request);
+  }
+
+  Future<Object?> _sendRequest({
     required String method,
     required String path,
     required bool authenticated,

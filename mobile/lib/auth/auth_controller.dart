@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:mobile/marketplace/marketplace_mode_controller.dart';
 import 'package:mobile/auth/auth_gateway.dart';
 import 'package:mobile/auth/auth_models.dart';
 import 'package:mobile/core/api_exception.dart';
@@ -6,7 +7,19 @@ import 'package:mobile/core/api_exception.dart';
 enum AuthStatus { initializing, unauthenticated, authenticated }
 
 final class AuthController extends ChangeNotifier {
-  AuthController(this._gateway);
+  AuthController(this._gateway, {MarketplaceModeController? marketplace})
+    : marketplace = marketplace ?? MarketplaceModeController() {
+    this.marketplace.addListener(notifyListeners);
+  }
+
+  final MarketplaceModeController marketplace;
+
+  @override
+  void dispose() {
+    marketplace.removeListener(notifyListeners);
+    marketplace.dispose();
+    super.dispose();
+  }
 
   final AuthGateway _gateway;
   AuthStatus _status = AuthStatus.initializing;
@@ -25,6 +38,7 @@ final class AuthController extends ChangeNotifier {
     notifyListeners();
     try {
       _user = await _gateway.restoreSession();
+      await marketplace.bind(_user);
       _status = _user == null
           ? AuthStatus.unauthenticated
           : AuthStatus.authenticated;
@@ -91,6 +105,7 @@ final class AuthController extends ChangeNotifier {
       _user = null;
       _status = AuthStatus.unauthenticated;
       _errorMessage = null;
+      await marketplace.clear();
       _setBusy(false);
     }
   }
@@ -112,6 +127,7 @@ final class AuthController extends ChangeNotifier {
     try {
       final session = await request();
       _user = session.user;
+      await marketplace.bind(_user);
       _status = AuthStatus.authenticated;
       return true;
     } on ApiException catch (exception) {

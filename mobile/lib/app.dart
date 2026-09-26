@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:mobile/marketplace/marketplace_mode_controller.dart';
+
 import 'package:mobile/matches/match_gateway.dart';
 import 'package:mobile/offers/offer_gateway.dart';
 
@@ -43,6 +45,7 @@ class SurplusLinkApp extends StatefulWidget {
 
 class _SurplusLinkAppState extends State<SurplusLinkApp> {
   late final GoRouter _router;
+  late int _modeRevision;
 
   @override
   void initState() {
@@ -58,11 +61,22 @@ class _SurplusLinkAppState extends State<SurplusLinkApp> {
       addressSearch: widget.addressSearch,
       initialLocation: widget.initialLocation,
     );
+    _modeRevision = widget.authController.marketplace.revision;
+    widget.authController.marketplace.addListener(_modeChanged);
     unawaited(widget.authController.initialize());
+  }
+
+  void _modeChanged() {
+    final revision = widget.authController.marketplace.revision;
+    if (_modeRevision == revision) return;
+    _modeRevision = revision;
+    // Replace the whole stack, including pageless transaction/history pages.
+    if (widget.authController.isAuthenticated) _router.go(AppRoutes.home);
   }
 
   @override
   void dispose() {
+    widget.authController.marketplace.removeListener(_modeChanged);
     _router.dispose();
     super.dispose();
   }
@@ -73,5 +87,9 @@ class _SurplusLinkAppState extends State<SurplusLinkApp> {
     debugShowCheckedModeBanner: false,
     theme: SurplusLinkTheme.light,
     routerConfig: _router,
+    builder: (context, child) => MarketplaceModeScope(
+      controller: widget.authController.marketplace,
+      child: child!,
+    ),
   );
 }

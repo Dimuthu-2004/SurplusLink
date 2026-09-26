@@ -38,7 +38,7 @@ void main() {
       );
     });
   }
-  testWidgets('dual role shows buyer and seller participation together', (
+  testWidgets('dual role defaults to buyer participation only', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -55,7 +55,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.textContaining('Buyer participation'), findsOneWidget);
-    expect(find.textContaining('Seller participation'), findsOneWidget);
+    expect(find.textContaining('Seller participation'), findsNothing);
     expect(find.text('Approve'), findsNothing);
   });
   for (final roles in [
