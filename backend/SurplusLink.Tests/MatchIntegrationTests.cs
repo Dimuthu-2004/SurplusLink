@@ -142,7 +142,8 @@ public sealed class MatchIntegrationTests(RequirementsDatabase fixture) : IClass
             ("LISTING_NOT_ACTIVE", listing => listing.Status = ListingStatus.DRAFT),
             ("LISTING_EXPIRED", listing => listing.AvailableUntil = DateTime.UtcNow.AddDays(-1)),
             ("UNIT_MISMATCH", listing => listing.Unit = "unit"),
-            ("INSUFFICIENT_QUANTITY", listing => listing.ReservedQuantity = 99),
+            (null, listing => listing.ReservedQuantity = 99),
+            ("INSUFFICIENT_QUANTITY", listing => listing.ReservedQuantity = listing.Quantity),
             ("BUDGET_EXCEEDED", listing => listing.UnitPrice = 3000),
         };
         foreach (var (reason, change) in cases)

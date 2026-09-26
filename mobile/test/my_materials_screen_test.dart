@@ -166,7 +166,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.drag(
       find.byKey(const Key('home-dashboard-scroll')),
-      const Offset(0, -900),
+      const Offset(0, -400),
     );
     await tester.pump();
     await tester.ensureVisible(find.byKey(const Key('open-my-materials')));
@@ -189,7 +189,7 @@ void main() {
     expect(find.byKey(const Key('home-dashboard-scroll')), findsOneWidget);
     await tester.drag(
       find.byKey(const Key('home-dashboard-scroll')),
-      const Offset(0, -900),
+      const Offset(0, -400),
     );
     await tester.pump();
     await tester.ensureVisible(find.byKey(const Key('open-my-requirements')));

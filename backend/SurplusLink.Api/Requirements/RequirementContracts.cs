@@ -51,7 +51,50 @@ public sealed record RequirementResponse(
 
 public sealed record RequirementPage(IReadOnlyList<RequirementResponse> Items, int Total, int Page, int PageSize);
 public sealed record StartMatchingResponse(RequirementResponse Requirement, Guid WorkflowId);
-public sealed record SelectMatchRequest(Guid MatchId);
+public sealed record SelectMatchRequest(Guid MatchId, decimal? Quantity = null);
+
+public sealed class MatchAllocationRequest
+{
+    [Required]
+    public Guid MatchId { get; init; }
+
+    [Range(typeof(decimal), "0.001", "999999999999999.999")]
+    public decimal Quantity { get; init; }
+}
+
+public sealed class SelectMatchesRequest : IValidatableObject
+{
+    [Required, MinLength(1)]
+    public List<MatchAllocationRequest> Allocations { get; init; } = [];
+
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        if (Allocations.Count == 0)
+        {
+            yield return new ValidationResult("At least one match allocation is required.", [nameof(Allocations)]);
+        }
+
+        var duplicateMatchIds = Allocations.GroupBy(x => x.MatchId).Where(g => g.Count() > 1).Select(g => g.Key).ToList();
+        if (duplicateMatchIds.Count > 0)
+        {
+            yield return new ValidationResult($"Duplicate match ID in allocations: {string.Join(", ", duplicateMatchIds)}.", [nameof(Allocations)]);
+        }
+
+        for (int i = 0; i < Allocations.Count; i++)
+        {
+            var item = Allocations[i];
+            if (item.Quantity <= 0)
+            {
+                yield return new ValidationResult($"Quantity must be greater than zero for match {item.MatchId}.", [nameof(Allocations)]);
+            }
+            if (decimal.Round(item.Quantity, 3) != item.Quantity)
+            {
+                yield return new ValidationResult($"Quantity supports at most three decimal places for match {item.MatchId}.", [nameof(Allocations)]);
+            }
+        }
+    }
+}
+
 public sealed class RequirementException(int statusCode, string message) : Exception(message)
 {
     public int StatusCode { get; } = statusCode;

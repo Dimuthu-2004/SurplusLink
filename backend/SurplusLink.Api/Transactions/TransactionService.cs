@@ -142,21 +142,33 @@ public sealed class TransactionService(SurplusLinkDbContext db)
         if (transaction.Status != TransactionStatus.HANDED_OVER) throw new TransactionOperationException(409, "Materials must be handed over before receipt can be confirmed.");
         transaction.Status = TransactionStatus.COMPLETED;
         transaction.CompletedAtUtc = DateTime.UtcNow;
-        transaction.Offer.MaterialMatch.MaterialRequest.Status = BuyerRequestStatus.COMPLETED;
         var match = transaction.Offer.MaterialMatch;
         var reservations = await db.Reservations.Where(x => x.MaterialRequestId == match.MaterialRequestId &&
             x.ListingId == match.ListingId && x.Status == ReservationStatus.ACTIVE).ToListAsync(ct);
         foreach (var row in reservations) row.Status = ReservationStatus.CONFIRMED;
-        var workflows = await db.AgentWorkflows.Where(x => x.MaterialMatchId == match.Id && x.Status == AgentWorkflowStatus.APPROVED).ToListAsync(ct);
-        foreach (var row in workflows) { row.Status = AgentWorkflowStatus.COMPLETED; row.CurrentStage = "COMPLETED"; row.CompletedAtUtc = DateTime.UtcNow; }
+
+        var hasRemainingActive = await db.Transactions.AnyAsync(x =>
+            x.Offer.MaterialMatch.MaterialRequestId == match.MaterialRequestId &&
+            x.Id != id &&
+            (x.Status == TransactionStatus.APPROVED || x.Status == TransactionStatus.HANDED_OVER || x.Status == TransactionStatus.PENDING_APPROVAL), ct);
+
+        if (!hasRemainingActive)
+        {
+            transaction.Offer.MaterialMatch.MaterialRequest.Status = BuyerRequestStatus.COMPLETED;
+            var workflows = await db.AgentWorkflows.Where(x =>
+                ((x.MaterialRequestId != null && x.MaterialRequestId == match.MaterialRequestId) ||
+                 x.MaterialMatchId == match.Id) && x.Status == AgentWorkflowStatus.APPROVED).ToListAsync(ct);
+            foreach (var row in workflows) { row.Status = AgentWorkflowStatus.COMPLETED; row.CurrentStage = "COMPLETED"; row.CompletedAtUtc = DateTime.UtcNow; }
+            foreach (var row in workflows)
+                db.AuditLogs.Add(new AuditLog { Id = Guid.NewGuid(), ActorUserId = actor,
+                    EntityType = nameof(AgentWorkflow), EntityId = row.Id, Action = "WORKFLOW_COMPLETED" });
+            db.AuditLogs.Add(new AuditLog { Id = Guid.NewGuid(), ActorUserId = actor,
+                EntityType = nameof(BuyerRequest), EntityId = match.MaterialRequestId, Action = "TRANSACTION_COMPLETED" });
+        }
+
         db.AuditLogs.Add(Log(id, actor, "TRANSACTION_COMPLETED"));
         db.AuditLogs.Add(new AuditLog { Id = Guid.NewGuid(), ActorUserId = actor,
-            EntityType = nameof(BuyerRequest), EntityId = match.MaterialRequestId, Action = "TRANSACTION_COMPLETED" });
-        db.AuditLogs.Add(new AuditLog { Id = Guid.NewGuid(), ActorUserId = actor,
             EntityType = nameof(Listing), EntityId = match.ListingId, Action = "TRANSFER_COMPLETED" });
-        foreach (var row in workflows)
-            db.AuditLogs.Add(new AuditLog { Id = Guid.NewGuid(), ActorUserId = actor,
-                EntityType = nameof(AgentWorkflow), EntityId = row.Id, Action = "WORKFLOW_COMPLETED" });
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
         return ToResponse(transaction);

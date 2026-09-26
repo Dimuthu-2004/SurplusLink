@@ -79,7 +79,12 @@ public sealed class RequirementsController(RequirementService service) : Control
     [HttpPost("{id:guid}/select-match")]
     [Authorize(Roles = "BUYER")]
     public Task<IActionResult> SelectMatch(Guid id, SelectMatchRequest input, CancellationToken ct) =>
-        Handle(async actor => Ok(await service.SelectMatchAsync(id, actor, input.MatchId, ct)));
+        Handle(async actor => Ok(await service.SelectMatchAsync(id, actor, input.MatchId, input.Quantity, ct)));
+
+    [HttpPost("{id:guid}/select-matches")]
+    [Authorize(Roles = "BUYER")]
+    public Task<IActionResult> SelectMatches(Guid id, SelectMatchesRequest input, CancellationToken ct) =>
+        Handle(async actor => Ok(await service.SelectMatchesAsync(id, actor, input.Allocations, ct)));
 
     [HttpPost("{id:guid}/cancel-pending-approval")]
     [Authorize(Roles = "BUYER")]

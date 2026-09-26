@@ -27,6 +27,7 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
   bool _loading = true, _historyLoading = false, _selecting = false;
   String? _selectionError;
   int _historyPage = 1;
+  double? _selectedQuantity;
   @override
   void initState() {
     super.initState();
@@ -57,6 +58,11 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
       setState(() {
         _match = match;
         _loading = false;
+        if (match.availableQuantity != null && match.quantity != null) {
+          _selectedQuantity = match.availableQuantity! < match.quantity!
+              ? match.availableQuantity
+              : match.quantity;
+        }
       });
       await _loadHistory(1);
     } on Object catch (error) {
@@ -120,11 +126,85 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
                       ),
                     ),
                   ),
+                if (_match!.isPartial) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    margin: const EdgeInsets.only(bottom: 8),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Quantity (${_match!.unit ?? ''}):',
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.remove_circle_outline, size: 20),
+                              onPressed: (_selectedQuantity ?? 1) > 1
+                                  ? () => setState(
+                                      () => _selectedQuantity = (_selectedQuantity ?? 1) - 1,
+                                    )
+                                  : null,
+                            ),
+                            SizedBox(
+                              width: 80,
+                              child: TextFormField(
+                                key: const Key('details-quantity-input'),
+                                initialValue: quantities.formatQuantity(
+                                  _selectedQuantity ?? 0,
+                                  _match!.unit ?? '',
+                                ),
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(decimal: true),
+                                textAlign: TextAlign.center,
+                                decoration: InputDecoration(
+                                  isDense: true,
+                                  contentPadding:
+                                      const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                ),
+                                onChanged: (text) {
+                                  final parsed = double.tryParse(text.trim());
+                                  if (parsed != null) {
+                                    setState(() => _selectedQuantity = parsed);
+                                  }
+                                },
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.add_circle_outline, size: 20),
+                              onPressed: ((_selectedQuantity ?? 0) <
+                                      (_match!.availableQuantity ?? double.infinity))
+                                  ? () => setState(
+                                      () => _selectedQuantity = (_selectedQuantity ?? 0) + 1,
+                                    )
+                                  : null,
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton.icon(
                     key: const Key('select-match'),
-                    onPressed: _selecting ? null : _selectMatch,
+                    onPressed: _selecting ||
+                            (_match!.isPartial &&
+                                ((_selectedQuantity ?? 0) <= 0 ||
+                                    (_selectedQuantity ?? 0) >
+                                        (_match!.availableQuantity ?? 0)))
+                        ? null
+                        : _selectMatch,
                     icon: const Icon(Icons.check_circle_outline),
                     label: Text(
                       _selecting ? 'Selecting...' : 'Select this match',
@@ -144,6 +224,55 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
                 MatchErrorBox(_error!, onRetry: _load)
               else if (_match case final match?) ...[
                 _SummaryCard(match: match),
+                if (match.isPartial && !match.isRejected)
+                  Card(
+                    key: const Key('partial-quantity-warning'),
+                    color: const Color(0xFFFEF3C7),
+                    margin: const EdgeInsets.only(bottom: 12),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(
+                            Icons.warning_amber_rounded,
+                            color: Color(0xFFB45309),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Partial quantity available',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF92400E),
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  match.partialWarning(),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF78350F),
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'You can choose a quantity up to ${quantities.formatQuantity(match.availableQuantity ?? 0, match.unit ?? '')} ${match.unit ?? ''}.',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Color(0xFF92400E),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 if (match.isRejected || match.status == 'ROUTE_FAILED')
                   _warning(match),
                 if (match.requirementStatus == 'PENDING_APPROVAL')
@@ -285,8 +414,10 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('Select this match?'),
-          content: const Text(
-            'Your selected match will be checked again and sent for manager approval. No material is reserved by this choice.',
+          content: Text(
+            match.isPartial
+                ? 'You selected ${quantities.formatQuantity(_selectedQuantity ?? 0, match.unit ?? '')} ${match.unit ?? ''}. Your selection will be checked again and sent for manager approval. No material is reserved by this choice.'
+                : 'Your selected match will be checked again and sent for manager approval. No material is reserved by this choice.',
           ),
           actions: [
             TextButton(
@@ -301,7 +432,11 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
         ),
       );
       if (confirmed != true || !mounted) return;
-      await widget.gateway.select(widget.requirementId, match.id);
+      await widget.gateway.select(
+        widget.requirementId,
+        match.id,
+        quantity: match.isPartial ? _selectedQuantity : null,
+      );
       if (mounted) context.go('/requirements/${widget.requirementId}');
     } on Object catch (error) {
       if (mounted) setState(() => _selectionError = matchError(error));

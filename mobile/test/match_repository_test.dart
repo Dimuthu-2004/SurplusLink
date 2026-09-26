@@ -123,7 +123,7 @@ void main() {
     'missing matches and malformed successful payloads are errors',
     () async {
       final repository = repo(
-        (_) async => http.Response(jsonEncode(pageJson([])), 200),
+        (_) async => http.Response('{"message":"Match not found."}', 404),
       );
       await expectLater(
         repository.get('r1', 'missing'),

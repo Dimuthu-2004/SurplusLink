@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mobile/core/api_exception.dart';
+import 'package:mobile/materials/quantity_format.dart' as quantities;
 import 'package:mobile/matches/match_formatters.dart';
 import 'package:mobile/matches/match_models.dart';
 import 'package:mobile/theme/surplus_link_theme.dart';
@@ -91,11 +92,21 @@ class MatchListCard extends StatelessWidget {
   const MatchListCard({
     required this.match,
     required this.onTap,
+    this.isSelected = false,
+    this.onToggleSelect,
+    this.selectedQuantity,
+    this.onQuantityChanged,
+    this.quantityError,
     super.key,
   });
 
   final RecommendedMatch match;
   final VoidCallback onTap;
+  final bool isSelected;
+  final ValueChanged<bool>? onToggleSelect;
+  final double? selectedQuantity;
+  final ValueChanged<double>? onQuantityChanged;
+  final String? quantityError;
 
   @override
   Widget build(BuildContext context) {
@@ -239,6 +250,215 @@ class MatchListCard extends StatelessWidget {
                 color: statusColor,
                 icon: statusIcon,
               ),
+              if (match.isPartial && !match.isRejected) ...[
+                const SizedBox(height: 6),
+                Container(
+                  key: Key('partial-warning-${match.id}'),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEF3C7),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFF59E0B)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.info_outline, size: 16, color: Color(0xFFB45309)),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          match.partialWarning(),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF92400E),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              if (onToggleSelect != null && match.isSelectable) ...[
+                const SizedBox(height: 8),
+                const Divider(height: 1),
+                const SizedBox(height: 4),
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {},
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Checkbox(
+                            key: Key('select-checkbox-${match.id}'),
+                            value: isSelected,
+                            onChanged: (val) => onToggleSelect!(val ?? false),
+                          ),
+                          Expanded(
+                            child: InkWell(
+                              onTap: () => onToggleSelect!(!isSelected),
+                              child: Text(
+                                isSelected ? 'Selected for fulfillment' : 'Select this seller',
+                                style: TextStyle(
+                                  fontWeight:
+                                      isSelected ? FontWeight.bold : FontWeight.normal,
+                                  color: isSelected
+                                      ? SurplusLinkTheme.amberDark
+                                      : SurplusLinkTheme.slate900,
+                                ),
+                              ),
+                            ),
+                          ),
+                          TextButton.icon(
+                            key: Key('view-details-${match.id}'),
+                            onPressed: onTap,
+                            icon: const Icon(Icons.info_outline, size: 16),
+                            label: const Text('Details'),
+                          ),
+                        ],
+                      ),
+                      if (isSelected)
+                        Container(
+                          key: Key('allocation-panel-${match.id}'),
+                          margin: const EdgeInsets.only(top: 4, bottom: 4),
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: SurplusLinkTheme.surfaceSoft,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: quantityError != null
+                                  ? Theme.of(context).colorScheme.error
+                                  : SurplusLinkTheme.slate300,
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      'Quantity to take (${match.unit ?? ''}):',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                  Text(
+                                    'Avail: ${quantities.formatQuantity(match.availableQuantity ?? 0, match.unit ?? '')} ${match.unit ?? ''}',
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      color: SurplusLinkTheme.slate600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  IconButton(
+                                    key: Key('qty-decrement-${match.id}'),
+                                    icon: const Icon(Icons.remove_circle_outline, size: 20),
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(
+                                      minWidth: 32,
+                                      minHeight: 32,
+                                    ),
+                                    onPressed: (selectedQuantity ?? 1) > 1
+                                        ? () => onQuantityChanged!(
+                                            (selectedQuantity ?? 1) - 1,
+                                          )
+                                        : null,
+                                  ),
+                                  SizedBox(
+                                    width: 90,
+                                    child: TextFormField(
+                                      key: Key('quantity-input-${match.id}'),
+                                      initialValue: quantities.formatQuantity(
+                                        selectedQuantity ?? 0,
+                                        match.unit ?? '',
+                                      ),
+                                      keyboardType: const TextInputType.numberWithOptions(
+                                        decimal: true,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                      decoration: InputDecoration(
+                                        contentPadding: const EdgeInsets.symmetric(
+                                          horizontal: 6,
+                                          vertical: 6,
+                                        ),
+                                        isDense: true,
+                                        border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                      ),
+                                      onChanged: (text) {
+                                        final parsed = double.tryParse(text.trim());
+                                        if (parsed != null) {
+                                          onQuantityChanged!(parsed);
+                                        }
+                                      },
+                                    ),
+                                  ),
+                                  IconButton(
+                                    key: Key('qty-increment-${match.id}'),
+                                    icon: const Icon(Icons.add_circle_outline, size: 20),
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(
+                                      minWidth: 32,
+                                      minHeight: 32,
+                                    ),
+                                    onPressed: ((selectedQuantity ?? 0) <
+                                            (match.availableQuantity ?? double.infinity))
+                                        ? () => onQuantityChanged!(
+                                            (selectedQuantity ?? 0) + 1,
+                                          )
+                                        : null,
+                                  ),
+                                  const Spacer(),
+                                  TextButton(
+                                    key: Key('qty-max-${match.id}'),
+                                    onPressed: () => onQuantityChanged!(
+                                      match.availableQuantity ?? 0,
+                                    ),
+                                    child: const Text('Max', style: TextStyle(fontSize: 12)),
+                                  ),
+                                ],
+                              ),
+                              if (quantityError != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 4),
+                                  child: Text(
+                                    quantityError!,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Theme.of(context).colorScheme.error,
+                                    ),
+                                  ),
+                                ),
+                              if (selectedQuantity != null && match.unitPrice != null) ...[
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Est: ${formatCurrency((selectedQuantity ?? 0) * (match.unitPrice ?? 0))} + ${formatCurrency(match.estimatedTransportCost ?? 0)} transport',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: SurplusLinkTheme.slate600,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
             ],
           ),
         ),
