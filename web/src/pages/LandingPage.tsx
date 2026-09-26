@@ -210,6 +210,7 @@ export function LandingPage() {
     const onScroll = () => {
       setScrolled(window.scrollY > 20);
     };
+    onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
 
     if (typeof IntersectionObserver === 'undefined') {
@@ -349,7 +350,7 @@ export function LandingPage() {
               src="/images/brand/surpluslink-mark.png" 
               alt="SurplusLink" 
             />
-            <span>SurplusLink</span>
+            <span className="lp-brand-text">SurplusLink</span>
           </a>
 
           <button
