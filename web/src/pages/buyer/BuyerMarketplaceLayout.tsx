@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
+import { LogoutConfirmation } from '../../components/LogoutConfirmation';
 import './buyerMarketplace.css';
 
 export interface BuyerMarketplaceLayoutProps {
@@ -60,14 +61,7 @@ export function BuyerMarketplaceLayout({ children }: BuyerMarketplaceLayoutProps
                 <span className="marketplace-role-tag">Buyer</span>
               </div>
             )}
-            <button
-              type="button"
-              className="marketplace-logout-btn"
-              onClick={logout}
-              aria-label="Log out"
-            >
-              Log out
-            </button>
+            <LogoutConfirmation className="marketplace-logout-btn" onLogout={logout}>Log out</LogoutConfirmation>
 
             {/* Mobile Menu Toggle */}
             <button
@@ -116,17 +110,7 @@ export function BuyerMarketplaceLayout({ children }: BuyerMarketplaceLayoutProps
                 <span className="marketplace-role-tag">Buyer</span>
               </div>
             )}
-            <button
-              type="button"
-              className="marketplace-logout-btn"
-              style={{ width: '100%', marginTop: '0.75rem', justifyContent: 'center' }}
-              onClick={() => {
-                setMobileMenuOpen(false);
-                logout();
-              }}
-            >
-              Log out
-            </button>
+            <LogoutConfirmation className="marketplace-logout-btn" onLogout={logout} onOpen={() => setMobileMenuOpen(false)}>Log out</LogoutConfirmation>
           </div>
         )}
       </header>

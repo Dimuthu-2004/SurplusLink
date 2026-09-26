@@ -5,6 +5,7 @@ import { useAuth } from '../auth/AuthContext';
 import { roleHomePath, roleLabels } from '../routing/roleRoutes';
 
 import { BuyerMarketplaceLayout } from '../pages/buyer/BuyerMarketplaceLayout';
+import { LogoutConfirmation } from './LogoutConfirmation';
 
 export function AppLayout() {
   const { user, logout } = useAuth();
@@ -40,9 +41,7 @@ export function AppLayout() {
         <div className="account-summary">
           <span>{user.email}</span>
           <span className="role-badge">{user.roles.map(role => roleLabels[role]).join(' + ')}</span>
-          <button className="button button-secondary logout-button" type="button" onClick={logout}>
-            <AppIcon name="logout" /> Log out
-          </button>
+          <LogoutConfirmation onLogout={logout}><><AppIcon name="logout" /> Log out</></LogoutConfirmation>
         </div>
       </header>
       <div className="app-body">

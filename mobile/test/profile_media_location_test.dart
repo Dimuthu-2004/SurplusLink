@@ -70,7 +70,13 @@ void main() {
           return http.Response(jsonEncode(user), 200);
         }
         expect(request.url.path, '/api/auth/register');
-        return http.Response(jsonEncode({'token': 'jwt', 'user': user}), 201);
+        return http.Response(
+          jsonEncode({
+            'email': 'seller@test.com',
+            'emailVerificationRequired': true,
+          }),
+          201,
+        );
       }),
     );
     final repository = AuthRepository(apiClient: api, tokenStorage: MemoryTokenStorage());
@@ -79,16 +85,15 @@ void main() {
       phoneNumber: '0771234567',
       address: 'Colombo',
     );
-    expect(
-      (await repository.register(
-        email: 'seller@test.com',
-        password: 'Password123!',
-        roles: [AppRole.seller],
-        profile: profile,
-      )).user.fullName,
-      'Test Seller',
+    await repository.register(
+      email: 'seller@test.com',
+      password: 'Password123!',
+      roles: [AppRole.seller],
+      profile: profile,
     );
-    expect((await repository.updateProfile(profile)).address, 'Colombo');
+    final updated = await repository.updateProfile(profile);
+    expect(updated.fullName, 'Test Seller');
+    expect(updated.address, 'Colombo');
   });
 
   test('multipart photo upload sends bytes with bearer auth and returns a portable media path', () async {

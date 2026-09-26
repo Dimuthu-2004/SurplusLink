@@ -78,12 +78,14 @@ class UserProfile {
     required this.fullName,
     required this.phoneNumber,
     required this.address,
+    this.nic = '',
     this.businessName = '',
   });
-  final String fullName, phoneNumber, businessName, address;
+  final String fullName, phoneNumber, businessName, address, nic;
   Map<String, dynamic> toJson() => {
     'fullName': fullName.trim(),
     'phoneNumber': phoneNumber.trim(),
+    if (nic.trim().isNotEmpty) 'nic': nic.trim(),
     'businessName': businessName.trim(),
     'address': address.trim(),
   };

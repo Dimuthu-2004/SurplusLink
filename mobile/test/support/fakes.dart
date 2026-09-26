@@ -49,7 +49,7 @@ final class FakeAuthGateway implements AuthGateway {
   }
 
   @override
-  Future<AuthSession> register({
+  Future<void> register({
     required String email,
     required String password,
     required List<AppRole> roles,
@@ -57,9 +57,12 @@ final class FakeAuthGateway implements AuthGateway {
   }) async {
     registeredRoles = roles;
     registeredProfile = profile;
-    final user = AppUser(id: 'registered', email: email, roles: roles);
-    return AuthSession(token: 'test-token', user: user);
   }
+
+  @override Future<void> verifyEmail({required String email, required String code}) async {}
+  @override Future<void> resendVerification({required String email}) async {}
+  @override Future<void> forgotPassword({required String email}) async {}
+  @override Future<void> resetPassword({required String email, required String code, required String newPassword}) async {}
 
   @override
   Future<AppUser> updateProfile(UserProfile profile) async => AppUser(

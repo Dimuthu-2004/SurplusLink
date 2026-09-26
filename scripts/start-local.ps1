@@ -32,6 +32,14 @@ try {
     if (!$ready) { throw 'AI service did not become ready.' }
     Write-Host 'AI ready; starting API with the same internal token and workflow worker enabled.'
     Write-Host 'Routing settings are inherited by the API. Configure .env.local or Routing__* environment variables for real routes.'
+    $smtpRequired = 'SMTP_HOST', 'SMTP_USERNAME', 'SMTP_PASSWORD', 'SMTP_FROM_EMAIL'
+    $missingSmtp = $smtpRequired | Where-Object {
+        $value = [Environment]::GetEnvironmentVariable($_)
+        [string]::IsNullOrWhiteSpace($value) -or $value -like 'your-*'
+    }
+    if ($missingSmtp) {
+        Write-Warning ('SMTP configuration is missing: ' + ($missingSmtp -join ', ') + '. Authentication email delivery will fail until .env.local is configured.')
+    }
     dotnet run --project (Join-Path $projectRoot 'backend/SurplusLink.Api') --launch-profile http
 } finally {
     if (!$ai.HasExited) { Stop-Process -Id $ai.Id }

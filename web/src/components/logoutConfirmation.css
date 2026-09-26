@@ -1,0 +1,7 @@
+.logout-modal-backdrop { position: fixed; inset: 0; z-index: 10000; display: grid; place-items: center; padding: 1.25rem; background: rgba(20, 28, 31, .62); }
+.logout-modal { width: min(100%, 28rem); box-sizing: border-box; border: 1px solid rgba(0,0,0,.08); border-radius: 1rem; padding: 1.5rem; background: #fffaf3; box-shadow: 0 1.5rem 4rem rgba(0,0,0,.32); }
+.logout-modal h2 { margin: 0; color: #253238; font-size: 1.35rem; }
+.logout-modal p { margin: .75rem 0 1.5rem; color: #59666c; }
+.logout-modal-actions { display: flex; justify-content: flex-end; gap: .75rem; }
+.logout-modal .button-danger { border: 0; background: #b6412e; color: #fff; }
+@media (max-width: 480px) { .logout-modal-actions { flex-direction: column-reverse; } .logout-modal-actions .button { width: 100%; } }

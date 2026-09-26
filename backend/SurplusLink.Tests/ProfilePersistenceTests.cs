@@ -15,12 +15,23 @@ public sealed class ProfilePersistenceTests(RequirementsDatabase fixture) : ICla
     {
         using var app = fixture.App();
         using var client = app.CreateClient();
+        var email = Guid.NewGuid() + "@profile.test";
         var response = await client.PostAsJsonAsync("/api/auth/register", new {
-            email = Guid.NewGuid() + "@profile.test", password = "Password123!", roles = new[] { "BUYER" },
+            email, password = "Password123!", roles = new[] { "BUYER" }, nic = "200000000010",
             fullName = "  New Buyer  ", phoneNumber = "0771234567", businessName = "Buyer Business", address = "Colombo"
         });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        var session = (await response.Content.ReadFromJsonAsync<AuthResponse>())!;
+        var registered = (await response.Content.ReadFromJsonAsync<RegistrationResponse>())!;
+        Assert.Equal(email, registered.Email);
+        using (var verificationDb = fixture.Context())
+        {
+            var registeredUser = await verificationDb.Users.SingleAsync(user => user.Email == email);
+            registeredUser.EmailVerified = true;
+            await verificationDb.SaveChangesAsync();
+        }
+        var login = await client.PostAsJsonAsync("/api/auth/login", new { email, password = "Password123!" });
+        Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+        var session = (await login.Content.ReadFromJsonAsync<AuthResponse>())!;
         Assert.Equal("New Buyer", session.User.FullName);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", session.Token);
         var before = (await client.GetFromJsonAsync<UserResponse>("/api/auth/me"))!;
@@ -50,7 +61,7 @@ public sealed class ProfilePersistenceTests(RequirementsDatabase fixture) : ICla
         using var buyer = fixture.Client(app, fixture.Buyer);
         var json = await buyer.GetFromJsonAsync<JsonElement>($"/api/materials/{id}");
         Assert.Equal("Supplier Name", json.GetProperty("seller").GetProperty("fullName").GetString());
-        Assert.Equal("0771112233", json.GetProperty("seller").GetProperty("phoneNumber").GetString());
+        Assert.Equal("+94771112233", json.GetProperty("seller").GetProperty("phoneNumber").GetString());
         Assert.DoesNotContain("Private home address", json.ToString());
         Assert.DoesNotContain("password", json.ToString(), StringComparison.OrdinalIgnoreCase);
     }
