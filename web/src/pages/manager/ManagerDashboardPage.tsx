@@ -112,6 +112,7 @@ export function ManagerDashboardPage() {
             <div className="analytics-metrics">
               <AnalyticsMetric label="Pending approvals" value={data.pendingApprovalCount} tone="pending" />
               <AnalyticsMetric label="Approved transactions" value={data.approvedCount} tone="success" />
+              <AnalyticsMetric label="Completed Transactions" value={data.completionCount} tone="success" detail="Completed buyer requirement/deal groups" />
             </div>
             <Link className="back-link" to="/app/manager/approvals">Review pending approvals</Link>
             {data.pendingApprovalCount + data.approvedCount + data.rejectedCount + data.completionCount === 0 && (

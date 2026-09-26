@@ -45,11 +45,30 @@ public sealed record AgentWorkflowResponse(
     string CurrentStage, string InputJson, string OutputJson, string ValidationJson, string? ErrorJson,
     string? Decision, int RetryCount, DateTime StartedAtUtc, DateTime? CompletedAtUtc,
     IReadOnlyList<AgentStepResponse> Steps, IReadOnlyList<ApprovalResponse> Approvals,
-    string? RecommendationReason = null);
+    string? RecommendationReason = null,
+    ApprovalGroupResponse? ApprovalGroup = null);
+
+public sealed record ApprovalAllocationResponse(
+    Guid TransactionId, Guid SellerId, string SellerName, string? SellerBusinessName,
+    Guid ListingId, string ListingTitle, decimal AllocatedQuantity, decimal AvailableQuantity,
+    string Unit, decimal UnitPrice, decimal MaterialValue, decimal? Score,
+    decimal? Distance, decimal? TransportCost, string Status);
+
+public sealed record ApprovalGroupResponse(
+    string RequirementTitle, string BuyerName, decimal RequestedQuantity,
+    decimal SelectedQuantity, decimal RemainingQuantity, string Unit,
+    string FulfillmentStatus, int SellerCount, decimal TotalValue,
+    IReadOnlyList<ApprovalAllocationResponse> Allocations);
+
+public sealed record ApprovalGroupSummaryResponse(
+    string RequirementTitle, string BuyerName, decimal RequestedQuantity,
+    decimal SelectedQuantity, decimal RemainingQuantity, string Unit,
+    string FulfillmentStatus, int SellerCount, decimal TotalValue);
 
 public sealed record AgentWorkflowListItem(Guid Id, Guid? MaterialRequestId, Guid? MaterialMatchId,
     [property: JsonConverter(typeof(JsonStringEnumConverter))] AgentWorkflowStatus Status, string CurrentStage,
-    int RetryCount, DateTime StartedAtUtc, DateTime? CompletedAtUtc, string? ErrorJson);
+    int RetryCount, DateTime StartedAtUtc, DateTime? CompletedAtUtc, string? ErrorJson,
+    ApprovalGroupSummaryResponse? ApprovalGroup = null);
 public sealed record AgentWorkflowStatusCount(string Status, int Count);
 public sealed record AgentWorkflowSummary(
     Guid Id, AgentWorkflowStatus Status, string CurrentStage, int StepCount, int ToolCallCount,

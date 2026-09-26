@@ -148,7 +148,7 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
         var listings = await db.Listings.AsNoTracking().Where(x => x.CategoryId == request.CategoryId &&
             x.SellerId != request.BuyerId)
             .OrderByDescending(x => x.Status == ListingStatus.ACTIVE && x.AvailableUntil > DateTime.UtcNow &&
-                x.Quantity - x.ReservedQuantity >= request.RequiredQuantity &&
+                x.Quantity - x.ReservedQuantity > 0 &&
                 x.Unit.ToLower() == request.Unit.ToLower() && x.UnitPrice * request.RequiredQuantity <= request.MaximumBudget)
             .ThenBy(x => x.UnitPrice).ThenBy(x => x.Id).ToListAsync(ct);
         var existing = await db.Matches.AsNoTracking().Where(x => x.MaterialRequestId == request.Id)
@@ -183,7 +183,7 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
         var winner = snapshot.Listings.Where(x => x.SellerId != request.BuyerId && x.CategoryId == request.CategoryId &&
                 x.Status == "ACTIVE" && x.AvailableUntil > now && x.AvailableUntil.Date >= request.Deadline.Date &&
                 string.Equals(x.Unit, request.Unit, StringComparison.OrdinalIgnoreCase) &&
-                x.AvailableQuantity >= request.RequiredQuantity && request.Deadline > now &&
+                x.AvailableQuantity > 0 && request.Deadline > now &&
                 x.RoutingError is null && x.DistanceKm is >= 0 && x.DurationMinutes is >= 0 && x.TransportCost is >= 0 &&
                 x.DurationMinutes <= (decimal)(request.Deadline - now).TotalMinutes &&
                 x.UnitPrice * request.RequiredQuantity + x.TransportCost <= request.MaximumBudget)
@@ -201,7 +201,7 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
         listing.Status == ListingStatus.ACTIVE && listing.AvailableUntil > DateTime.UtcNow &&
         listing.SellerId != request.BuyerId && listing.CategoryId == request.CategoryId &&
         string.Equals(listing.Unit, request.Unit, StringComparison.OrdinalIgnoreCase) &&
-        listing.Quantity - listing.ReservedQuantity >= request.RequiredQuantity && transportCost >= 0 &&
+        listing.Quantity - listing.ReservedQuantity > 0 && transportCost >= 0 &&
         listing.UnitPrice * request.RequiredQuantity + transportCost <= request.MaximumBudget;
 
     internal static void ValidateResult(WorkflowRunRequest input, WorkflowRunResult result)
@@ -273,7 +273,7 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
             var reason = row.Status != "ACTIVE" ? "LISTING_NOT_ACTIVE"
                 : row.AvailableUntil <= DateTime.UtcNow ? "LISTING_EXPIRED"
                 : !string.Equals(row.Unit, request.Unit, StringComparison.OrdinalIgnoreCase) ? "UNIT_MISMATCH"
-                : row.AvailableQuantity < request.RequiredQuantity ? "INSUFFICIENT_QUANTITY"
+                : row.AvailableQuantity <= 0 ? "INSUFFICIENT_QUANTITY"
                 : row.UnitPrice * request.RequiredQuantity > request.MaximumBudget ? "BUDGET_EXCEEDED"
                 : row.UnitPrice * request.RequiredQuantity + (row.TransportCost ?? 0) > request.MaximumBudget && row.TransportCost is not null ? "TOTAL_COST_EXCEEDS_BUDGET"
                 : null;
