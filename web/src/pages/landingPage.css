@@ -108,22 +108,48 @@
   right: 0;
   z-index: 100;
   padding: 1.35rem 0;
-  transition: background-color 0.35s var(--lp-ease-out), padding 0.35s var(--lp-ease-out), box-shadow 0.35s var(--lp-ease-out), border-color 0.35s var(--lp-ease-out);
+  background-color: transparent;
+  transition: 
+    background-color 0.3s var(--lp-ease-out), 
+    padding 0.3s var(--lp-ease-out), 
+    box-shadow 0.3s var(--lp-ease-out), 
+    border-color 0.3s var(--lp-ease-out);
+}
+
+/* Subtle top vignette behind transparent navbar over hero */
+.lp-nav::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 125%;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(12, 10, 8, 0.42) 0%, rgba(12, 10, 8, 0.18) 60%, transparent 100%);
+  opacity: 1;
+  transition: opacity 0.3s ease;
+  z-index: -1;
 }
 
 .lp-nav.lp-nav-scrolled {
-  background-color: rgba(250, 248, 245, 0.92);
+  background-color: rgba(250, 248, 245, 0.94);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   padding: 0.75rem 0;
-  box-shadow: 0 4px 20px rgba(30, 20, 10, 0.06);
-  border-bottom: 1px solid var(--lp-border);
+  box-shadow: 0 4px 20px rgba(30, 20, 10, 0.08);
+  border-bottom: 1px solid rgba(226, 221, 214, 0.85);
+}
+
+.lp-nav.lp-nav-scrolled::before {
+  opacity: 0;
 }
 
 .lp-nav .lp-container {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  position: relative;
+  z-index: 1;
 }
 
 .lp-brand {
@@ -131,11 +157,12 @@
   align-items: center;
   gap: 0.65rem;
   text-decoration: none;
-  color: var(--lp-text-headline);
+  color: #ffffff;
   font-size: 1.2rem;
   font-weight: 800;
   letter-spacing: -0.02em;
-  transition: transform 0.2s ease;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+  transition: color 0.3s ease, transform 0.2s ease, text-shadow 0.3s ease;
 }
 
 .lp-brand:hover {
@@ -146,6 +173,18 @@
   width: 2.1rem;
   height: 2.1rem;
   object-fit: contain;
+  background: transparent;
+}
+
+.lp-brand-text {
+  color: inherit;
+  transition: color 0.3s ease;
+}
+
+/* Scrolled: wordmark transitions smoothly to dark charcoal */
+.lp-nav.lp-nav-scrolled .lp-brand {
+  color: var(--lp-text-headline);
+  text-shadow: none;
 }
 
 .lp-nav-links {
@@ -154,17 +193,19 @@
   gap: 2rem;
 }
 
+/* Over hero: nav links are white / light */
 .lp-nav-link {
   position: relative;
-  color: var(--lp-text-headline);
+  color: rgba(255, 255, 255, 0.82);
   text-decoration: none;
   font-size: 0.92rem;
   font-weight: 600;
   padding: 0.35rem 0;
-  transition: color 0.25s ease;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  transition: color 0.3s ease, text-shadow 0.3s ease;
 }
 
-/* Animated active underline */
+/* Active underline stays orange in both states */
 .lp-nav-link::after {
   content: "";
   position: absolute;
@@ -183,11 +224,24 @@
   transform: scaleX(1);
 }
 
+/* Over hero: hover and current link are bright white */
 .lp-nav-link:hover,
 .lp-nav-link.active {
+  color: #ffffff;
+}
+
+/* Scrolled: nav text switches to dark charcoal, hover/current to orange */
+.lp-nav.lp-nav-scrolled .lp-nav-link {
+  color: var(--lp-text-body);
+  text-shadow: none;
+}
+
+.lp-nav.lp-nav-scrolled .lp-nav-link:hover,
+.lp-nav.lp-nav-scrolled .lp-nav-link.active {
   color: var(--lp-accent);
 }
 
+/* Login button: remains orange with white text in both states */
 .lp-nav-cta {
   display: inline-flex;
   align-items: center;
@@ -200,31 +254,43 @@
   font-weight: 750;
   text-decoration: none;
   transition: background-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
-  box-shadow: 0 4px 12px rgba(224, 109, 16, 0.25);
+  box-shadow: 0 4px 12px rgba(224, 109, 16, 0.28);
+  text-shadow: none !important;
 }
 
 .lp-nav-cta:hover {
   background-color: var(--lp-accent-hover);
   transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(224, 109, 16, 0.35);
+  box-shadow: 0 6px 16px rgba(224, 109, 16, 0.38);
 }
 
 .lp-nav-cta:active {
   transform: translateY(0);
 }
 
+/* Mobile menu toggle button */
 .lp-menu-btn {
   display: none;
   background: none;
   border: none;
   cursor: pointer;
   padding: 0.5rem;
-  color: var(--lp-text-headline);
+  color: #ffffff;
   border-radius: var(--lp-radius-sm);
-  transition: background-color 0.2s ease;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  transition: color 0.3s ease, background-color 0.2s ease, text-shadow 0.3s ease;
 }
 
 .lp-menu-btn:hover {
+  background-color: rgba(255, 255, 255, 0.15);
+}
+
+.lp-nav.lp-nav-scrolled .lp-menu-btn {
+  color: var(--lp-text-headline);
+  text-shadow: none;
+}
+
+.lp-nav.lp-nav-scrolled .lp-menu-btn:hover {
   background-color: rgba(30, 20, 10, 0.05);
 }
 
@@ -271,12 +337,16 @@
   transform: scale(1.08);
 }
 
-/* Adaptive gradient overlay: dark behind left text, clear on the right */
+/* Adaptive gradient overlay: subtle top vignette for navbar, dark behind left text, clear on the right */
 .lp-hero-overlay {
   position: absolute;
   inset: 0;
   z-index: 2;
   background: 
+    linear-gradient(180deg,
+      rgba(14, 12, 10, 0.4) 0%,
+      rgba(14, 12, 10, 0.14) 100px,
+      transparent 180px),
     linear-gradient(90deg, 
       rgba(16, 14, 12, 0.94) 0%, 
       rgba(16, 14, 12, 0.82) 40%, 
@@ -1537,6 +1607,20 @@
   
   .lp-nav-links.open {
     display: flex;
+  }
+
+  /* High contrast links inside mobile dropdown menu */
+  .lp-nav-links .lp-nav-link {
+    color: var(--lp-text-headline) !important;
+    text-shadow: none !important;
+    font-size: 0.98rem;
+    width: 100%;
+    padding: 0.35rem 0;
+  }
+
+  .lp-nav-links .lp-nav-link:hover,
+  .lp-nav-links .lp-nav-link.active {
+    color: var(--lp-accent) !important;
   }
   
   .lp-nav-cta {

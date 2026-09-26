@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
@@ -178,5 +178,34 @@ describe('LandingPage Final Polish', () => {
     renderLanding();
     const scrollCue = screen.getByLabelText(/Scroll down to explore platform/i);
     expect(scrollCue).toHaveAttribute('href', '#platform');
+  });
+
+  it('renders navbar brand with SurplusLink wordmark and transitions scroll state', () => {
+    renderLanding();
+    const header = document.querySelector('header.lp-nav');
+    expect(header).toBeInTheDocument();
+    expect(header).not.toHaveClass('lp-nav-scrolled');
+
+    // Brand and logo
+    const brand = document.querySelector('.lp-brand');
+    expect(brand).toBeInTheDocument();
+    expect(brand).toHaveTextContent('SurplusLink');
+    const brandImg = brand?.querySelector('.lp-brand-img');
+    expect(brandImg).toHaveAttribute('src', '/images/brand/surpluslink-mark.png');
+
+    // Nav links
+    const nav = screen.getByRole('navigation', { name: /Public navigation/i });
+    expect(nav).toBeInTheDocument();
+    expect(within(nav).getByText('Home')).toBeInTheDocument();
+    expect(within(nav).getByText('Platform')).toBeInTheDocument();
+    expect(within(nav).getByText('How it works')).toBeInTheDocument();
+    expect(within(nav).getByText('Features')).toBeInTheDocument();
+    expect(within(nav).getByText('Materials')).toBeInTheDocument();
+    expect(within(nav).getByText('Impact')).toBeInTheDocument();
+
+    // Trigger scroll
+    Object.defineProperty(window, 'scrollY', { value: 50, writable: true, configurable: true });
+    fireEvent.scroll(window);
+    expect(header).toHaveClass('lp-nav-scrolled');
   });
 });
