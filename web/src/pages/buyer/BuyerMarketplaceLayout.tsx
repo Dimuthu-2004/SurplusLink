@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
 import { LogoutConfirmation } from '../../components/LogoutConfirmation';
+import { SurplusLinkLogo } from '../../components/SurplusLinkLogo';
 import './buyerMarketplace.css';
 
 export interface BuyerMarketplaceLayoutProps {
@@ -29,12 +30,7 @@ export function BuyerMarketplaceLayout({ children }: BuyerMarketplaceLayoutProps
             aria-label="SurplusLink Buyer Home"
             onClick={() => setMobileMenuOpen(false)}
           >
-            <img
-              src="/images/brand/surpluslink-mark.png"
-              alt="SurplusLink"
-              className="marketplace-brand-logo"
-            />
-            <span>SurplusLink</span>
+            <SurplusLinkLogo className="marketplace-brand-logo" />
           </Link>
 
           {/* Desktop Nav */}

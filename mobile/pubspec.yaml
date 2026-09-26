@@ -61,7 +61,9 @@ dev_dependencies:
 flutter:
 
   assets:
-    - assets/images/surpluslink_logo.png
+    - assets/branding/surpluslink-logo.jpeg
+    - assets/branding/surpluslink-logo.png
+    - assets/branding/surpluslink-mark.png
     - assets/images/login_background.jpg
 
   # The following line ensures that the Material Icons font is

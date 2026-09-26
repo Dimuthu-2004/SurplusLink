@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { createMobileHandoff, type MobileHandoffCreationResponse } from '../../api/buyerMarketplaceApi';
+import { SurplusLinkLogo } from '../../components/SurplusLinkLogo';
 
 export interface MobileHandoffModalProps {
   isOpen: boolean;
@@ -19,6 +20,7 @@ export function MobileHandoffModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [secondsRemaining, setSecondsRemaining] = useState<number>(0);
+  const [showIntroduction, setShowIntroduction] = useState(true);
   const timerRef = useRef<number | null>(null);
 
   const initHandoff = useCallback(async () => {
@@ -41,7 +43,7 @@ export function MobileHandoffModal({
 
   useEffect(() => {
     if (isOpen) {
-      initHandoff();
+      setShowIntroduction(true);
     } else {
       setHandoff(null);
       setError(null);
@@ -51,7 +53,13 @@ export function MobileHandoffModal({
         timerRef.current = null;
       }
     }
-  }, [isOpen, initHandoff]);
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (isOpen && !showIntroduction && !handoff && !loading && !error) {
+      initHandoff();
+    }
+  }, [error, handoff, initHandoff, isOpen, loading, showIntroduction]);
 
   useEffect(() => {
     if (!handoff || secondsRemaining <= 0) return;
@@ -101,6 +109,27 @@ export function MobileHandoffModal({
           &times;
         </button>
 
+        {showIntroduction ? (
+          <section className="handoff-introduction" aria-labelledby="handoff-modal-title">
+            <SurplusLinkLogo className="handoff-intro-logo" />
+            <h2 id="handoff-modal-title" className="ai-mobile-heading">
+              Find the best match with SurplusLink Mobile
+            </h2>
+            <p className="ai-mobile-desc">
+              You are viewing materials in the <strong>{categoryName}</strong> category. Use SurplusLink Mobile to create your actual requirement and let the AI compare available materials based on quantity, budget, location and logistics.
+            </p>
+            <ol className="handoff-intro-steps">
+              <li>Install or open SurplusLink Mobile</li>
+              <li>Sign in with the same account</li>
+              <li>Choose <strong>Scan Web Handoff QR</strong></li>
+              <li>Scan the QR code</li>
+            </ol>
+            <div className="handoff-intro-actions">
+              <button type="button" className="button button-secondary" onClick={onClose}>Cancel</button>
+              <button type="button" className="button button-primary" onClick={() => setShowIntroduction(false)}>Continue to QR</button>
+            </div>
+          </section>
+        ) : <>
         <div className="ai-mobile-badge" style={{ justifyContent: 'center' }}>
           <span>AI Matching Handoff</span>
         </div>
@@ -239,6 +268,7 @@ export function MobileHandoffModal({
             </div>
           </>
         )}
+        </>}
       </div>
     </div>
   );

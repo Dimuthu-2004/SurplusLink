@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:mobile/auth/auth_controller.dart';
 import 'package:mobile/handoff/qr_payload_parser.dart';
 import 'package:mobile/theme/surplus_link_theme.dart';
+import 'package:mobile/widgets/surplus_link_logo.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 class QrScannerScreen extends StatefulWidget {
@@ -198,16 +199,7 @@ class _QrScannerScreenState extends State<QrScannerScreen>
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Image.asset(
-              'assets/images/surpluslink_logo.png',
-              width: 24,
-              height: 24,
-              errorBuilder: (_, _, _) => const Icon(
-                Icons.recycling_rounded,
-                color: SurplusLinkTheme.amber,
-                size: 24,
-              ),
-            ),
+            const SurplusLinkLogo(size: 24, showWordmark: false),
             const SizedBox(width: 8),
             const Text(
               'Scan Web Handoff QR',

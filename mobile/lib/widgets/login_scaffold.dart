@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mobile/theme/surplus_link_theme.dart';
+import 'package:mobile/widgets/surplus_link_logo.dart';
 
 /// Login-only presentation; authentication and form state live in LoginScreen.
 class LoginScaffold extends StatelessWidget {
@@ -38,47 +39,7 @@ class LoginScaffold extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        // Match the React brand mark; the PNG currently contains
-                        // the Flutter placeholder, not the SurplusLink logo.
-                        Semantics(
-                          label: 'SurplusLink',
-                          image: true,
-                          child: ExcludeSemantics(
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Container(
-                                  width: 44,
-                                  height: 44,
-                                  alignment: Alignment.center,
-                                  decoration: BoxDecoration(
-                                    color: SurplusLinkTheme.amber,
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: const Text(
-                                    'S',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 28,
-                                      fontWeight: FontWeight.w900,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                const Flexible(
-                                  child: Text(
-                                    'SurplusLink',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 26,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
+                        const Center(child: SurplusLinkLogo(size: 58)),
                         const SizedBox(height: 28),
                         Container(
                           key: const Key('login-glass-card'),

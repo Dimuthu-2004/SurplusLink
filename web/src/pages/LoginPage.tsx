@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'rea
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import type { PublicRegistration, UserRole } from '../auth/authTypes';
+import { SurplusLinkLogo } from '../components/SurplusLinkLogo';
 import './loginPage.css';
 
 type AuthMode = 'signIn' | 'signUp';
@@ -160,7 +161,7 @@ export function LoginPage() {
   );
 }
 
-function Brand({ dark = false }: { dark?: boolean }) { return <div className={`auth-logo ${dark ? 'auth-logo-dark' : ''}`}><img src="/images/brand/surpluslink-mark.png" alt="SurplusLink" /><span>SurplusLink</span></div>; }
+function Brand({ dark = false }: { dark?: boolean }) { return <div className={`auth-logo ${dark ? 'auth-logo-dark' : ''}`}><SurplusLinkLogo className="auth-logo-image" /></div>; }
 function Field({ label, htmlFor, children, full = false }: { label: string; htmlFor: string; children: ReactNode; full?: boolean }) { return <label className={`auth-field ${full ? 'auth-field-full' : ''}`} htmlFor={htmlFor}><span>{label}</span>{children}</label>; }
 function PasswordField({ id, label, autoComplete, value, onChange, visible, onToggle, disabled }: { id: string; label: string; autoComplete: string; value: string; onChange(value: string): void; visible: boolean; onToggle(): void; disabled: boolean }) { return <label className="auth-field" htmlFor={id}><span>{label}</span><span className="auth-password-input"><input id={id} name={id} type={visible ? 'text' : 'password'} autoComplete={autoComplete} value={value} onChange={event => onChange(event.target.value)} disabled={disabled} /><button type="button" aria-label={visible ? 'Hide password' : 'Show password'} aria-pressed={visible} onClick={onToggle} disabled={disabled}>{visible ? 'Hide' : 'Show'}</button></span></label>; }
 function FormMessage({ message }: { message: string | null }) { return message ? <div className="auth-error" role="alert">{message}</div> : null; }

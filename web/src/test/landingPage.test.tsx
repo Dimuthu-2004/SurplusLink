@@ -18,7 +18,7 @@ function renderLanding() {
 describe('LandingPage Final Polish', () => {
   it('renders the real SurplusLink logo asset (not a placeholder)', () => {
     renderLanding();
-    const logoImgs = document.querySelectorAll('img[src="/images/brand/surpluslink-mark.png"]');
+    const logoImgs = document.querySelectorAll('img[alt^="SurplusLink"]');
     expect(logoImgs.length).toBeGreaterThan(0);
     // Ensure no placeholder black circle "+", fake "S", etc.
     expect(screen.queryByText('brand-symbol')).not.toBeInTheDocument();
@@ -189,9 +189,9 @@ describe('LandingPage Final Polish', () => {
     // Brand and logo
     const brand = document.querySelector('.lp-brand');
     expect(brand).toBeInTheDocument();
-    expect(brand).toHaveTextContent('SurplusLink');
     const brandImg = brand?.querySelector('.lp-brand-img');
-    expect(brandImg).toHaveAttribute('src', '/images/brand/surpluslink-mark.png');
+    expect(brandImg).toHaveAccessibleName(/SurplusLink/i);
+    expect(brandImg?.getAttribute('src')).toContain('surpluslink-logo');
 
     // Nav links
     const nav = screen.getByRole('navigation', { name: /Public navigation/i });

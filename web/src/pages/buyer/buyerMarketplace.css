@@ -57,10 +57,10 @@
 }
 
 .marketplace-brand-logo {
-  width: 32px;
-  height: 32px;
+  width: 10rem;
+  height: auto;
+  display: block;
   object-fit: contain;
-  border-radius: 6px;
 }
 
 .marketplace-nav-links {
@@ -960,6 +960,12 @@
   background: #e2e8f0;
   color: #0f172a;
 }
+
+.handoff-introduction { animation: modal-scale-in 0.25s cubic-bezier(0.16, 1, 0.3, 1); }
+.handoff-intro-logo { display: block; width: min(100%, 19rem); height: auto; margin: 0 auto 1.2rem; }
+.handoff-intro-steps { margin: 0 0 1.5rem; padding-left: 1.4rem; color: #475569; text-align: left; line-height: 1.7; }
+.handoff-intro-actions { display: flex; justify-content: flex-end; gap: .75rem; }
+@media (max-width: 420px) { .handoff-intro-actions { flex-direction: column-reverse; } .handoff-intro-actions .button { width: 100%; } }
 
 .handoff-qr-wrapper {
   margin: 1.5rem auto;

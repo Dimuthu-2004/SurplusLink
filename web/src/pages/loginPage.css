@@ -32,9 +32,9 @@
 .auth-experience.is-leaving .auth-form { animation: auth-form-exit 160ms ease-out both; }
 
 .auth-logo { display: inline-flex; align-items: center; gap: .62rem; width: fit-content; color: white; font-weight: 800; font-size: 1.15rem; letter-spacing: -.035em; }
-.auth-logo img { width: 2.1rem; height: 2.1rem; object-fit: contain; }
+.auth-logo img { width: 11.5rem; height: auto; object-fit: contain; }
 .auth-logo-dark { color: var(--auth-ink); }
-.auth-logo-dark img { width: 2.25rem; height: 2.25rem; }
+.auth-logo-dark img { width: 12rem; height: auto; }
 .auth-kicker, .auth-panel-kicker { margin: 2.85rem 0 .7rem; color: var(--auth-accent); font-size: .69rem; font-weight: 800; letter-spacing: .15em; }
 .auth-panel-kicker { margin: 0 0 1rem; color: #ffd2aa; }
 .auth-form h1 { max-width: 24rem; margin: 0; color: var(--auth-ink); font-size: clamp(2rem, 3.4vw, 3rem); line-height: 1.04; letter-spacing: -.055em; }

@@ -6,6 +6,7 @@ import { roleHomePath, roleLabels } from '../routing/roleRoutes';
 
 import { BuyerMarketplaceLayout } from '../pages/buyer/BuyerMarketplaceLayout';
 import { LogoutConfirmation } from './LogoutConfirmation';
+import { SurplusLinkLogo } from './SurplusLinkLogo';
 
 export function AppLayout() {
   const { user, logout } = useAuth();
@@ -35,8 +36,7 @@ export function AppLayout() {
     <div className={manager ? 'app-shell manager-shell' : 'app-shell'}>
       <header className="app-header">
         <Link className="brand" to={roleHomePath(user.roles)}>
-          <span className="brand-mark" aria-hidden="true"><AppIcon name="materials" /></span>
-          SurplusLink
+          <SurplusLinkLogo className="app-brand-logo" />
         </Link>
         <div className="account-summary">
           <span>{user.email}</span>

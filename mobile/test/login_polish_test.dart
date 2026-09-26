@@ -41,7 +41,7 @@ void main() {
     );
     expect(image.fit, BoxFit.cover);
     expect(image.image, isA<ResizeImage>());
-    expect(find.text('SurplusLink'), findsOneWidget);
+    expect(find.bySemanticsLabel('SurplusLink'), findsOneWidget);
     final card = tester.widget<Container>(
       find.byKey(const Key('login-glass-card')),
     );
