@@ -57,6 +57,18 @@ public sealed class MatchingReevaluationTests(RequirementsDatabase fixture) : IC
         excellent.Listing.Quantity = 9;
         await db.SaveChangesAsync();
         page = await service.ListAsync(request.Id, fixture.Buyer, false, new(), default);
+        Assert.Equal(excellent.Id, page.RecommendedMatchId);
+        var partial = Assert.Single(page.Items, x => x.AiRecommended);
+        Assert.Equal(excellent.Id, partial.Id);
+        Assert.True(partial.Valid);
+        Assert.True(partial.IsPartial);
+        Assert.Equal(9m, partial.AvailableQuantity);
+        Assert.Equal(excellent.Id, (await db.BuyerRequests.AsNoTracking().SingleAsync(x => x.Id == request.Id)).RecommendedMatchId);
+
+        // Partial stock remains eligible; only exhausted unreserved stock removes it.
+        excellent.Listing.ReservedQuantity = 9;
+        await db.SaveChangesAsync();
+        page = await service.ListAsync(request.Id, fixture.Buyer, false, new(), default);
         Assert.DoesNotContain(page.Items, x => x.AiRecommended);
         Assert.Null(page.RecommendedMatchId);
         Assert.Contains("INSUFFICIENT_QUANTITY", page.RecommendationReason);
@@ -154,10 +166,14 @@ public sealed class MatchingReevaluationTests(RequirementsDatabase fixture) : IC
         await service.RecordRouteAsync(first.Id, true, 12, 500, fixture.Manager, default);
         first.DurationMinutes = 30; listing.Quantity = 200; await db.SaveChangesAsync();
         var second = await service.GenerateAsync(request.Id, listing.Id, fixture.Manager, default);
-        Assert.Equal(first.Id, second.Id); Assert.Equal("INSUFFICIENT_QUANTITY", second.RejectionReason);
+        Assert.Equal(first.Id, second.Id);
+        Assert.Equal(MatchStatus.GENERATED, second.Status);
+        Assert.Null(second.RejectionReason);
         Assert.Equal(0, second.Score); Assert.Null(second.Distance); Assert.Null(second.DurationMinutes); Assert.Null(second.EstimatedTransportCost);
+        listing.ReservedQuantity = 200; await db.SaveChangesAsync();
         Assert.Equal("INSUFFICIENT_QUANTITY", (await service.GenerateAsync(request.Id, listing.Id, null, default)).RejectionReason);
-        listing.Quantity = 500; listing.SellerId = fixture.Buyer; await db.SaveChangesAsync();
+        Assert.Equal(MatchStatus.REJECTED, second.Status);
+        listing.ReservedQuantity = 0; listing.Quantity = 500; listing.SellerId = fixture.Buyer; await db.SaveChangesAsync();
         Assert.Equal("SELF_MATCH_NOT_ALLOWED", (await service.GenerateAsync(request.Id, listing.Id, null, default)).RejectionReason);
         listing.SellerId = fixture.Seller; await db.SaveChangesAsync();
         await service.GenerateAsync(request.Id, listing.Id, null, default);
