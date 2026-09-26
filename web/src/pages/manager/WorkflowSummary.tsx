@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { managerRequirementsApi } from '../../features/requirements/managerRequirementsApi';
 import { managerMaterialsApi } from '../../features/materials/managerMaterialsApi';
 import { requirementNumber, statusLabel, useRequirementResource } from '../../features/requirements/requirementUi';
-import type { Workflow } from '../../features/workflows/managerWorkflowsApi';
+import type { ApprovalGroup, Workflow } from '../../features/workflows/managerWorkflowsApi';
 
 function jsonObject(value: string): Record<string, unknown> {
   try { const parsed: unknown = JSON.parse(value); return object(parsed); } catch { return {}; }
@@ -60,6 +60,7 @@ export function WorkflowSummary({ workflow }: { workflow: Workflow }) {
     return { match, listing };
   }, [recommendedId, workflow, validation.valid]));
   const selected = !current.loading && !current.error ? current.data : null;
+  if (workflow.approvalGroup) return <ApprovalGroupDetails group={workflow.approvalGroup} />;
   const warnings = messages(validation.warnings ?? object(output.validation).warnings);
   const violations = messages(validation.violations ?? object(output.validation).violations);
   const row = request.data;
@@ -98,6 +99,36 @@ export function WorkflowSummary({ workflow }: { workflow: Workflow }) {
     <h3>Warnings and violations</h3>
     {warnings.length + violations.length > 0 ? <ul>{violations.map((text, index) => <li key={'v' + index}><strong>Violation:</strong> {text}</li>)}{warnings.map((text, index) => <li key={'w' + index}><strong>Warning:</strong> {text}</li>)}</ul> : <p>{Array.isArray(validation.warnings) && Array.isArray(validation.violations) ? 'None recorded.' : 'No warning or violation details recorded.'}</p>}
     {workflow.errorJson && <p className="error-message">Workflow error: {typeof jsonObject(workflow.errorJson).code === 'string' ? statusLabel(jsonObject(workflow.errorJson).code as string) : 'See Technical details.'}</p>}
+  </>;
+}
+
+function ApprovalGroupDetails({ group }: { group: ApprovalGroup }) {
+  const full = group.fulfillmentStatus === 'FULL';
+  return <>
+    <dl className="detail-grid">
+      <div><dt>Buyer</dt><dd>{group.buyerName}</dd></div>
+      <div><dt>Requirement</dt><dd>{group.requirementTitle}</dd></div>
+      <div><dt>Total requested</dt><dd>{requirementNumber(group.requestedQuantity)} {group.unit}</dd></div>
+      <div><dt>Total selected</dt><dd>{requirementNumber(group.selectedQuantity)} {group.unit}</dd></div>
+      <div><dt>Remaining</dt><dd>{requirementNumber(group.remainingQuantity)} {group.unit}</dd></div>
+      <div><dt>Fulfillment</dt><dd>{full ? 'Full' : 'Partial fulfillment'}</dd></div>
+      <div><dt>Total deal value</dt><dd>LKR {requirementNumber(group.totalValue, 2)}</dd></div>
+    </dl>
+    {!full && <p className="decision-notice">Partial fulfillment: {requirementNumber(group.remainingQuantity)} {group.unit} remains unfulfilled.</p>}
+    <section className="recommendation-card" aria-label="Seller allocation breakdown">
+      <h3>Seller allocations ({group.sellerCount})</h3>
+      <div className="table-scroll" role="region" tabIndex={0} aria-label="Seller allocations">
+        <table><thead><tr><th>Seller / listing</th><th>Allocated / available</th><th>Price / value</th><th>AI / logistics</th><th>Status</th></tr></thead><tbody>
+          {group.allocations.map((allocation) => <tr key={allocation.transactionId}>
+            <td><strong>{allocation.sellerBusinessName || allocation.sellerName}</strong><small className="requirement-id">{allocation.listingTitle}</small></td>
+            <td>{requirementNumber(allocation.allocatedQuantity)} {allocation.unit}<small className="requirement-id">Available: {requirementNumber(allocation.availableQuantity)} {allocation.unit}</small></td>
+            <td>LKR {requirementNumber(allocation.unitPrice, 2)} / {allocation.unit}<small className="requirement-id">Value: LKR {requirementNumber(allocation.materialValue, 2)}</small></td>
+            <td>Score: {allocation.score === null ? 'Not available' : `${requirementNumber(allocation.score * 100, 1)}%`}<small className="requirement-id">Distance: {allocation.distance === null ? 'Not available' : `${requirementNumber(allocation.distance, 2)} km`} · Transport: {allocation.transportCost === null ? 'Not available' : `LKR ${requirementNumber(allocation.transportCost, 2)}`}</small></td>
+            <td>{allocation.status}</td>
+          </tr>)}
+        </tbody></table>
+      </div>
+    </section>
   </>;
 }
 

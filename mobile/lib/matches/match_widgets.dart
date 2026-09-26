@@ -96,6 +96,8 @@ class MatchListCard extends StatelessWidget {
     this.onToggleSelect,
     this.selectedQuantity,
     this.onQuantityChanged,
+    this.maximumQuantity,
+    this.onRemove,
     this.quantityError,
     super.key,
   });
@@ -106,6 +108,8 @@ class MatchListCard extends StatelessWidget {
   final ValueChanged<bool>? onToggleSelect;
   final double? selectedQuantity;
   final ValueChanged<double>? onQuantityChanged;
+  final double? maximumQuantity;
+  final VoidCallback? onRemove;
   final String? quantityError;
 
   @override
@@ -366,9 +370,9 @@ class MatchListCard extends StatelessWidget {
                                       minWidth: 32,
                                       minHeight: 32,
                                     ),
-                                    onPressed: (selectedQuantity ?? 1) > 1
+                                    onPressed: (selectedQuantity ?? 1) > (quantities.isDiscreteUnit(match.unit ?? '') ? 1 : 0.1)
                                         ? () => onQuantityChanged!(
-                                            (selectedQuantity ?? 1) - 1,
+                                            (selectedQuantity ?? 1) - (quantities.isDiscreteUnit(match.unit ?? '') ? 1 : 0.1),
                                           )
                                         : null,
                                   ),
@@ -415,9 +419,11 @@ class MatchListCard extends StatelessWidget {
                                       minHeight: 32,
                                     ),
                                     onPressed: ((selectedQuantity ?? 0) <
-                                            (match.availableQuantity ?? double.infinity))
+                                            (maximumQuantity ?? match.availableQuantity ?? double.infinity))
                                         ? () => onQuantityChanged!(
-                                            (selectedQuantity ?? 0) + 1,
+                                            ((selectedQuantity ?? 0) + (quantities.isDiscreteUnit(match.unit ?? '') ? 1 : 0.1))
+                                                .clamp(0.0, maximumQuantity ?? match.availableQuantity ?? double.infinity)
+                                                .toDouble(),
                                           )
                                         : null,
                                   ),
@@ -425,9 +431,14 @@ class MatchListCard extends StatelessWidget {
                                   TextButton(
                                     key: Key('qty-max-${match.id}'),
                                     onPressed: () => onQuantityChanged!(
-                                      match.availableQuantity ?? 0,
+                                      maximumQuantity ?? match.availableQuantity ?? 0,
                                     ),
                                     child: const Text('Max', style: TextStyle(fontSize: 12)),
+                                  ),
+                                  TextButton(
+                                    key: Key('qty-remove-${match.id}'),
+                                    onPressed: onRemove,
+                                    child: const Text('Remove', style: TextStyle(fontSize: 12)),
                                   ),
                                 ],
                               ),
@@ -452,6 +463,10 @@ class MatchListCard extends StatelessWidget {
                                   ),
                                 ),
                               ],
+                              Text(
+                                'Seller available: ${quantities.formatQuantity(match.availableQuantity ?? 0, match.unit ?? '')} ${match.unit ?? ''} · Allocated: ${quantities.formatQuantity(selectedQuantity ?? 0, match.unit ?? '')} ${match.unit ?? ''}',
+                                style: const TextStyle(fontSize: 11, color: SurplusLinkTheme.slate600),
+                              ),
                             ],
                           ),
                         ),

@@ -396,6 +396,7 @@ public static class MarketplaceModelConfiguration
             entity.HasIndex(transaction => new { transaction.Status, transaction.CreatedAtUtc }).HasDatabaseName("IX_Transactions_Status_CreatedAtUtc");
             entity.HasIndex(transaction => transaction.BuyerId).HasDatabaseName("IX_Transactions_BuyerId");
             entity.HasIndex(transaction => transaction.SellerId).HasDatabaseName("IX_Transactions_SellerId");
+            entity.HasIndex(transaction => transaction.ApprovalWorkflowId).HasDatabaseName("IX_Transactions_ApprovalWorkflowId");
             entity.HasOne(transaction => transaction.Offer).WithMany().HasForeignKey(transaction => transaction.OfferId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(transaction => transaction.Buyer).WithMany().HasForeignKey(transaction => transaction.BuyerId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(transaction => transaction.Seller).WithMany().HasForeignKey(transaction => transaction.SellerId).OnDelete(DeleteBehavior.Restrict);

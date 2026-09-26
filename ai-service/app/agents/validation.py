@@ -111,7 +111,9 @@ class DeterministicValidationTools:
                             "LISTING_EXPIRED_OR_EXPIRES_BEFORE_DELIVERY")
 
     async def check_available_quantity(self, value):
-        return self._result(value.availableQuantity >= value.quantity, "INSUFFICIENT_QUANTITY")
+        # A candidate may contribute part of a requirement; exact allocation
+        # limits are enforced when the buyer selects and the manager reserves.
+        return self._result(value.availableQuantity > 0, "INSUFFICIENT_QUANTITY")
 
     async def check_budget(self, value):
         return self._result(value.transportCost is not None and

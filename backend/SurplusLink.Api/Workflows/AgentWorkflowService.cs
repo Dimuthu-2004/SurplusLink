@@ -18,15 +18,22 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db)
             "stage" => input.SortDir.Equals("asc", StringComparison.OrdinalIgnoreCase) ? query.OrderBy(x => x.CurrentStage).ThenBy(x => x.Id) : query.OrderByDescending(x => x.CurrentStage).ThenBy(x => x.Id),
             _ => input.SortDir.Equals("asc", StringComparison.OrdinalIgnoreCase) ? query.OrderBy(x => x.StartedAtUtc).ThenBy(x => x.Id) : query.OrderByDescending(x => x.StartedAtUtc).ThenBy(x => x.Id),
         };
-        var items = await ordered.Skip((input.Page - 1) * input.PageSize).Take(input.PageSize)
-            .Select(x => new AgentWorkflowListItem(x.Id, x.MaterialRequestId, x.MaterialMatchId, x.Status, x.CurrentStage, x.RetryCount, x.StartedAtUtc, x.CompletedAtUtc, x.ErrorJson)).ToListAsync(ct);
+        var rows = await ordered.Skip((input.Page - 1) * input.PageSize).Take(input.PageSize).ToListAsync(ct);
+        var items = new List<AgentWorkflowListItem>(rows.Count);
+        foreach (var row in rows)
+        {
+            var group = await GetApprovalGroupAsync(row, ct);
+            items.Add(new AgentWorkflowListItem(row.Id, row.MaterialRequestId, row.MaterialMatchId, row.Status,
+                row.CurrentStage, row.RetryCount, row.StartedAtUtc, row.CompletedAtUtc, row.ErrorJson,
+                group is null ? null : ToSummary(group)));
+        }
         return (items, total);
     }
 
     public async Task<AgentWorkflowResponse> GetAsync(Guid id, CancellationToken ct)
     {
         var workflow = await LoadAsync(id, ct) ?? throw NotFound();
-        return ToResponse(workflow);
+        return ToResponse(workflow) with { ApprovalGroup = await GetApprovalGroupAsync(workflow, ct) };
     }
 
     public async Task<AgentWorkflowSummary> SummaryAsync(Guid id, CancellationToken ct)
@@ -127,8 +134,10 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db)
                 .Include(x => x.Offer).ThenInclude(x => x.MaterialMatch).ThenInclude(x => x.Listing)
                 .Include(x => x.Offer).ThenInclude(x => x.MaterialMatch).ThenInclude(x => x.MaterialRequest)
                 .Where(x => x.Status == TransactionStatus.PENDING_APPROVAL &&
-                    ((workflow.MaterialRequestId != null && x.Offer.MaterialMatch.MaterialRequestId == workflow.MaterialRequestId) ||
-                     x.Offer.MaterialMatchId == workflow.MaterialMatchId))
+                    (x.ApprovalWorkflowId == workflow.Id ||
+                     (x.ApprovalWorkflowId == null &&
+                      ((workflow.MaterialRequestId != null && x.Offer.MaterialMatch.MaterialRequestId == workflow.MaterialRequestId) ||
+                       x.Offer.MaterialMatchId == workflow.MaterialMatchId))))
                 .ToListAsync(ct);
 
             if (pendingTransactions.Count == 0)
@@ -218,6 +227,8 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db)
                     throw new AgentWorkflowException(409, "The material request is not open for reservation.");
                 if (request.Deadline <= DateTime.UtcNow)
                     throw new AgentWorkflowException(409, "The material request has expired.");
+                if (pendingTransactions.Sum(x => x.Quantity) > request.RequiredQuantity)
+                    throw new AgentWorkflowException(409, "Selected allocations exceed the requested quantity.");
 
                 // Validate every transaction allocation
                 foreach (var txRow in pendingTransactions)
@@ -257,7 +268,7 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db)
 
                     // Stock re-check:
                     if (listing.ReservedQuantity + allocatedQty > listing.Quantity)
-                        throw new AgentWorkflowException(409, $"Insufficient available quantity for listing '{listing.Title}'. Required: {allocatedQty}, Available: {listing.Quantity - listing.ReservedQuantity}.");
+                        throw new AgentWorkflowException(409, $"STOCK_CHANGED: allocation conflict for listing '{listing.Title}'. Required: {allocatedQty}, Available: {listing.Quantity - listing.ReservedQuantity}.");
                 }
 
                 // Total budget check:
@@ -341,6 +352,44 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db)
         return ToResponse(await LoadAsync(id, ct) ?? workflow);
     }
 
+    private async Task<ApprovalGroupResponse?> GetApprovalGroupAsync(AgentWorkflow workflow, CancellationToken ct)
+    {
+        var baseQuery = db.Transactions.AsNoTracking()
+            .Include(x => x.Offer).ThenInclude(x => x.Buyer)
+            .Include(x => x.Offer).ThenInclude(x => x.MaterialMatch).ThenInclude(x => x.Listing).ThenInclude(x => x.Seller)
+            .Include(x => x.Offer).ThenInclude(x => x.MaterialMatch).ThenInclude(x => x.MaterialRequest);
+        var allocations = await baseQuery.Where(x => x.ApprovalWorkflowId == workflow.Id).ToListAsync(ct);
+        // The nullable group key was added after the original single-match
+        // workflow. Read those rows through their existing request/match link.
+        if (allocations.Count == 0)
+        {
+            allocations = await baseQuery.Where(x => x.ApprovalWorkflowId == null &&
+                ((workflow.MaterialRequestId != null && x.Offer.MaterialMatch.MaterialRequestId == workflow.MaterialRequestId) ||
+                 x.Offer.MaterialMatchId == workflow.MaterialMatchId)).ToListAsync(ct);
+        }
+        if (allocations.Count == 0) return null;
+
+        var request = allocations[0].Offer.MaterialMatch.MaterialRequest;
+        var selected = allocations.Sum(x => x.Quantity);
+        var rows = allocations.OrderBy(x => x.Offer.MaterialMatch.Listing.Title).ThenBy(x => x.Id)
+            .Select(x => new ApprovalAllocationResponse(
+                x.Id, x.SellerId, x.Offer.MaterialMatch.Listing.Seller.FullName ?? "Seller",
+                x.Offer.MaterialMatch.Listing.Seller.BusinessName, x.Offer.MaterialMatch.ListingId,
+                x.Offer.MaterialMatch.Listing.Title, x.Quantity,
+                x.Offer.MaterialMatch.Listing.Quantity - x.Offer.MaterialMatch.Listing.ReservedQuantity,
+                x.Offer.MaterialMatch.Listing.Unit, x.Offer.UnitValue, x.Offer.TotalValue,
+                x.Offer.MaterialMatch.Score, x.Offer.MaterialMatch.Distance,
+                x.Offer.MaterialMatch.EstimatedTransportCost, x.Status.ToString())).ToArray();
+        return new ApprovalGroupResponse(request.Title, allocations[0].Offer.Buyer.FullName ?? "Buyer",
+            request.RequiredQuantity, selected, request.RequiredQuantity - selected, request.Unit,
+            selected == request.RequiredQuantity ? "FULL" : "PARTIAL", rows.Select(x => x.SellerId).Distinct().Count(),
+            rows.Sum(x => x.MaterialValue) + rows.Sum(x => x.TransportCost ?? 0), rows);
+    }
+
+    private static ApprovalGroupSummaryResponse ToSummary(ApprovalGroupResponse group) => new(
+        group.RequirementTitle, group.BuyerName, group.RequestedQuantity, group.SelectedQuantity,
+        group.RemainingQuantity, group.Unit, group.FulfillmentStatus, group.SellerCount, group.TotalValue);
+
     private async Task<AgentWorkflow?> LoadAsync(Guid id, CancellationToken ct) =>
         await db.AgentWorkflows.AsNoTracking()
             .Include(x => x.MaterialRequest)
@@ -351,8 +400,11 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db)
         TransactionStatus status, CancellationToken ct)
     {
         var transactions = await db.Transactions.Include(x => x.Offer).Where(x =>
-            ((workflow.MaterialRequestId != null && x.Offer.MaterialMatch.MaterialRequestId == workflow.MaterialRequestId) ||
-             x.Offer.MaterialMatchId == workflow.MaterialMatchId) && x.Status == TransactionStatus.PENDING_APPROVAL).ToListAsync(ct);
+            (x.ApprovalWorkflowId == workflow.Id ||
+             (x.ApprovalWorkflowId == null &&
+              ((workflow.MaterialRequestId != null && x.Offer.MaterialMatch.MaterialRequestId == workflow.MaterialRequestId) ||
+               x.Offer.MaterialMatchId == workflow.MaterialMatchId))) &&
+            x.Status == TransactionStatus.PENDING_APPROVAL).ToListAsync(ct);
         foreach (var row in transactions)
         {
             row.Status = status;

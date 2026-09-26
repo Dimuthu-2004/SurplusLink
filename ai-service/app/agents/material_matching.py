@@ -169,7 +169,9 @@ class MaterialMatchingAgent:
     def _fits(listing: MaterialListingRecord, request: MatchingRequest) -> bool:
         if listing.seller_id == request.buyerUserId:
             return False
-        if listing.available_quantity < request.requiredQuantity:
+        # Partial inventory is a valid candidate: allocation selection decides
+        # how much to take. Only unavailable stock is a hard exclusion.
+        if listing.available_quantity <= 0:
             return False
         if listing.unit.casefold() != request.unit.casefold():
             return False

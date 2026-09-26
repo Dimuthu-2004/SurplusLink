@@ -84,7 +84,10 @@ public sealed class TransactionService(SurplusLinkDbContext db)
         var pending = await db.Transactions.CountAsync(x => x.Status == TransactionStatus.PENDING_APPROVAL, ct);
         var approved = await db.Transactions.CountAsync(x => x.Status == TransactionStatus.APPROVED, ct);
         var rejected = await db.Transactions.CountAsync(x => x.Status == TransactionStatus.REJECTED, ct);
-        var completed = await db.Transactions.CountAsync(x => x.Status == TransactionStatus.COMPLETED, ct);
+        // A buyer requirement is one deal even when it has several seller
+        // allocation transactions. Dashboard completion counts must therefore
+        // be measured at the requirement/group level.
+        var completed = await db.BuyerRequests.CountAsync(x => x.Status == BuyerRequestStatus.COMPLETED, ct);
         var handedOver = await db.Transactions.CountAsync(x => x.Status == TransactionStatus.HANDED_OVER, ct);
         var totalDecisions = approved + handedOver + rejected + completed;
         return new(pending, approved, rejected,
