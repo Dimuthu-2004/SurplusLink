@@ -1,3 +1,5 @@
+import 'package:mobile/marketplace/marketplace_mode.dart';
+import 'package:mobile/marketplace/marketplace_offer_view.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile/core/api_exception.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -7,14 +9,25 @@ import 'package:mobile/offers/offer_models.dart';
 import 'package:mobile/widgets/role_navigation.dart';
 
 class MyOffersScreen extends StatefulWidget {
-  const MyOffersScreen({required this.gateway, required this.user, super.key});
+  const MyOffersScreen({
+    required this.gateway,
+    required this.user,
+    this.mode,
+    super.key,
+  });
   final OfferGateway gateway;
   final AppUser user;
+  final MarketplaceMode? mode;
   @override
   State<MyOffersScreen> createState() => _MyOffersScreenState();
 }
 
 class _MyOffersScreenState extends State<MyOffersScreen> {
+  late final OfferGateway view = MarketplaceOfferView.forUser(
+    widget.gateway,
+    widget.user,
+    widget.mode ?? availableMode(widget.user),
+  );
   OfferPage? offers;
   TransactionPage? transactions;
   String? error;
@@ -40,8 +53,8 @@ class _MyOffersScreenState extends State<MyOffersScreen> {
     try {
       final query = OfferQuery(status: status, sortBy: sort, page: offerPage);
       final results = await Future.wait([
-        widget.gateway.offers(query),
-        widget.gateway.transactions(
+        view.offers(query),
+        view.transactions(
           OfferQuery(
             status: transactionStatus,
             sortBy: sort,
@@ -230,7 +243,11 @@ class _MyOffersScreenState extends State<MyOffersScreen> {
             }),
         ],
       ),
-      bottomNavigationBar: RoleNavigation(user: widget.user, current: '/offers'),
+      bottomNavigationBar: RoleNavigation(
+        user: widget.user,
+        mode: widget.mode,
+        current: '/offers',
+      ),
     );
   }
 

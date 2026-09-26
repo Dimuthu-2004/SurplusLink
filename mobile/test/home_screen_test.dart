@@ -24,6 +24,7 @@ void main() {
   ) async {
     await _pump(tester, buyerUser);
     expect(find.text('Buyer'), findsOneWidget);
+    expect(find.byKey(const Key('marketplace-mode-switcher')), findsNothing);
     await tester.drag(
       find.byKey(const Key('home-dashboard-scroll')),
       const Offset(0, -500),
@@ -37,6 +38,7 @@ void main() {
   testWidgets('seller home shows seller actions only', (tester) async {
     await _pump(tester, sellerUser);
     expect(find.text('Seller'), findsOneWidget);
+    expect(find.byKey(const Key('marketplace-mode-switcher')), findsNothing);
     await tester.drag(
       find.byKey(const Key('home-dashboard-scroll')),
       const Offset(0, -500),
@@ -47,21 +49,39 @@ void main() {
     expect(find.byKey(const Key('home-create-requirement')), findsNothing);
   });
 
-  testWidgets('dual role home combines labeled buyer and seller sections', (
+  testWidgets('dual role selects one dashboard and navigation at a time', (
     tester,
   ) async {
-    await _pump(tester, dualUser);
-    expect(find.text('Dual role · Buyer + Seller'), findsOneWidget);
-    expect(find.text('BUYING'), findsOneWidget);
-    expect(find.text('SELLING'), findsOneWidget);
+    final auth = await _pump(tester, dualUser);
+    expect(find.byKey(const Key('marketplace-mode-switcher')), findsOneWidget);
+    expect(find.text('Active Requirements'), findsOneWidget);
+    expect(find.text('Active Listings'), findsNothing);
+    expect(find.text('Needs'), findsOneWidget);
+    expect(find.text('Listings'), findsNothing);
+    await tester.tap(find.byKey(const Key('mode-seller')));
+    await tester.pumpAndSettle();
+    expect(find.text('Active Listings'), findsOneWidget);
+    expect(find.text('Active Requirements'), findsNothing);
+    expect(find.text('Needs'), findsNothing);
+    expect(find.text('Listings'), findsOneWidget);
     await tester.drag(
       find.byKey(const Key('home-dashboard-scroll')),
-      const Offset(0, -900),
+      const Offset(0, -500),
     );
-    await tester.pump();
+    await tester.pumpAndSettle();
     expect(find.byKey(const Key('home-add-material')), findsOneWidget);
-    expect(find.byKey(const Key('home-create-requirement')), findsOneWidget);
-    expect(find.byKey(const Key('home-open-offers')), findsOneWidget);
+    expect(find.byKey(const Key('home-create-requirement')), findsNothing);
+    expect(auth.user, same(dualUser));
+    expect(auth.isAuthenticated, isTrue);
+    await tester.drag(
+      find.byKey(const Key('home-dashboard-scroll')),
+      const Offset(0, 1000),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('mode-buyer')));
+    await tester.pumpAndSettle();
+    expect(find.text('Active Requirements'), findsOneWidget);
+    expect(find.text('Active Listings'), findsNothing);
   });
 
   testWidgets('quick actions use their existing navigation callbacks', (
@@ -97,7 +117,7 @@ void main() {
   });
 }
 
-Future<void> _pump(
+Future<AuthController> _pump(
   WidgetTester tester,
   AppUser user, {
   RequirementGateway? requirements,
@@ -118,6 +138,7 @@ Future<void> _pump(
   );
   await tester.pump();
   if (settle) await tester.pump(const Duration(milliseconds: 750));
+  return auth;
 }
 
 final class _RequirementGate implements RequirementGateway {

@@ -1,3 +1,4 @@
+import 'package:mobile/marketplace/marketplace_mode.dart';
 import 'package:mobile/screens/profile_screen.dart';
 import 'package:mobile/matches/match_gateway.dart';
 import 'package:mobile/screens/recommended_matches_screen.dart';
@@ -73,12 +74,12 @@ GoRouter createAppRouter({
       }
       if ((location == AppRoutes.requirements ||
               location.startsWith('/requirements/')) &&
-          authController.user?.hasRole(AppRole.buyer) != true) {
+          authController.marketplace.activeMode != MarketplaceMode.buyer) {
         return AppRoutes.home;
       }
       if ((location == AppRoutes.materials ||
               location.startsWith('${AppRoutes.materials}/')) &&
-          authController.user?.hasRole(AppRole.seller) != true) {
+          authController.marketplace.activeMode != MarketplaceMode.seller) {
         return AppRoutes.home;
       }
       return null;
@@ -242,7 +243,12 @@ GoRouter createAppRouter({
             final user = authController.user;
             return user == null
                 ? const SizedBox.shrink()
-                : MyOffersScreen(gateway: offerGateway, user: user);
+                : MyOffersScreen(
+                    key: ValueKey(authController.marketplace.activeMode),
+                    gateway: offerGateway,
+                    user: user,
+                    mode: authController.marketplace.activeMode,
+                  );
           },
         ),
     ],

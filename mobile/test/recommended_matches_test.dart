@@ -176,7 +176,7 @@ void main() {
       expect(find.byType(RecommendedMatchesScreen), findsOneWidget);
       router.go('/home');
       await tester.pumpAndSettle();
-      expect(find.textContaining('Dual role'), findsOneWidget);
+      expect(find.byKey(const Key('marketplace-mode-switcher')), findsOneWidget);
     },
   );
   testWidgets('loading empty error retry and pagination keep query state', (

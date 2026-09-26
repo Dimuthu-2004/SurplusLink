@@ -1,3 +1,5 @@
+import 'package:mobile/marketplace/marketplace_mode.dart';
+import 'package:mobile/widgets/marketplace_mode_switcher.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile/auth/auth_controller.dart';
@@ -54,13 +56,22 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     super.dispose();
   }
 
-  HomeDashboardController _forUser(AppUser user) =>
-      _dashboard ??= HomeDashboardController(
-        user: user,
-        requirements: widget.requirementGateway,
-        materials: widget.materialGateway,
-        offers: widget.offerGateway,
-      )..load();
+  HomeDashboardController _forUser(AppUser user) {
+    final mode = widget.authController.marketplace.activeMode;
+    if (_dashboard != null &&
+        (_dashboard!.user.id != user.id || _dashboard!.mode != mode)) {
+      _dashboard!.dispose();
+      _dashboard = null;
+    }
+    return _dashboard ??= HomeDashboardController(
+      user: user,
+      mode: mode,
+      requirements: widget.requirementGateway,
+      materials: widget.materialGateway,
+      offers: widget.offerGateway,
+    )..load();
+  }
+
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
     animation: widget.authController,
@@ -68,70 +79,98 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       final user = widget.authController.user;
       if (user == null) return const Scaffold(body: SizedBox());
       final dashboard = _forUser(user);
+      final mode = dashboard.mode;
       return AnimatedBuilder(
         animation: dashboard,
         builder: (_, _) => Scaffold(
-          body: SafeArea(
-            child: RefreshIndicator(
-              onRefresh: dashboard.load,
-              child: ListView(
-                key: const Key('home-dashboard-scroll'),
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 112),
-                children: [
-                  _Entrance(
-                    index: 0,
-                    controller: _entrance,
-                    child: _Hero(
-                      user: user,
-                      glow: _glow,
-                      onProfile: () => context.push('/profile'),
-                      onLogout: widget.authController.logout,
-                    ),
+          body: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 220),
+            // Only the selected experience is interactive during the fade.
+            layoutBuilder: (child, _) => child ?? const SizedBox.shrink(),
+            transitionBuilder: (child, animation) => FadeTransition(
+              opacity: animation,
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: Offset(
+                    mode == MarketplaceMode.seller ? .025 : -.025,
+                    0,
                   ),
-                  const SizedBox(height: 20),
-                  _Entrance(
-                    index: 1,
-                    controller: _entrance,
-                    child: _Overview(
-                      user: user,
-                      data: dashboard.data,
-                      loading: dashboard.isLoading,
-                      buyerTap: widget.onOpenRequirements,
-                      sellerTap: widget.onOpenMaterials,
-                      offersTap: widget.onOpenOffers,
+                  end: Offset.zero,
+                ).animate(animation),
+                child: child,
+              ),
+            ),
+            child: SafeArea(
+              key: ValueKey(mode),
+              child: RefreshIndicator(
+                onRefresh: dashboard.load,
+                child: ListView(
+                  key: const Key('home-dashboard-scroll'),
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 112),
+                  children: [
+                    _Entrance(
+                      index: 0,
+                      controller: _entrance,
+                      child: _Hero(
+                        user: user,
+                        mode: mode,
+                        switcher: MarketplaceModeSwitcher(
+                          controller: widget.authController.marketplace,
+                        ),
+                        glow: _glow,
+                        onProfile: () => context.push('/profile'),
+                        onLogout: widget.authController.logout,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 24),
-                  _Entrance(
-                    index: 2,
-                    controller: _entrance,
-                    child: _QuickActions(
-                      user: user,
-                      createMaterial: widget.onCreateMaterial,
-                      createRequirement: widget.onCreateRequirement,
-                      materials: widget.onOpenMaterials,
-                      requirements: widget.onOpenRequirements,
-                      offers: widget.onOpenOffers,
-                      highlight: (dashboard.data.buyer?.pending ?? 0) > 0,
+                    const SizedBox(height: 20),
+                    _Entrance(
+                      index: 1,
+                      controller: _entrance,
+                      child: _Overview(
+                        mode: mode,
+                        data: dashboard.data,
+                        loading: dashboard.isLoading,
+                        buyerTap: widget.onOpenRequirements,
+                        sellerTap: widget.onOpenMaterials,
+                        offersTap: widget.onOpenOffers,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 24),
-                  _Entrance(
-                    index: 3,
-                    controller: _entrance,
-                    child: _Activity(
-                      rows: dashboard.data.activities,
-                      loading: dashboard.isLoading,
-                      error: dashboard.error,
-                      onRetry: dashboard.load,
+                    const SizedBox(height: 24),
+                    _Entrance(
+                      index: 2,
+                      controller: _entrance,
+                      child: _QuickActions(
+                        mode: mode,
+                        createMaterial: widget.onCreateMaterial,
+                        createRequirement: widget.onCreateRequirement,
+                        materials: widget.onOpenMaterials,
+                        requirements: widget.onOpenRequirements,
+                        offers: widget.onOpenOffers,
+                        highlight: (dashboard.data.buyer?.pending ?? 0) > 0,
+                      ),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 24),
+                    _Entrance(
+                      index: 3,
+                      controller: _entrance,
+                      child: _Activity(
+                        rows: dashboard.data.activities,
+                        loading: dashboard.isLoading,
+                        error: dashboard.error,
+                        onRetry: dashboard.load,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
-          bottomNavigationBar: RoleNavigation(user: user, current: '/home'),
+          bottomNavigationBar: RoleNavigation(
+            user: user,
+            mode: mode,
+            current: '/home',
+          ),
         ),
       );
     },
@@ -141,11 +180,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 class _Hero extends StatelessWidget {
   const _Hero({
     required this.user,
+    required this.mode,
+    required this.switcher,
     required this.glow,
     required this.onProfile,
     required this.onLogout,
   });
   final AppUser user;
+  final MarketplaceMode? mode;
+  final Widget switcher;
   final Animation<double> glow;
   final VoidCallback onProfile;
   final VoidCallback onLogout;
@@ -188,9 +231,13 @@ class _Hero extends StatelessWidget {
               Row(
                 children: [
                   const Expanded(
-                    child: SurplusLinkLogo(
-                      size: 30,
-                      foregroundColor: Colors.white,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: SurplusLinkLogo(
+                        size: 30,
+                        foregroundColor: Colors.white,
+                      ),
                     ),
                   ),
                   Material(
@@ -243,7 +290,10 @@ class _Hero extends StatelessWidget {
                 icon: const Icon(Icons.logout),
               ),
               const SizedBox(height: 13),
-              _RolePill(user: user),
+              if (isDualMarketplaceUser(user))
+                switcher
+              else
+                _RolePill(mode: mode),
             ],
           ),
         ],
@@ -258,16 +308,13 @@ class _Hero extends StatelessWidget {
 }
 
 class _RolePill extends StatelessWidget {
-  const _RolePill({required this.user});
-  final AppUser user;
+  const _RolePill({required this.mode});
+  final MarketplaceMode? mode;
   @override
   Widget build(BuildContext context) {
-    final b = user.hasRole(AppRole.buyer), s = user.hasRole(AppRole.seller);
-    final label = b && s
-        ? 'Dual role · Buyer + Seller'
-        : s
+    final label = mode == MarketplaceMode.seller
         ? 'Seller'
-        : b
+        : mode == MarketplaceMode.buyer
         ? 'Buyer'
         : 'Manager';
     return Container(
@@ -294,26 +341,24 @@ class _RolePill extends StatelessWidget {
 
 class _Overview extends StatelessWidget {
   const _Overview({
-    required this.user,
+    required this.mode,
     required this.data,
     required this.loading,
     this.buyerTap,
     this.sellerTap,
     this.offersTap,
   });
-  final AppUser user;
+  final MarketplaceMode? mode;
   final HomeDashboardData data;
   final bool loading;
   final VoidCallback? buyerTap, sellerTap, offersTap;
   @override
   Widget build(BuildContext context) {
-    final dual = user.hasRole(AppRole.buyer) && user.hasRole(AppRole.seller);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const _Title('Overview'),
-        if (user.hasRole(AppRole.buyer)) ...[
-          if (dual) const _RoleLabel('BUYING'),
+        if (mode == MarketplaceMode.buyer) ...[
           _Grid(
             loading: loading,
             cards: [
@@ -339,12 +384,7 @@ class _Overview extends StatelessWidget {
             ],
           ),
         ],
-        if (user.hasRole(AppRole.seller)) ...[
-          if (dual)
-            const Padding(
-              padding: EdgeInsets.only(top: 18),
-              child: _RoleLabel('SELLING'),
-            ),
+        if (mode == MarketplaceMode.seller) ...[
           _Grid(
             loading: loading,
             cards: [
@@ -498,7 +538,7 @@ class _Count extends StatelessWidget {
 
 class _QuickActions extends StatelessWidget {
   const _QuickActions({
-    required this.user,
+    required this.mode,
     this.createMaterial,
     this.createRequirement,
     this.materials,
@@ -506,7 +546,7 @@ class _QuickActions extends StatelessWidget {
     this.offers,
     required this.highlight,
   });
-  final AppUser user;
+  final MarketplaceMode? mode;
   final VoidCallback? createMaterial,
       createRequirement,
       materials,
@@ -523,7 +563,7 @@ class _QuickActions extends StatelessWidget {
         spacing: 10,
         runSpacing: 10,
         children: [
-          if (user.hasRole(AppRole.seller)) ...[
+          if (mode == MarketplaceMode.seller) ...[
             _Action(
               const Key('home-add-material'),
               'Add Material',
@@ -537,7 +577,7 @@ class _QuickActions extends StatelessWidget {
               materials,
             ),
           ],
-          if (user.hasRole(AppRole.buyer)) ...[
+          if (mode == MarketplaceMode.buyer) ...[
             _Action(
               const Key('home-create-requirement'),
               'Create Requirement',
@@ -551,7 +591,7 @@ class _QuickActions extends StatelessWidget {
               requirements,
             ),
           ],
-          if (user.hasRole(AppRole.buyer) || user.hasRole(AppRole.seller))
+          if (mode == MarketplaceMode.buyer || mode == MarketplaceMode.seller)
             _Action(
               const Key('home-open-offers'),
               'My Offers',
@@ -715,23 +755,6 @@ class _Title extends StatelessWidget {
     style: Theme.of(context).textTheme.titleLarge?.copyWith(
       fontWeight: FontWeight.w900,
       color: SurplusLinkTheme.slate900,
-    ),
-  );
-}
-
-class _RoleLabel extends StatelessWidget {
-  const _RoleLabel(this.text);
-  final String text;
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 8),
-    child: Text(
-      text,
-      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-        letterSpacing: 1.1,
-        fontWeight: FontWeight.w900,
-        color: SurplusLinkTheme.amberDark,
-      ),
     ),
   );
 }

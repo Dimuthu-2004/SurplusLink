@@ -1,3 +1,5 @@
+import 'package:mobile/marketplace/marketplace_mode.dart';
+import 'package:mobile/marketplace/marketplace_offer_view.dart';
 import 'package:flutter/foundation.dart';
 import 'package:mobile/auth/auth_models.dart';
 import 'package:mobile/materials/material_inventory_gateway.dart';
@@ -14,8 +16,18 @@ final class HomeDashboardController extends ChangeNotifier {
     this.requirements,
     this.materials,
     this.offers,
-  });
+    MarketplaceMode? mode,
+  }) : mode = mode ?? availableMode(user);
   final AppUser user;
+  final MarketplaceMode? mode;
+  bool _disposed = false;
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
   final RequirementGateway? requirements;
   final MaterialInventoryGateway? materials;
   final OfferGateway? offers;
@@ -24,10 +36,12 @@ final class HomeDashboardController extends ChangeNotifier {
   HomeDashboardData data = const HomeDashboardData();
 
   Future<void> load() async {
+    if (_disposed) return;
     isLoading = true;
     error = null;
     notifyListeners();
     final results = await Future.wait([_buyer(), _seller(), _transactions()]);
+    if (_disposed) return;
     final buyer = results[0] as BuyerDashboardData?;
     final seller = results[1] as SellerDashboardData?;
     final activities = <DashboardActivity>[
@@ -45,7 +59,7 @@ final class HomeDashboardController extends ChangeNotifier {
   }
 
   Future<BuyerDashboardData?> _buyer() async {
-    if (!user.hasRole(AppRole.buyer) || requirements == null) return null;
+    if (mode != MarketplaceMode.buyer || requirements == null) return null;
     try {
       final r = await Future.wait([
         requirements!.my(const RequirementQuery(pageSize: 10)),
@@ -72,7 +86,7 @@ final class HomeDashboardController extends ChangeNotifier {
   }
 
   Future<SellerDashboardData?> _seller() async {
-    if (!user.hasRole(AppRole.seller) || materials == null) return null;
+    if (mode != MarketplaceMode.seller || materials == null) return null;
     try {
       final r = await Future.wait([
         materials!.search(
@@ -106,11 +120,15 @@ final class HomeDashboardController extends ChangeNotifier {
 
   Future<List<DashboardActivity>> _transactions() async {
     if (offers == null ||
-        (!user.hasRole(AppRole.buyer) && !user.hasRole(AppRole.seller))) {
+        (mode != MarketplaceMode.buyer && mode != MarketplaceMode.seller)) {
       return const [];
     }
     try {
-      return (await offers!.transactions(const OfferQuery(pageSize: 10))).items
+      return (await MarketplaceOfferView.forUser(
+            offers!,
+            user,
+            mode,
+          ).transactions(const OfferQuery(pageSize: 10))).items
           .map(_transactionActivity)
           .nonNulls
           .toList();

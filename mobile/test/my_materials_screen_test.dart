@@ -1,3 +1,4 @@
+import 'package:mobile/marketplace/marketplace_mode.dart';
 import 'package:mobile/categories/material_category.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -91,11 +92,14 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.byKey(const Key('home-role-label')), findsOneWidget);
+      expect(find.byKey(const Key('home-dashboard-scroll')), findsOneWidget);
       if (roles.contains(AppRole.seller) && roles.contains(AppRole.buyer)) {
-        expect(find.textContaining('Dual role'), findsOneWidget);
-        expect(find.text('SELLING'), findsOneWidget);
-        expect(find.text('BUYING'), findsOneWidget);
+        expect(
+          find.byKey(const Key('marketplace-mode-switcher')),
+          findsOneWidget,
+        );
+        expect(find.text('Active Listings'), findsNothing);
+        expect(find.text('Active Requirements'), findsOneWidget);
       }
       final router = GoRouter.of(
         tester.element(find.byKey(const Key('logout-button'))),
@@ -108,6 +112,14 @@ void main() {
         ('/requirements', AppRole.buyer),
         ('/requirements/new', AppRole.buyer),
       ]) {
+        if (auth.marketplace.isDualRole) {
+          await auth.marketplace.select(
+            entry.$2 == AppRole.seller
+                ? MarketplaceMode.seller
+                : MarketplaceMode.buyer,
+          );
+          await tester.pumpAndSettle();
+        }
         router.go(entry.$1);
         await tester.pumpAndSettle();
         expect(
@@ -164,6 +176,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('mode-seller')));
+    await tester.pumpAndSettle();
     await tester.drag(
       find.byKey(const Key('home-dashboard-scroll')),
       const Offset(0, -400),
@@ -187,6 +201,8 @@ void main() {
     await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('home-dashboard-scroll')), findsOneWidget);
+    await auth.marketplace.select(MarketplaceMode.buyer);
+    await tester.pumpAndSettle();
     await tester.drag(
       find.byKey(const Key('home-dashboard-scroll')),
       const Offset(0, -400),
