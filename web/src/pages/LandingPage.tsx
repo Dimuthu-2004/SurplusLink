@@ -342,6 +342,63 @@ export function LandingPage() {
                 A modern material exchange built for the realities of construction logistics,
                 tight project timelines, and accountable management oversight.
               </p>
+
+              <div className="lp-journey" aria-label="Material lifecycle journey">
+                <span className="lp-journey-eyebrow">MATERIAL JOURNEY</span>
+                <div className="lp-journey-timeline">
+                  <div className="lp-journey-line" aria-hidden="true" />
+
+                  <div className="lp-journey-step">
+                    <span className="lp-journey-node">
+                      <span className="lp-journey-dot" />
+                    </span>
+                    <div className="lp-journey-text">
+                      <strong className="lp-journey-label">Surplus Stock</strong>
+                      <span className="lp-journey-desc">Verified inventory cataloged</span>
+                    </div>
+                  </div>
+
+                  <div className="lp-journey-step">
+                    <span className="lp-journey-node">
+                      <span className="lp-journey-dot" />
+                    </span>
+                    <div className="lp-journey-text">
+                      <strong className="lp-journey-label">Matched</strong>
+                      <span className="lp-journey-desc">Specification & volume aligned</span>
+                    </div>
+                  </div>
+
+                  <div className="lp-journey-step">
+                    <span className="lp-journey-node">
+                      <span className="lp-journey-dot" />
+                    </span>
+                    <div className="lp-journey-text">
+                      <strong className="lp-journey-label">Logistics Checked</strong>
+                      <span className="lp-journey-desc">Haulage route & viable transit</span>
+                    </div>
+                  </div>
+
+                  <div className="lp-journey-step">
+                    <span className="lp-journey-node">
+                      <span className="lp-journey-dot" />
+                    </span>
+                    <div className="lp-journey-text">
+                      <strong className="lp-journey-label">Human Reviewed</strong>
+                      <span className="lp-journey-desc">Authorized supervisor sign-off</span>
+                    </div>
+                  </div>
+
+                  <div className="lp-journey-step lp-journey-step-final">
+                    <span className="lp-journey-node lp-journey-node-final">
+                      <span className="lp-journey-dot lp-journey-dot-final" />
+                    </span>
+                    <div className="lp-journey-text">
+                      <strong className="lp-journey-label lp-journey-label-final">Reused</strong>
+                      <span className="lp-journey-desc">Put safely back to work on site</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </Reveal>
 
             <Reveal className="lp-editorial-rows">

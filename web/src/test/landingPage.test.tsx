@@ -57,6 +57,16 @@ describe('LandingPage Final Polish', () => {
     expect(screen.getByText('Controlled human approval')).toBeInTheDocument();
   });
 
+  it('renders the vertical material journey in Section 2 left column', () => {
+    renderLanding();
+    expect(screen.getByText('MATERIAL JOURNEY')).toBeInTheDocument();
+    expect(screen.getByText('Surplus Stock')).toBeInTheDocument();
+    expect(screen.getByText('Matched')).toBeInTheDocument();
+    expect(screen.getByText('Logistics Checked')).toBeInTheDocument();
+    expect(screen.getByText('Human Reviewed')).toBeInTheDocument();
+    expect(screen.getByText('Reused')).toBeInTheDocument();
+  });
+
   it('renders SECTION 3: How it Works connected 6-step timeline', () => {
     renderLanding();
     expect(screen.getByText('From surplus stock to project delivery.')).toBeInTheDocument();
