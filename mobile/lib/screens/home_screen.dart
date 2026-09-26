@@ -237,7 +237,6 @@ class _Hero extends StatelessWidget {
                       alignment: Alignment.centerLeft,
                       child: SurplusLinkLogo(
                         size: 30,
-                        foregroundColor: Colors.white,
                       ),
                     ),
                   ),

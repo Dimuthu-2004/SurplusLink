@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { roleHomePath } from '../routing/roleRoutes';
+import { SurplusLinkLogo } from '../components/SurplusLinkLogo';
 import './landingPage.css';
 
 const heroImages = [
@@ -350,12 +351,7 @@ export function LandingPage() {
             href="#top" 
             onClick={(e) => handleSmoothScroll(e, 'top')}
           >
-            <img 
-              className="lp-brand-img" 
-              src="/images/brand/surpluslink-mark.png" 
-              alt="SurplusLink" 
-            />
-            <span className="lp-brand-text">SurplusLink</span>
+            <SurplusLinkLogo className="lp-brand-img" />
           </a>
 
           <button
@@ -990,12 +986,7 @@ export function LandingPage() {
                 href="#top" 
                 onClick={(e) => handleSmoothScroll(e, 'top')}
               >
-                <img 
-                  className="lp-brand-img" 
-                  src="/images/brand/surpluslink-mark.png" 
-                  alt="SurplusLink" 
-                />
-                <span>SurplusLink</span>
+                <SurplusLinkLogo className="lp-brand-img" />
               </a>
               <p>
                 The accountable marketplace for reusable construction materials. Connecting supply,

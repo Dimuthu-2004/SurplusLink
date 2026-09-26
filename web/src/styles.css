@@ -62,6 +62,7 @@ input:focus { outline: 3px solid rgba(22, 121, 75, 0.2); border-color: #16794b; 
 .app-shell { min-height: 100vh; }
 .app-header { min-height: 4.5rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.8rem clamp(1rem, 4vw, 2.5rem); border-bottom: 1px solid #d8e5dc; background: #fff; }
 .brand { display: flex; align-items: center; gap: 0.7rem; text-decoration: none; font-size: 1.15rem; font-weight: 850; }
+.app-brand-logo { display: block; width: 10.5rem; height: auto; }
 .account-summary { display: flex; align-items: center; gap: 0.8rem; }
 .role-badge { padding: 0.3rem 0.55rem; border-radius: 999px; background: #dff1e5; color: #125f3b; font-size: 0.78rem; font-weight: 800; }
 .app-body { display: grid; grid-template-columns: 15rem 1fr; min-height: calc(100vh - 4.5rem); }
