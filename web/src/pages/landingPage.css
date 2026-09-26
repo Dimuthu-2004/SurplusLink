@@ -1,0 +1,1044 @@
+/* ==========================================================================
+   SurplusLink – Public Landing Page Styles
+   Theme: Warm off-white / soft stone / orange accent / dark charcoal text
+   Zero giant navy background blocks. Editorial architecture layout.
+   ========================================================================== */
+
+:root {
+  --lp-bg: #faf8f5;
+  --lp-bg-subtle: #f3efe8;
+  --lp-bg-stone: #ece6dc;
+  --lp-card-bg: #ffffff;
+  --lp-border: #e4ded4;
+  --lp-border-subtle: #eee9e0;
+  
+  --lp-accent: #e06d10;
+  --lp-accent-hover: #c85a06;
+  --lp-accent-subtle: #fcf1e7;
+  --lp-accent-border: #f7ceab;
+  
+  --lp-text-headline: #1c1a17;
+  --lp-text-body: #403c37;
+  --lp-text-muted: #6e675f;
+  
+  --lp-radius-sm: 0.5rem;
+  --lp-radius-md: 0.85rem;
+  --lp-radius-lg: 1.25rem;
+  --lp-radius-xl: 1.75rem;
+  
+  --lp-shadow-sm: 0 2px 8px rgba(35, 25, 15, 0.04);
+  --lp-shadow-md: 0 8px 24px rgba(35, 25, 15, 0.06);
+  --lp-shadow-lg: 0 16px 40px rgba(35, 25, 15, 0.08);
+}
+
+/* Base landing wrapper */
+.lp-wrapper {
+  background-color: var(--lp-bg);
+  color: var(--lp-text-body);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  line-height: 1.6;
+  overflow-x: hidden;
+  width: 100%;
+}
+
+.lp-container {
+  width: min(1180px, calc(100% - 3rem));
+  margin-inline: auto;
+}
+
+/* Subtle reveal on scroll */
+.lp-reveal {
+  opacity: 0;
+  transform: translateY(22px);
+  transition: opacity 0.65s cubic-bezier(0.2, 0.8, 0.2, 1), transform 0.65s cubic-bezier(0.2, 0.8, 0.2, 1);
+  will-change: opacity, transform;
+}
+
+.lp-reveal.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ==========================================================================
+   NAVIGATION
+   ========================================================================== */
+
+.lp-nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  padding: 1.25rem 0;
+  transition: background-color 0.3s ease, padding 0.3s ease, box-shadow 0.3s ease;
+}
+
+.lp-nav.lp-nav-scrolled {
+  background-color: rgba(250, 248, 245, 0.94);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  padding: 0.75rem 0;
+  box-shadow: 0 4px 20px rgba(30, 20, 10, 0.05);
+  border-bottom: 1px solid var(--lp-border);
+}
+
+.lp-nav .lp-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.lp-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  text-decoration: none;
+  color: var(--lp-text-headline);
+  font-size: 1.2rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.lp-brand-img {
+  width: 2.1rem;
+  height: 2.1rem;
+  object-fit: contain;
+}
+
+.lp-nav-links {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+}
+
+.lp-nav-link {
+  color: var(--lp-text-headline);
+  text-decoration: none;
+  font-size: 0.92rem;
+  font-weight: 600;
+  transition: color 0.2s ease;
+}
+
+.lp-nav-link:hover {
+  color: var(--lp-accent);
+}
+
+.lp-nav-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background-color: var(--lp-accent);
+  color: #ffffff !important;
+  padding: 0.55rem 1.15rem;
+  border-radius: var(--lp-radius-sm);
+  font-size: 0.88rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+.lp-nav-cta:hover {
+  background-color: var(--lp-accent-hover);
+  transform: translateY(-1px);
+}
+
+/* Mobile hamburger button */
+.lp-menu-btn {
+  display: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.5rem;
+  color: var(--lp-text-headline);
+}
+
+.lp-menu-btn svg {
+  width: 1.6rem;
+  height: 1.6rem;
+  display: block;
+}
+
+/* ==========================================================================
+   HERO
+   ========================================================================== */
+
+.lp-hero {
+  position: relative;
+  min-height: min(54rem, 100vh);
+  display: flex;
+  align-items: center;
+  padding: 8rem 0 5rem;
+  overflow: hidden;
+  background-color: #1a1815;
+}
+
+.lp-hero-slides {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+.lp-hero-slide {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transform: scale(1.04);
+  transition: opacity 1.2s ease, transform 6s ease-out;
+}
+
+.lp-hero-slide.active {
+  opacity: 1;
+  transform: scale(1.1);
+}
+
+/* Adaptive gradient overlay: dark behind left text, clear on the right */
+.lp-hero-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: 
+    linear-gradient(90deg, 
+      rgba(18, 16, 14, 0.94) 0%, 
+      rgba(18, 16, 14, 0.84) 38%, 
+      rgba(18, 16, 14, 0.45) 70%, 
+      rgba(18, 16, 14, 0.15) 100%),
+    linear-gradient(0deg, 
+      rgba(18, 16, 14, 0.6) 0%, 
+      transparent 45%);
+}
+
+.lp-hero-content {
+  position: relative;
+  z-index: 3;
+  max-width: 44rem;
+  color: #ffffff;
+}
+
+.lp-hero-eyebrow {
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--lp-accent);
+  margin-bottom: 1.25rem;
+}
+
+.lp-hero-title {
+  font-size: clamp(3rem, 6.5vw, 5.5rem);
+  font-weight: 900;
+  line-height: 1.02;
+  letter-spacing: -0.04em;
+  margin: 0 0 2rem;
+  color: #ffffff;
+}
+
+.lp-hero-title .lp-accent {
+  color: #f78d38;
+}
+
+.lp-hero-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 2.5rem;
+}
+
+.lp-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background-color: var(--lp-accent);
+  color: #ffffff;
+  padding: 0.85rem 1.6rem;
+  border-radius: var(--lp-radius-sm);
+  font-size: 0.95rem;
+  font-weight: 750;
+  text-decoration: none;
+  transition: background-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 6px 16px rgba(224, 109, 16, 0.35);
+}
+
+.lp-btn-primary:hover {
+  background-color: var(--lp-accent-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 22px rgba(224, 109, 16, 0.45);
+}
+
+.lp-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background-color: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  padding: 0.85rem 1.6rem;
+  border-radius: var(--lp-radius-sm);
+  font-size: 0.95rem;
+  font-weight: 700;
+  text-decoration: none;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(8px);
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.lp-btn-secondary:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.45);
+}
+
+/* 3 small capability tags under buttons */
+.lp-hero-tags {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.lp-hero-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #e4dfd7;
+}
+
+.lp-hero-tag svg {
+  width: 1rem;
+  height: 1rem;
+  color: #f78d38;
+  flex-shrink: 0;
+}
+
+/* Slide dots */
+.lp-hero-dots {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 3rem;
+}
+
+.lp-hero-dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  padding: 0;
+  border: none;
+  border-radius: 99px;
+  background-color: rgba(255, 255, 255, 0.35);
+  cursor: pointer;
+  transition: width 0.3s ease, background-color 0.3s ease;
+}
+
+.lp-hero-dot.active {
+  width: 1.8rem;
+  background-color: var(--lp-accent);
+}
+
+/* ==========================================================================
+   SECTION 2: WHAT SURPLUSLINK DOES (EDITORIAL TWO-COLUMN)
+   ========================================================================== */
+
+.lp-section-editorial {
+  padding: 7.5rem 0;
+  background-color: var(--lp-bg);
+}
+
+.lp-editorial-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.35fr;
+  gap: 4.5rem;
+  align-items: start;
+}
+
+.lp-editorial-left {
+  position: sticky;
+  top: 6rem;
+}
+
+.lp-eyebrow {
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--lp-accent);
+  margin: 0 0 0.85rem;
+}
+
+.lp-editorial-left h2 {
+  font-size: clamp(2.3rem, 4vw, 3.4rem);
+  font-weight: 850;
+  line-height: 1.1;
+  letter-spacing: -0.035em;
+  color: var(--lp-text-headline);
+  margin: 0 0 1.25rem;
+}
+
+.lp-editorial-lead {
+  font-size: 1.12rem;
+  color: var(--lp-text-muted);
+  line-height: 1.7;
+}
+
+.lp-editorial-rows {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--lp-border);
+}
+
+.lp-editorial-row {
+  padding: 1.85rem 0;
+  border-bottom: 1px solid var(--lp-border);
+  display: grid;
+  grid-template-columns: 2.2rem 1fr;
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.lp-row-num {
+  font-size: 0.82rem;
+  font-weight: 850;
+  color: var(--lp-accent);
+  margin-top: 0.2rem;
+}
+
+.lp-row-content h3 {
+  font-size: 1.22rem;
+  font-weight: 750;
+  color: var(--lp-text-headline);
+  margin: 0 0 0.45rem;
+  letter-spacing: -0.015em;
+}
+
+.lp-row-content p {
+  margin: 0;
+  font-size: 0.96rem;
+  color: var(--lp-text-body);
+  line-height: 1.65;
+}
+
+/* ==========================================================================
+   SECTION 3: HOW IT WORKS (CONNECTED TIMELINE)
+   ========================================================================== */
+
+.lp-section-timeline {
+  padding: 7.5rem 0;
+  background-color: var(--lp-bg-stone);
+}
+
+.lp-section-header {
+  max-width: 44rem;
+  margin: 0 auto 4.5rem;
+  text-align: center;
+}
+
+.lp-section-header h2 {
+  font-size: clamp(2.1rem, 3.8vw, 3.2rem);
+  font-weight: 850;
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+  color: var(--lp-text-headline);
+  margin: 0 0 1rem;
+}
+
+.lp-section-header p {
+  font-size: 1.05rem;
+  color: var(--lp-text-muted);
+  margin: 0;
+}
+
+.lp-timeline-track {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 1.25rem;
+}
+
+/* Continuous connecting line across timeline */
+.lp-timeline-track::before {
+  content: "";
+  position: absolute;
+  top: 1.75rem;
+  left: 2rem;
+  right: 2rem;
+  height: 2px;
+  background: var(--lp-border);
+  z-index: 0;
+}
+
+.lp-timeline-step {
+  position: relative;
+  z-index: 1;
+}
+
+.lp-timeline-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3.5rem;
+  height: 3.5rem;
+  background-color: #ffffff;
+  border: 2px solid var(--lp-accent);
+  border-radius: var(--lp-radius-md);
+  margin-bottom: 1.35rem;
+  box-shadow: 0 4px 12px rgba(30, 20, 10, 0.06);
+}
+
+.lp-step-num {
+  font-size: 0.85rem;
+  font-weight: 850;
+  color: var(--lp-accent);
+}
+
+.lp-timeline-step h3 {
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--lp-text-headline);
+  margin: 0 0 0.5rem;
+  letter-spacing: -0.01em;
+}
+
+.lp-timeline-step p {
+  font-size: 0.86rem;
+  color: var(--lp-text-body);
+  line-height: 1.55;
+  margin: 0;
+}
+
+/* ==========================================================================
+   SECTION 4: PLATFORM FEATURES (BENTO / ASYMMETRIC GRID)
+   ========================================================================== */
+
+.lp-section-features {
+  padding: 7.5rem 0;
+  background-color: var(--lp-bg);
+}
+
+.lp-bento-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 1.5rem;
+}
+
+.lp-bento-card {
+  background-color: var(--lp-card-bg);
+  border: 1px solid var(--lp-border);
+  border-radius: var(--lp-radius-lg);
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-shadow: var(--lp-shadow-sm);
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+
+.lp-bento-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--lp-shadow-md);
+  border-color: var(--lp-accent-border);
+}
+
+/* Bento spans */
+.lp-bento-span-7 { grid-column: span 7; }
+.lp-bento-span-5 { grid-column: span 5; }
+.lp-bento-span-4 { grid-column: span 4; }
+.lp-bento-span-6 { grid-column: span 6; }
+
+.lp-bento-icon {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: var(--lp-radius-md);
+  background-color: var(--lp-accent-subtle);
+  color: var(--lp-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1.75rem;
+}
+
+.lp-bento-icon svg {
+  width: 1.4rem;
+  height: 1.4rem;
+}
+
+.lp-bento-card h3 {
+  font-size: 1.25rem;
+  font-weight: 750;
+  color: var(--lp-text-headline);
+  margin: 0 0 0.65rem;
+  letter-spacing: -0.015em;
+}
+
+.lp-bento-card p {
+  font-size: 0.94rem;
+  color: var(--lp-text-body);
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* ==========================================================================
+   SECTION 5: MATERIAL TYPES (PHOTO-BACKED CARDS)
+   ========================================================================== */
+
+.lp-section-materials {
+  padding: 7.5rem 0;
+  background-color: var(--lp-bg-subtle);
+}
+
+.lp-materials-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.5rem;
+}
+
+.lp-material-card {
+  position: relative;
+  min-height: 24rem;
+  border-radius: var(--lp-radius-lg);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 2.25rem;
+  color: #ffffff;
+  box-shadow: var(--lp-shadow-md);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.lp-material-card:hover {
+  transform: translateY(-5px);
+  box-shadow: var(--lp-shadow-lg);
+}
+
+.lp-material-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 1;
+  transition: transform 0.6s ease;
+}
+
+.lp-material-card:hover .lp-material-bg {
+  transform: scale(1.06);
+}
+
+.lp-material-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: linear-gradient(0deg, 
+    rgba(18, 16, 14, 0.95) 0%, 
+    rgba(18, 16, 14, 0.72) 48%, 
+    rgba(18, 16, 14, 0.25) 100%);
+}
+
+.lp-material-content {
+  position: relative;
+  z-index: 3;
+}
+
+.lp-material-tag {
+  display: inline-block;
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #ffaa5c;
+  margin-bottom: 0.5rem;
+}
+
+.lp-material-content h3 {
+  font-size: 1.45rem;
+  font-weight: 800;
+  color: #ffffff;
+  margin: 0 0 0.65rem;
+  letter-spacing: -0.02em;
+}
+
+.lp-material-content p {
+  font-size: 0.92rem;
+  color: #ded9d0;
+  line-height: 1.55;
+  margin: 0;
+}
+
+/* ==========================================================================
+   SECTION 6: SUSTAINABILITY & IMPACT
+   ========================================================================== */
+
+.lp-section-impact {
+  padding: 7.5rem 0;
+  background-color: var(--lp-bg);
+}
+
+.lp-impact-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1.5rem;
+  margin-bottom: 3.5rem;
+}
+
+.lp-impact-item {
+  border-top: 2px solid var(--lp-accent);
+  padding-top: 1.75rem;
+}
+
+.lp-impact-icon {
+  color: var(--lp-accent);
+  margin-bottom: 1rem;
+}
+
+.lp-impact-icon svg {
+  width: 1.75rem;
+  height: 1.75rem;
+}
+
+.lp-impact-item h3 {
+  font-size: 1.15rem;
+  font-weight: 750;
+  color: var(--lp-text-headline);
+  margin: 0 0 0.5rem;
+  letter-spacing: -0.01em;
+}
+
+.lp-impact-item p {
+  font-size: 0.92rem;
+  color: var(--lp-text-muted);
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* Metric banner */
+.lp-impact-banner {
+  background-color: var(--lp-bg-subtle);
+  border: 1px solid var(--lp-border);
+  border-radius: var(--lp-radius-lg);
+  padding: 2.25rem 3rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2rem;
+}
+
+.lp-banner-text strong {
+  display: block;
+  font-size: 1.25rem;
+  color: var(--lp-text-headline);
+  font-weight: 800;
+  margin-bottom: 0.35rem;
+}
+
+.lp-banner-text span {
+  font-size: 0.95rem;
+  color: var(--lp-text-muted);
+}
+
+.lp-banner-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.55rem 1.15rem;
+  background-color: #ffffff;
+  border: 1px solid var(--lp-border);
+  border-radius: 99px;
+  font-size: 0.85rem;
+  font-weight: 750;
+  color: var(--lp-accent);
+  white-space: nowrap;
+}
+
+/* ==========================================================================
+   SECTION 7: FINAL CTA (WARM LIGHT GRADIENT — NO NAVY BOX)
+   ========================================================================== */
+
+.lp-section-cta {
+  padding: 0 0 7.5rem;
+  background-color: var(--lp-bg);
+}
+
+.lp-cta-card {
+  background: linear-gradient(135deg, #f7f2ea 0%, #ebe4d8 50%, #f6f0e6 100%);
+  border: 1px solid var(--lp-border);
+  border-radius: var(--lp-radius-xl);
+  padding: clamp(3rem, 6vw, 5rem);
+  text-align: center;
+  box-shadow: var(--lp-shadow-md);
+  position: relative;
+  overflow: hidden;
+}
+
+.lp-cta-card h2 {
+  font-size: clamp(2.3rem, 4.5vw, 3.8rem);
+  font-weight: 850;
+  line-height: 1.1;
+  letter-spacing: -0.035em;
+  color: var(--lp-text-headline);
+  margin: 0 0 1.25rem;
+}
+
+.lp-cta-card p {
+  max-width: 38rem;
+  margin: 0 auto 2.5rem;
+  font-size: 1.12rem;
+  color: var(--lp-text-body);
+  line-height: 1.65;
+}
+
+.lp-cta-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.lp-btn-cta-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background-color: #ffffff;
+  color: var(--lp-text-headline);
+  padding: 0.85rem 1.6rem;
+  border-radius: var(--lp-radius-sm);
+  font-size: 0.95rem;
+  font-weight: 750;
+  text-decoration: none;
+  border: 1px solid var(--lp-border);
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.lp-btn-cta-secondary:hover {
+  background-color: #f7f5f0;
+  border-color: var(--lp-text-muted);
+}
+
+/* ==========================================================================
+   FOOTER
+   ========================================================================== */
+
+.lp-footer {
+  background-color: var(--lp-bg-stone);
+  border-top: 1px solid var(--lp-border);
+  padding: 4.5rem 0 3rem;
+}
+
+.lp-footer-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  gap: 3rem;
+  margin-bottom: 3.5rem;
+}
+
+.lp-footer-brand p {
+  margin: 0.85rem 0 0;
+  font-size: 0.92rem;
+  color: var(--lp-text-muted);
+  max-width: 20rem;
+}
+
+.lp-footer-col h4 {
+  font-size: 0.82rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--lp-text-headline);
+  margin: 0 0 1.25rem;
+}
+
+.lp-footer-col a,
+.lp-footer-col span {
+  display: block;
+  font-size: 0.9rem;
+  color: var(--lp-text-body);
+  text-decoration: none;
+  margin-bottom: 0.65rem;
+  transition: color 0.2s ease;
+}
+
+.lp-footer-col a:hover {
+  color: var(--lp-accent);
+}
+
+.lp-footer-bottom {
+  padding-top: 2rem;
+  border-top: 1px solid var(--lp-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  color: var(--lp-text-muted);
+}
+
+/* ==========================================================================
+   RESPONSIVENESS (1024px, 768px, 480px)
+   ========================================================================== */
+
+@media (max-width: 1024px) {
+  .lp-editorial-grid {
+    grid-template-columns: 1fr;
+    gap: 3rem;
+  }
+  
+  .lp-editorial-left {
+    position: static;
+  }
+  
+  .lp-timeline-track {
+    grid-template-columns: repeat(3, 1fr);
+    row-gap: 3rem;
+  }
+  
+  .lp-timeline-track::before {
+    display: none;
+  }
+  
+  .lp-bento-span-7,
+  .lp-bento-span-5,
+  .lp-bento-span-4,
+  .lp-bento-span-6 {
+    grid-column: span 6;
+  }
+  
+  .lp-impact-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .lp-footer-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .lp-menu-btn {
+    display: block;
+  }
+  
+  .lp-nav-links {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 1rem;
+    right: 1rem;
+    background-color: #ffffff;
+    border: 1px solid var(--lp-border);
+    border-radius: var(--lp-radius-md);
+    padding: 1.5rem;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1.25rem;
+    box-shadow: var(--lp-shadow-lg);
+  }
+  
+  .lp-nav-links.open {
+    display: flex;
+  }
+  
+  .lp-nav-cta {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .lp-hero {
+    min-height: auto;
+    padding: 7rem 0 4rem;
+  }
+  
+  .lp-timeline-track {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+  }
+  
+  .lp-bento-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .lp-bento-span-7,
+  .lp-bento-span-5,
+  .lp-bento-span-4,
+  .lp-bento-span-6 {
+    grid-column: span 1;
+  }
+  
+  .lp-materials-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .lp-impact-banner {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 1.75rem;
+  }
+  
+  .lp-footer-grid {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+  }
+  
+  .lp-footer-bottom {
+    flex-direction: column;
+    gap: 1rem;
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 480px) {
+  .lp-container {
+    width: calc(100% - 2rem);
+  }
+  
+  .lp-hero-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .lp-btn-primary,
+  .lp-btn-secondary {
+    justify-content: center;
+  }
+  
+  .lp-editorial-row {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+  
+  .lp-impact-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .lp-cta-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .lp-btn-cta-secondary {
+    justify-content: center;
+  }
+}
+
+/* ==========================================================================
+   REDUCED MOTION
+   ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  .lp-reveal {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+  
+  .lp-hero-slide {
+    transition: none !important;
+  }
+  
+  .lp-bento-card,
+  .lp-material-card,
+  .lp-material-bg,
+  .lp-btn-primary {
+    transition: none !important;
+    transform: none !important;
+  }
+}
