@@ -3,12 +3,14 @@ import { useCallback, useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { RequirementError, RequirementPagination, RequirementBadge, requirementDate, useRequirementResource } from '../../features/requirements/requirementUi';
 import { managerWorkflowsApi, workflowStatuses, type ManagerWorkflowsApi, type WorkflowQuery } from '../../features/workflows/managerWorkflowsApi';
+import { useLiveReload } from '../../hooks/useLiveResource';
 
 const defaults = { search: '', status: 'PENDING_APPROVAL', sortBy: 'startedAt' as WorkflowQuery['sortBy'], sortDir: 'desc' as WorkflowQuery['sortDir'], pageSize: 20 };
 export function ManagerApprovalsPage({ api = managerWorkflowsApi }: { api?: ManagerWorkflowsApi }) {
   const [draft, setDraft] = useState(defaults); const [filters, setFilters] = useState(defaults); const [page, setPage] = useState(1);
   const query = useMemo<WorkflowQuery>(() => ({ ...filters, search: filters.search.trim(), page }), [filters, page]);
   const resource = useRequirementResource(useCallback(() => api.list(query), [api, query]));
+  useLiveReload(resource.reload, resource.loading);
   function apply(event: FormEvent) { event.preventDefault(); setFilters({ ...draft }); setPage(1); }
   return <div className="manager-page approval-page">
     <header className="page-heading"><div><p className="eyebrow">Manager workspace</p><h1>Pending approvals</h1><p className="muted">Review agent recommendations and make an accountable decision.</p></div></header>

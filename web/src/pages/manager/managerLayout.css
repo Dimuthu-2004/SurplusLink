@@ -44,3 +44,19 @@
 @keyframes manager-shimmer { to { background-position: -220% 0; } }
 @media (max-width: 700px) { .manager-shell .page-heading, .manager-shell .recommendation-card { padding: 1rem; } }
 @media (prefers-reduced-motion: reduce) { .manager-shell *, .manager-shell *::before { animation: none !important; transition: none !important; } }
+
+/* Manager design-system refinements: light, elevated workspace instead of large navy slabs. */
+.manager-shell .page-heading { position:relative; overflow:hidden; border-color:#ece6df; background:linear-gradient(115deg,#fffdf9,#fff4e7); box-shadow:0 12px 32px #18243a0d; }
+.manager-shell .page-heading::after { content:""; position:absolute; width:13rem; height:13rem; right:-5rem; top:-7rem; border-radius:50%; background:radial-gradient(circle,#fb923c45,transparent 68%); pointer-events:none; }
+.manager-shell .page-heading h1 { color:#172033; letter-spacing:-.045em; }
+.manager-shell .page-heading .muted { color:#536176; max-width:45rem; }
+.manager-shell .page-heading .eyebrow { color:#b95010; }
+.manager-shell .page-content { background:radial-gradient(ellipse at top right,#ffedd59c,transparent 42%),#f7f8fa; }
+.brand-mark { display:grid !important; place-items:center; color:#fff; background:linear-gradient(135deg,#ec741f,#f49a42) !important; box-shadow:0 8px 18px #ec741f3b; }
+.brand-mark .app-icon { width:1.15rem; height:1.15rem; }
+.live-indicator { display:inline-flex; align-items:center; gap:.38rem; margin-top:.9rem; padding:.42rem .65rem; border:1px solid #c9ead8; border-radius:999px; color:#246b4a; background:#f1fbf5; font-size:.76rem; font-weight:750; }
+.live-indicator i { width:.46rem; height:.46rem; border-radius:50%; background:#20a76c; box-shadow:0 0 0 .18rem #20a76c24; animation:live-pulse 2.3s ease-out infinite; }
+.metric-trend { display:inline-flex; align-items:center; gap:.3rem; margin-top:1rem; color:#64748b; font-size:.73rem; }
+.metric-trend span { color:#e86f1a; font-size:.9rem; }
+.loading-skeleton { display:grid; gap:.65rem; padding:1.1rem 0; }.loading-skeleton i { display:block; height:1rem; border-radius:99px; background:linear-gradient(90deg,#eef1f5 25%,#fff 45%,#eef1f5 65%); background-size:220% 100%; animation:manager-shimmer 1.45s linear infinite; }.loading-skeleton i:last-child { width:72%; }
+@keyframes live-pulse { 70% { box-shadow:0 0 0 .42rem transparent; } 100% { box-shadow:0 0 0 .18rem transparent; } }

@@ -1,39 +1,20 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { normalizeApiError } from '../../api/apiClient';
 import { AnalyticsMetric } from '../../components/AnalyticsChart';
+import { LiveIndicator, MetricTrend, PageHeader } from '../../components/DesignSystem';
 import { managerDashboardApi } from '../../features/dashboard/managerDashboardApi';
 import { requirementNumber } from '../../features/requirements/requirementUi';
+import { useLiveResource } from '../../hooks/useLiveResource';
 
 export function ManagerDashboardPage() {
-  const [userSummary, setUserSummary] = useState<{
-    data: { totalUsers: number; sellers: number; buyers: number; dualRoleUsers: number; managers: number } | null;
-    error: string | null;
-    loading: boolean;
-  }>({ data: null, error: null, loading: true });
-
-  useEffect(() => {
-    let active = true;
-    managerDashboardApi.usersSummary().then(
-      (data) => {
-        if (active) setUserSummary({ data, error: null, loading: false });
-      },
-      (error: unknown) => {
-        if (active) setUserSummary({ data: null, error: normalizeApiError(error).message, loading: false });
-      }
-    );
-    return () => { active = false; };
-  }, []);
+  const userSummary = useLiveResource(managerDashboardApi.usersSummary);
 
   return (
     <div className="manager-page manager-dashboard">
-      <header className="page-heading">
-        <div>
-          <p className="eyebrow">SurplusLink overview</p>
-          <h1>Manager Dashboard</h1>
-          <p className="muted">Inventory, buyer requirements, matches, and transactions.</p>
-        </div>
-      </header>
+      <PageHeader eyebrow="SurplusLink overview" title="Manager Dashboard">
+        <p className="muted">A live view of inventory, buyer requirements, matches, and transactions.</p>
+        <LiveIndicator updatedAt={userSummary.updatedAt} />
+      </PageHeader>
 
       <section className="manager-panel" aria-label="Community" aria-busy={userSummary.loading}>
         <div className="section-heading">
@@ -42,13 +23,7 @@ export function ManagerDashboardPage() {
             <h2>Community</h2>
           </div>
           <button type="button" className="button button-secondary" disabled={userSummary.loading}
-            onClick={() => {
-              setUserSummary((prev) => ({ ...prev, loading: true, error: null }));
-              managerDashboardApi.usersSummary().then(
-                (data) => setUserSummary({ data, error: null, loading: false }),
-                (error) => setUserSummary({ data: null, error: normalizeApiError(error).message, loading: false })
-              );
-            }}>
+            onClick={() => void userSummary.reload()}>
             {userSummary.error ? 'Retry' : 'Refresh'} community
           </button>
         </div>
@@ -162,35 +137,20 @@ function AnalyticsPanel<T>({ title, load, children }: {
   load: () => Promise<T>;
   children: (data: T) => ReactNode;
 }) {
-  const [state, setState] = useState<{ data: T | null; error: string | null; loading: boolean }>({
-    data: null, error: null, loading: true,
-  });
-  const [revision, setRevision] = useState(0);
-
-  useEffect(() => {
-    let active = true;
-    setState({ data: null, error: null, loading: true });
-    void load().then(
-      (data) => { if (active) setState({ data, error: null, loading: false }); },
-      (error: unknown) => {
-        if (active) setState({ data: null, error: normalizeApiError(error).message, loading: false });
-      },
-    );
-    return () => { active = false; };
-  }, [load, revision]);
+  const state = useLiveResource(load);
 
   return (
     <section className="manager-panel" aria-label={title} aria-busy={state.loading}>
       <div className="section-heading">
         <h2>{title}</h2>
         <button type="button" className="button button-secondary" disabled={state.loading}
-          onClick={() => setRevision((value) => value + 1)}>
+          onClick={() => void state.reload()}>
           {state.error ? 'Retry' : 'Refresh'} {title.toLowerCase()}
         </button>
       </div>
       {state.loading && <p className="analytics-loading" role="status">Loading {title.toLowerCase()}…</p>}
       {state.error && <p className="error-message" role="alert">{state.error}</p>}
-      {state.data !== null && children(state.data)}
+      {state.data !== null && <div className="panel-content">{children(state.data)}<MetricTrend label="Refreshes every 10 seconds" /></div>}
     </section>
   );
 }
