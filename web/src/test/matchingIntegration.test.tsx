@@ -31,7 +31,7 @@ it('real API adapter keeps failed routes visible with metadata, auth, sort, filt
     return { data, config, status: 200, statusText: 'OK', headers: {} };
   };
   render(<MemoryRouter initialEntries={['/app/manager/requirements/r1/matches']}><AuthProvider><App /></AuthProvider></MemoryRouter>);
-  const table = await screen.findByRole('region', { name: 'Match comparison table' }, { timeout: 5000 });
+  const table = await screen.findByRole('region', { name: 'Match comparison table' });
   for (const text of ['Tiles', 'Floor tiles', '400 pcs', '500 pcs', 'LKR 800.00', '80%', 'Route unavailable / failed', 'Route Failed', 'Not rejected'])
     expect(within(table).getByText(text)).toBeInTheDocument();
   expect(within(table).getByRole('link', { name: 'View material' })).toHaveAttribute('href', '/app/manager/materials/l1');

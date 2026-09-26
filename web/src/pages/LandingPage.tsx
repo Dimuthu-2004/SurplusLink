@@ -19,6 +19,7 @@ type IconName =
   | 'recycle' 
   | 'shield' 
   | 'arrow' 
+  | 'arrow-down'
   | 'box' 
   | 'clock' 
   | 'file-text' 
@@ -64,6 +65,12 @@ function Icon({ name }: { name: IconName }) {
       </>
     ),
     arrow: <path d="M5 12h13m-5-5 5 5-5 5" />,
+    'arrow-down': (
+      <>
+        <line x1="12" y1="5" x2="12" y2="19" />
+        <polyline points="19 12 12 19 5 12" />
+      </>
+    ),
     box: (
       <>
         <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
@@ -115,18 +122,71 @@ function Icon({ name }: { name: IconName }) {
 function Reveal({
   children,
   className = '',
+  variant = 'fade-up',
+  delay = 0,
 }: {
   children: ReactNode;
   className?: string;
+  variant?: 'fade-up' | 'slide-left' | 'slide-right' | 'scale';
+  delay?: number;
 }) {
-  return <div className={`lp-reveal ${className}`}>{children}</div>;
+  const variantClass = variant !== 'fade-up' ? `lp-reveal-${variant}` : '';
+  return (
+    <div 
+      className={`lp-reveal ${variantClass} ${className}`}
+      style={delay ? { transitionDelay: `${delay}ms` } : undefined}
+    >
+      {children}
+    </div>
+  );
 }
+
+const workflowStepsData = [
+  {
+    num: '01',
+    title: '01 LIST',
+    icon: 'layers' as const,
+    summary: 'Seller publishes surplus stock with verified specifications and location.',
+  },
+  {
+    num: '02',
+    title: '02 REQUEST',
+    icon: 'search' as const,
+    summary: 'Buyer specifies material, quantity, location, budget and deadline.',
+  },
+  {
+    num: '03',
+    title: '03 MATCH',
+    icon: 'route' as const,
+    summary: 'The system evaluates suitable materials, volume coverage, and logistics.',
+  },
+  {
+    num: '04',
+    title: '04 REVIEW',
+    icon: 'check' as const,
+    summary: 'Buyer compares recommended options and selects suitable supply.',
+  },
+  {
+    num: '05',
+    title: '05 APPROVE',
+    icon: 'shield' as const,
+    summary: 'Authorized manager reviews and validates the selected workflow.',
+  },
+  {
+    num: '06',
+    title: '06 REUSE',
+    icon: 'recycle' as const,
+    summary: 'Approved material moves to its next project, put safely back to work.',
+  },
+];
 
 export function LandingPage() {
   const { status, user } = useAuth();
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [activeSlide, setActiveSlide] = useState(0);
+  const [activeSection, setActiveSection] = useState('top');
+  const [activeWorkflowStep, setActiveWorkflowStep] = useState(0);
 
   const authenticated = status === 'authenticated' && user;
   const accountPath = user ? roleHomePath(user.roles) : '/login';
@@ -138,20 +198,24 @@ export function LandingPage() {
     if (el) {
       el.scrollIntoView({ behavior: 'smooth' });
       window.history.pushState(null, '', `#${targetId}`);
+      setActiveSection(targetId);
     }
     setOpen(false);
   }
 
   // Header scroll detection & scroll reveals (safe in JSDOM / non-browser)
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 20);
+    const onScroll = () => {
+      setScrolled(window.scrollY > 20);
+    };
     window.addEventListener('scroll', onScroll, { passive: true });
 
     if (typeof IntersectionObserver === 'undefined') {
       return () => window.removeEventListener('scroll', onScroll);
     }
 
-    const observer = new IntersectionObserver(
+    // Scroll reveal observer
+    const revealObserver = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
@@ -162,12 +226,60 @@ export function LandingPage() {
       { threshold: 0.12 }
     );
 
-    document.querySelectorAll('.lp-reveal').forEach((node) => observer.observe(node));
+    document.querySelectorAll('.lp-reveal').forEach((node) => revealObserver.observe(node));
+
+    // Section observer for dynamic active navbar highlight
+    const sectionIds = ['top', 'platform', 'how-it-works', 'features', 'materials', 'impact'];
+    const sectionObserver = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            setActiveSection(entry.target.id);
+          }
+        });
+      },
+      { threshold: 0.25 }
+    );
+
+    sectionIds.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) sectionObserver.observe(el);
+    });
 
     return () => {
-      observer.disconnect();
+      revealObserver.disconnect();
+      sectionObserver.disconnect();
       window.removeEventListener('scroll', onScroll);
     };
+  }, []);
+
+  // Scroll-driven workflow timeline progress tracker
+  useEffect(() => {
+    const section = document.getElementById('how-it-works');
+    if (!section) return;
+
+    let ticking = false;
+    const handleScroll = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          const rect = section.getBoundingClientRect();
+          const windowHeight = window.innerHeight;
+          const start = windowHeight * 0.75;
+          const end = -rect.height * 0.25;
+          
+          if (rect.top <= start && rect.bottom >= 0) {
+            const progress = Math.min(Math.max((start - rect.top) / (start - end), 0), 1);
+            const calculatedStep = Math.min(Math.floor(progress * 6), 5);
+            setActiveWorkflowStep((prev) => (prev !== calculatedStep ? calculatedStep : prev));
+          }
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
   // Hero slideshow timer respecting prefers-reduced-motion
@@ -179,10 +291,13 @@ export function LandingPage() {
     return () => window.clearInterval(timer);
   }, []);
 
+  // Calculate timeline progress fill percentage
+  const timelineProgressPercent = `${(activeWorkflowStep / 5) * 100}%`;
+
   return (
     <div className="lp-wrapper">
       {/* ====================================================================
-          1. NAVIGATION
+          1. NAVIGATION (SCROLL-REACTIVE & ACTIVE UNDERLINE)
           ==================================================================== */}
       <header className={`lp-nav ${scrolled ? 'lp-nav-scrolled' : ''}`}>
         <div className="lp-container">
@@ -211,42 +326,42 @@ export function LandingPage() {
 
           <nav className={`lp-nav-links ${open ? 'open' : ''}`} aria-label="Public navigation">
             <a 
-              className="lp-nav-link" 
+              className={`lp-nav-link ${activeSection === 'top' ? 'active' : ''}`} 
               href="#top" 
               onClick={(e) => handleSmoothScroll(e, 'top')}
             >
               Home
             </a>
             <a 
-              className="lp-nav-link" 
+              className={`lp-nav-link ${activeSection === 'platform' ? 'active' : ''}`} 
               href="#platform" 
               onClick={(e) => handleSmoothScroll(e, 'platform')}
             >
               Platform
             </a>
             <a 
-              className="lp-nav-link" 
+              className={`lp-nav-link ${activeSection === 'how-it-works' ? 'active' : ''}`} 
               href="#how-it-works" 
               onClick={(e) => handleSmoothScroll(e, 'how-it-works')}
             >
               How it works
             </a>
             <a 
-              className="lp-nav-link" 
+              className={`lp-nav-link ${activeSection === 'features' ? 'active' : ''}`} 
               href="#features" 
               onClick={(e) => handleSmoothScroll(e, 'features')}
             >
               Features
             </a>
             <a 
-              className="lp-nav-link" 
+              className={`lp-nav-link ${activeSection === 'materials' ? 'active' : ''}`} 
               href="#materials" 
               onClick={(e) => handleSmoothScroll(e, 'materials')}
             >
               Materials
             </a>
             <a 
-              className="lp-nav-link" 
+              className={`lp-nav-link ${activeSection === 'impact' ? 'active' : ''}`} 
               href="#impact" 
               onClick={(e) => handleSmoothScroll(e, 'impact')}
             >
@@ -325,6 +440,19 @@ export function LandingPage() {
                 />
               ))}
             </div>
+
+            {/* Subtle scroll-down cue */}
+            <div>
+              <a 
+                className="lp-hero-scroll-cue" 
+                href="#platform" 
+                onClick={(e) => handleSmoothScroll(e, 'platform')}
+                aria-label="Scroll down to explore platform"
+              >
+                <span>Scroll to explore</span>
+                <Icon name="arrow-down" />
+              </a>
+            </div>
           </div>
         </div>
       </section>
@@ -335,7 +463,7 @@ export function LandingPage() {
       <section id="platform" className="lp-section-editorial">
         <div className="lp-container">
           <div className="lp-editorial-grid">
-            <Reveal className="lp-editorial-left">
+            <Reveal className="lp-editorial-left" variant="slide-left">
               <p className="lp-eyebrow">WHAT SURPLUSLINK DOES</p>
               <h2>More than a listing board.</h2>
               <p className="lp-editorial-lead">
@@ -401,7 +529,7 @@ export function LandingPage() {
               </div>
             </Reveal>
 
-            <Reveal className="lp-editorial-rows">
+            <Reveal className="lp-editorial-rows" variant="slide-right" delay={150}>
               <div className="lp-editorial-row">
                 <span className="lp-row-num">01</span>
                 <div className="lp-row-content">
@@ -466,7 +594,7 @@ export function LandingPage() {
           ==================================================================== */}
       <section id="how-it-works" className="lp-section-timeline">
         <div className="lp-container">
-          <Reveal className="lp-section-header">
+          <Reveal className="lp-section-header" variant="fade-up">
             <p className="lp-eyebrow">STEP-BY-STEP WORKFLOW</p>
             <h2>From surplus stock to project delivery.</h2>
             <p>
@@ -476,53 +604,50 @@ export function LandingPage() {
           </Reveal>
 
           <div className="lp-timeline-track">
-            <Reveal className="lp-timeline-step">
-              <div className="lp-timeline-badge">
-                <span className="lp-step-num">01</span>
-              </div>
-              <h3>01 LIST</h3>
-              <p>Seller publishes surplus stock with verified specifications and location.</p>
-            </Reveal>
+            {/* Scroll-driven active progress bar */}
+            <div 
+              className="lp-timeline-progress-bar" 
+              style={{ width: timelineProgressPercent }} 
+              aria-hidden="true" 
+            />
 
-            <Reveal className="lp-timeline-step">
-              <div className="lp-timeline-badge">
-                <span className="lp-step-num">02</span>
-              </div>
-              <h3>02 REQUEST</h3>
-              <p>Buyer specifies material, quantity, location, budget and deadline.</p>
-            </Reveal>
+            {workflowStepsData.map((step, index) => {
+              const isCompleted = index < activeWorkflowStep;
+              const isActive = index === activeWorkflowStep;
+              const statusClass = isActive 
+                ? 'is-active' 
+                : isCompleted 
+                ? 'is-completed' 
+                : 'is-upcoming';
 
-            <Reveal className="lp-timeline-step">
-              <div className="lp-timeline-badge">
-                <span className="lp-step-num">03</span>
-              </div>
-              <h3>03 MATCH</h3>
-              <p>The system evaluates suitable materials, volume coverage, and logistics.</p>
-            </Reveal>
-
-            <Reveal className="lp-timeline-step">
-              <div className="lp-timeline-badge">
-                <span className="lp-step-num">04</span>
-              </div>
-              <h3>04 REVIEW</h3>
-              <p>Buyer compares recommended options and selects suitable supply.</p>
-            </Reveal>
-
-            <Reveal className="lp-timeline-step">
-              <div className="lp-timeline-badge">
-                <span className="lp-step-num">05</span>
-              </div>
-              <h3>05 APPROVE</h3>
-              <p>Authorized manager reviews and validates the selected workflow.</p>
-            </Reveal>
-
-            <Reveal className="lp-timeline-step">
-              <div className="lp-timeline-badge">
-                <span className="lp-step-num">06</span>
-              </div>
-              <h3>06 REUSE</h3>
-              <p>Approved material moves to its next project, put safely back to work.</p>
-            </Reveal>
+              return (
+                <Reveal 
+                  key={step.num}
+                  className={`lp-timeline-step ${statusClass}`}
+                  variant="fade-up"
+                  delay={index * 80}
+                >
+                  <div 
+                    onClick={() => setActiveWorkflowStep(index)}
+                    onMouseEnter={() => setActiveWorkflowStep(index)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        setActiveWorkflowStep(index);
+                      }
+                    }}
+                    aria-label={`Step ${step.num}: ${step.title}`}
+                  >
+                    <div className="lp-timeline-badge">
+                      <span className="lp-step-num">{step.num}</span>
+                    </div>
+                    <h3>{step.title}</h3>
+                    <p>{step.summary}</p>
+                  </div>
+                </Reveal>
+              );
+            })}
           </div>
         </div>
       </section>
@@ -532,7 +657,7 @@ export function LandingPage() {
           ==================================================================== */}
       <section id="features" className="lp-section-features">
         <div className="lp-container">
-          <Reveal className="lp-section-header">
+          <Reveal className="lp-section-header" variant="fade-up">
             <p className="lp-eyebrow">PLATFORM CAPABILITIES</p>
             <h2>Built specifically for materials, logistics, and accountability.</h2>
             <p>
@@ -541,7 +666,7 @@ export function LandingPage() {
           </Reveal>
 
           <div className="lp-bento-grid">
-            <Reveal className="lp-bento-card lp-bento-span-7">
+            <Reveal className="lp-bento-card lp-bento-span-7" variant="fade-up" delay={50}>
               <div>
                 <div className="lp-bento-icon">
                   <Icon name="layers" />
@@ -554,7 +679,7 @@ export function LandingPage() {
               </div>
             </Reveal>
 
-            <Reveal className="lp-bento-card lp-bento-span-5">
+            <Reveal className="lp-bento-card lp-bento-span-5" variant="fade-up" delay={120}>
               <div>
                 <div className="lp-bento-icon">
                   <Icon name="search" />
@@ -567,7 +692,7 @@ export function LandingPage() {
               </div>
             </Reveal>
 
-            <Reveal className="lp-bento-card lp-bento-span-4">
+            <Reveal className="lp-bento-card lp-bento-span-4" variant="fade-up" delay={190}>
               <div>
                 <div className="lp-bento-icon">
                   <Icon name="check" />
@@ -580,7 +705,7 @@ export function LandingPage() {
               </div>
             </Reveal>
 
-            <Reveal className="lp-bento-card lp-bento-span-4">
+            <Reveal className="lp-bento-card lp-bento-span-4" variant="fade-up" delay={260}>
               <div>
                 <div className="lp-bento-icon">
                   <Icon name="route" />
@@ -593,7 +718,7 @@ export function LandingPage() {
               </div>
             </Reveal>
 
-            <Reveal className="lp-bento-card lp-bento-span-4">
+            <Reveal className="lp-bento-card lp-bento-span-4" variant="fade-up" delay={330}>
               <div>
                 <div className="lp-bento-icon">
                   <Icon name="shield" />
@@ -606,7 +731,7 @@ export function LandingPage() {
               </div>
             </Reveal>
 
-            <Reveal className="lp-bento-card lp-bento-span-6">
+            <Reveal className="lp-bento-card lp-bento-span-6" variant="fade-up" delay={400}>
               <div>
                 <div className="lp-bento-icon">
                   <Icon name="box" />
@@ -619,7 +744,7 @@ export function LandingPage() {
               </div>
             </Reveal>
 
-            <Reveal className="lp-bento-card lp-bento-span-6">
+            <Reveal className="lp-bento-card lp-bento-span-6" variant="fade-up" delay={470}>
               <div>
                 <div className="lp-bento-icon">
                   <Icon name="file-text" />
@@ -640,7 +765,7 @@ export function LandingPage() {
           ==================================================================== */}
       <section id="materials" className="lp-section-materials">
         <div className="lp-container">
-          <Reveal className="lp-section-header">
+          <Reveal className="lp-section-header" variant="fade-up">
             <p className="lp-eyebrow">REUSABLE MATERIAL CATALOG</p>
             <h2>High-value categories ready for circulation.</h2>
             <p>
@@ -649,7 +774,7 @@ export function LandingPage() {
           </Reveal>
 
           <div className="lp-materials-grid">
-            <Reveal className="lp-material-card">
+            <Reveal className="lp-material-card" variant="fade-up" delay={100}>
               <img 
                 className="lp-material-bg" 
                 src="/images/hero/tiles-and-timber.png" 
@@ -658,6 +783,7 @@ export function LandingPage() {
               <div className="lp-material-overlay" />
               <div className="lp-material-content">
                 <span className="lp-material-tag">SURPLUS FINISHES</span>
+                <div className="lp-material-accent-line" aria-hidden="true" />
                 <h3>Tiles & finishes</h3>
                 <p>
                   Ceramic, porcelain, natural stone tiles, pavers, architectural wall finishes, and
@@ -666,7 +792,7 @@ export function LandingPage() {
               </div>
             </Reveal>
 
-            <Reveal className="lp-material-card">
+            <Reveal className="lp-material-card" variant="fade-up" delay={200}>
               <img 
                 className="lp-material-bg" 
                 src="/images/hero/steel-loading-bay.png" 
@@ -675,6 +801,7 @@ export function LandingPage() {
               <div className="lp-material-overlay" />
               <div className="lp-material-content">
                 <span className="lp-material-tag">STRUCTURAL STOCK</span>
+                <div className="lp-material-accent-line" aria-hidden="true" />
                 <h3>Steel & structural</h3>
                 <p>
                   Reinforcement bar, structural sections, universal beams, hollow pipes, steel mesh,
@@ -683,7 +810,7 @@ export function LandingPage() {
               </div>
             </Reveal>
 
-            <Reveal className="lp-material-card">
+            <Reveal className="lp-material-card" variant="fade-up" delay={300}>
               <img 
                 className="lp-material-bg" 
                 src="/images/hero/warehouse-timber.png" 
@@ -692,6 +819,7 @@ export function LandingPage() {
               <div className="lp-material-overlay" />
               <div className="lp-material-content">
                 <span className="lp-material-tag">RECLAIMED LUMBER</span>
+                <div className="lp-material-accent-line" aria-hidden="true" />
                 <h3>Timber & components</h3>
                 <p>
                   Reclaimed framing studs, structural beams, plywood sheets, engineered trusses, pallets,
@@ -708,7 +836,7 @@ export function LandingPage() {
           ==================================================================== */}
       <section id="impact" className="lp-section-impact">
         <div className="lp-container">
-          <Reveal className="lp-section-header">
+          <Reveal className="lp-section-header" variant="fade-up">
             <p className="lp-eyebrow">SUSTAINABLE CIRCULARITY</p>
             <h2>Use what already exists.</h2>
             <p>
@@ -718,7 +846,7 @@ export function LandingPage() {
           </Reveal>
 
           <div className="lp-impact-grid">
-            <Reveal className="lp-impact-item">
+            <Reveal className="lp-impact-item" variant="fade-up" delay={80}>
               <div className="lp-impact-icon">
                 <Icon name="recycle" />
               </div>
@@ -729,7 +857,7 @@ export function LandingPage() {
               </p>
             </Reveal>
 
-            <Reveal className="lp-impact-item">
+            <Reveal className="lp-impact-item" variant="fade-up" delay={160}>
               <div className="lp-impact-icon">
                 <Icon name="box" />
               </div>
@@ -740,7 +868,7 @@ export function LandingPage() {
               </p>
             </Reveal>
 
-            <Reveal className="lp-impact-item">
+            <Reveal className="lp-impact-item" variant="fade-up" delay={240}>
               <div className="lp-impact-icon">
                 <Icon name="search" />
               </div>
@@ -751,7 +879,7 @@ export function LandingPage() {
               </p>
             </Reveal>
 
-            <Reveal className="lp-impact-item">
+            <Reveal className="lp-impact-item" variant="fade-up" delay={320}>
               <div className="lp-impact-icon">
                 <Icon name="route" />
               </div>
@@ -763,7 +891,7 @@ export function LandingPage() {
             </Reveal>
           </div>
 
-          <Reveal className="lp-impact-banner">
+          <Reveal className="lp-impact-banner" variant="scale" delay={200}>
             <div className="lp-banner-text">
               <strong>Accountable, practical sustainability</strong>
               <span>
@@ -783,7 +911,7 @@ export function LandingPage() {
           ==================================================================== */}
       <section id="cta" className="lp-section-cta">
         <div className="lp-container">
-          <Reveal className="lp-cta-card">
+          <Reveal className="lp-cta-card" variant="scale">
             <p className="lp-eyebrow">GET STARTED TODAY</p>
             <h2>Start with what you already have.</h2>
             <p>

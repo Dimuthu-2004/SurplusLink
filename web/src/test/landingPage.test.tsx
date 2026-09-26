@@ -147,6 +147,23 @@ describe('LandingPage Final Polish', () => {
     expect(dots[2]).toHaveClass('active');
   });
 
+  it('allows interacting with workflow steps and updating the active step', async () => {
+    const user = userEvent.setup();
+    renderLanding();
+    const stepButtons = screen.getAllByRole('button', { name: /Step 0/i });
+    expect(stepButtons.length).toBe(6);
+
+    // Click step 3 (03 MATCH)
+    await user.click(stepButtons[2]);
+    const step3Container = stepButtons[2].closest('.lp-timeline-step');
+    expect(step3Container).toHaveClass('is-active');
+
+    // Click step 5 (05 APPROVE)
+    await user.click(stepButtons[4]);
+    const step5Container = stepButtons[4].closest('.lp-timeline-step');
+    expect(step5Container).toHaveClass('is-active');
+  });
+
   it('allows toggling the mobile menu', async () => {
     const user = userEvent.setup();
     renderLanding();
@@ -155,5 +172,11 @@ describe('LandingPage Final Polish', () => {
     expect(toggleBtn).toHaveAttribute('aria-expanded', 'true');
     await user.click(toggleBtn);
     expect(toggleBtn).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('renders the subtle hero scroll cue linking to #platform', () => {
+    renderLanding();
+    const scrollCue = screen.getByLabelText(/Scroll down to explore platform/i);
+    expect(scrollCue).toHaveAttribute('href', '#platform');
   });
 });
