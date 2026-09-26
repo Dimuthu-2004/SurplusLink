@@ -130,7 +130,7 @@ export function LoginPage() {
                 </div>
                 <button className="auth-submit" type="submit" disabled={pending || changing}>{pending ? <><Spinner /> Signing in...</> : <>Sign in <Arrow /></>}</button>
                 {error === 'Your email has not been verified.' && <p className="auth-mobile-switch"><button type="button" onClick={() => { setVerification({ email: loginForm.email.trim(), code: '' }); setStep('verify'); }}>Verify Email</button><button type="button" onClick={async () => { const email = loginForm.email.trim(); setVerification({ email, code: '' }); if (await resendVerification(email)) setResendSeconds(60); }}>Resend Code</button></p>}
-                <p className="auth-mobile-switch"><button type="button" onClick={() => { clearError(); setStep('forgot'); }}>Forgot password?</button></p>
+                <p className="auth-forgot-password"><button type="button" onClick={() => { clearError(); setStep('forgot'); }}>Forgot password?</button></p>
                 <p className="auth-mobile-switch">New to SurplusLink? <button type="button" onClick={() => switchMode('signUp')} disabled={pending || changing}>Create account</button></p>
               </form>
             ) : (
