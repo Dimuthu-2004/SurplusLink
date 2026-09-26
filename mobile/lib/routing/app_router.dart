@@ -1,3 +1,6 @@
+import 'package:mobile/handoff/mobile_handoff_gateway.dart';
+import 'package:mobile/screens/handoff_screen.dart';
+import 'package:mobile/screens/qr_scanner_screen.dart';
 import 'package:mobile/marketplace/marketplace_mode.dart';
 import 'package:mobile/screens/profile_screen.dart';
 import 'package:mobile/matches/match_gateway.dart';
@@ -43,6 +46,7 @@ GoRouter createAppRouter({
   RequirementGateway? requirementGateway,
   MatchGateway? matchGateway,
   OfferGateway? offerGateway,
+  MobileHandoffGateway? handoffGateway,
   RequirementLocationSource requirementLocation =
       const DeviceRequirementLocation(),
   AddressLookup? locationLookup,
@@ -54,6 +58,19 @@ GoRouter createAppRouter({
     initialLocation: initialLocation,
     refreshListenable: authController,
     redirect: (context, state) {
+      final uri = state.uri;
+      if (uri.scheme == 'surpluslink' && (uri.host == 'handoff' || uri.path.startsWith('/handoff'))) {
+        final queryCode = uri.queryParameters['code'];
+        final code = queryCode != null && queryCode.isNotEmpty
+            ? queryCode
+            : (uri.host == 'handoff'
+                ? (uri.pathSegments.isNotEmpty ? uri.pathSegments.last : uri.path.replaceAll('/', ''))
+                : uri.pathSegments.last);
+        if (code.isNotEmpty) {
+          return '/handoff/$code';
+        }
+      }
+
       final location = state.matchedLocation;
       final isAuthRoute =
           location == AppRoutes.login || location == AppRoutes.register;
@@ -65,6 +82,14 @@ GoRouter createAppRouter({
         return location == AppRoutes.splash ? null : AppRoutes.splash;
       }
       if (!authController.isAuthenticated) {
+        if (location == '/scan-qr') {
+          return null;
+        }
+        if (location == AppRoutes.login && state.extra is String) {
+          pendingLocation = state.extra as String;
+        } else if (!isAuthRoute && location != AppRoutes.splash) {
+          pendingLocation = state.uri.toString();
+        }
         return isAuthRoute ? null : AppRoutes.login;
       }
       if (isAuthRoute || location == AppRoutes.splash) {
@@ -85,6 +110,12 @@ GoRouter createAppRouter({
       return null;
     },
     routes: [
+      GoRoute(
+        path: '/scan-qr',
+        builder: (context, state) => QrScannerScreen(
+          authController: authController,
+        ),
+      ),
       GoRoute(
         path: AppRoutes.splash,
         builder: (context, state) => const SplashScreen(),
@@ -148,6 +179,16 @@ GoRouter createAppRouter({
           ),
         ),
       ],
+      if (handoffGateway != null) ...[
+        GoRoute(
+          path: '/handoff/:code',
+          builder: (context, state) => HandoffScreen(
+            code: state.pathParameters['code']!,
+            authController: authController,
+            handoffGateway: handoffGateway,
+          ),
+        ),
+      ],
       if (requirementGateway != null) ...[
         GoRoute(
           path: AppRoutes.requirements,
@@ -156,11 +197,18 @@ GoRouter createAppRouter({
         ),
         GoRoute(
           path: '/requirements/new',
-          builder: (context, state) => RequirementFormScreen(
-            gateway: requirementGateway,
-            locationSource: requirementLocation,
-            locationLookup: locationLookup,
-          ),
+          builder: (context, state) {
+            final categoryId = state.uri.queryParameters['categoryId'] ??
+                (state.extra is Map<String, dynamic>
+                    ? (state.extra as Map<String, dynamic>)['categoryId'] as String?
+                    : state.extra as String?);
+            return RequirementFormScreen(
+              gateway: requirementGateway,
+              initialCategoryId: categoryId,
+              locationSource: requirementLocation,
+              locationLookup: locationLookup,
+            );
+          },
         ),
         GoRoute(
           path: '/requirements/:id/edit',

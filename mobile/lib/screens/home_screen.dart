@@ -590,6 +590,12 @@ class _QuickActions extends StatelessWidget {
               Icons.assignment_outlined,
               requirements,
             ),
+            _Action(
+              const Key('home-scan-web-qr'),
+              'Scan Web QR',
+              Icons.qr_code_scanner_rounded,
+              () => context.push('/scan-qr'),
+            ),
           ],
           if (mode == MarketplaceMode.buyer || mode == MarketplaceMode.seller)
             _Action(

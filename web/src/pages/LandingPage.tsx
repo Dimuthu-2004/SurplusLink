@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { roleHomePath } from '../routing/roleRoutes';
 import './landingPage.css';
@@ -182,6 +182,11 @@ const workflowStepsData = [
 
 export function LandingPage() {
   const { status, user } = useAuth();
+
+  if (status === 'authenticated' && user) {
+    return <Navigate to={roleHomePath(user.roles)} replace />;
+  }
+
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [activeSlide, setActiveSlide] = useState(0);
@@ -190,8 +195,8 @@ export function LandingPage() {
   const [workflowVisible, setWorkflowVisible] = useState(false);
   const [workflowProgress, setWorkflowProgress] = useState(0);
 
-  const authenticated = status === 'authenticated' && user;
-  const accountPath = user ? roleHomePath(user.roles) : '/login';
+  const authenticated = false;
+  const accountPath = '/login';
 
   // Smooth scroll handler ensuring ZERO dead links
   function handleSmoothScroll(e: React.MouseEvent<HTMLAnchorElement>, targetId: string) {

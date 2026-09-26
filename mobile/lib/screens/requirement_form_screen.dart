@@ -13,6 +13,7 @@ class RequirementFormScreen extends StatefulWidget {
   const RequirementFormScreen({
     required this.gateway,
     this.requirementId,
+    this.initialCategoryId,
     this.locationPicker = showLocationPicker,
     this.locationSource = const DeviceRequirementLocation(),
     this.locationLookup,
@@ -20,6 +21,7 @@ class RequirementFormScreen extends StatefulWidget {
   });
   final RequirementGateway gateway;
   final String? requirementId;
+  final String? initialCategoryId;
   final LocationPicker locationPicker;
   final RequirementLocationSource locationSource;
   final AddressLookup? locationLookup;
@@ -88,6 +90,9 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
           _deadline = row.deadline.toLocal();
           _capturedLatitude = row.latitude;
           _capturedLongitude = row.longitude;
+        } else if (widget.initialCategoryId != null &&
+            widget.initialCategoryId!.trim().isNotEmpty) {
+          _category = widget.initialCategoryId!.trim();
         }
       });
     } on Object catch (error) {

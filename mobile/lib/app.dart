@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:mobile/marketplace/marketplace_mode_controller.dart';
 
+import 'package:mobile/handoff/mobile_handoff_gateway.dart';
 import 'package:mobile/matches/match_gateway.dart';
 import 'package:mobile/offers/offer_gateway.dart';
 
@@ -22,6 +23,7 @@ class SurplusLinkApp extends StatefulWidget {
     this.requirementGateway,
     this.matchGateway,
     this.offerGateway,
+    this.handoffGateway,
     this.requirementLocation = const DeviceRequirementLocation(),
     this.locationLookup,
     this.addressSearch,
@@ -34,6 +36,7 @@ class SurplusLinkApp extends StatefulWidget {
   final RequirementGateway? requirementGateway;
   final MatchGateway? matchGateway;
   final OfferGateway? offerGateway;
+  final MobileHandoffGateway? handoffGateway;
   final RequirementLocationSource requirementLocation;
   final AddressLookup? locationLookup;
   final AddressSearch? addressSearch;
@@ -56,6 +59,7 @@ class _SurplusLinkAppState extends State<SurplusLinkApp> {
       requirementGateway: widget.requirementGateway,
       matchGateway: widget.matchGateway,
       offerGateway: widget.offerGateway,
+      handoffGateway: widget.handoffGateway,
       requirementLocation: widget.requirementLocation,
       locationLookup: widget.locationLookup,
       addressSearch: widget.addressSearch,

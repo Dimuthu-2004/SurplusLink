@@ -89,6 +89,24 @@ class _LoginScreenState extends State<LoginScreen> {
                     },
               child: const Text('Create an account'),
             ),
+            const SizedBox(height: 12),
+            const Row(
+              children: [
+                Expanded(child: Divider()),
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 12),
+                  child: Text('OR', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                ),
+                Expanded(child: Divider()),
+              ],
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              key: const Key('login-scan-qr'),
+              onPressed: () => context.push('/scan-qr'),
+              icon: const Icon(Icons.qr_code_scanner_rounded),
+              label: const Text('Scan Web Handoff QR'),
+            ),
           ],
         ),
       ),

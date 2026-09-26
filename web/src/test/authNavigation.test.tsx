@@ -19,6 +19,32 @@ describe('authentication navigation', () => {
     expect(screen.queryByText('Seller home')).not.toBeInTheDocument();
   });
 
+  it('routes an authenticated buyer from / to their role home /app/buyer', async () => {
+    const storage = memoryStorage('buyer-jwt');
+    const client = fakeClient();
+    client.get.mockResolvedValue({ data: buyer });
+
+    renderApp('/', client, storage);
+
+    expect(await screen.findByRole('heading', { name: 'Buyer home' })).toBeInTheDocument();
+  });
+
+  it('routes an authenticated seller from / to their role home /app/seller', async () => {
+    const storage = memoryStorage('seller-jwt');
+    const client = fakeClient();
+    client.get.mockResolvedValue({ data: seller });
+
+    renderApp('/', client, storage);
+
+    expect(await screen.findByRole('heading', { name: 'Seller home' })).toBeInTheDocument();
+  });
+
+  it('renders the public landing page on / for an anonymous visitor', async () => {
+    renderApp('/');
+
+    expect(await screen.findByRole('heading', { name: /Turn Surplus[\s\S]*Into Opportunity/i })).toBeInTheDocument();
+  });
+
   it('restores a session and redirects a user away from another role', async () => {
     const storage = memoryStorage('stored-jwt');
     const client = fakeClient();

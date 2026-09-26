@@ -1,3 +1,4 @@
+import 'package:mobile/handoff/mobile_handoff_repository.dart';
 import 'package:mobile/marketplace/marketplace_mode_controller.dart';
 import 'package:mobile/marketplace/marketplace_mode_storage.dart';
 import 'package:flutter/material.dart';
@@ -45,6 +46,7 @@ void main() {
         onSessionExpired: authController.logout,
       ),
       offerGateway: OfferRepository(apiClient),
+      handoffGateway: MobileHandoffRepository(apiClient),
       locationLookup: ApiLocationLookup(apiClient).lookup,
       addressSearch: ApiLocationLookup(apiClient).search,
     ),
