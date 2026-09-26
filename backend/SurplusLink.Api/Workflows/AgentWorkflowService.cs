@@ -122,60 +122,190 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db)
             {
                 throw new AgentWorkflowException(409, "Workflow validation data is invalid.");
             }
-            if (workflow.MaterialMatchId is not Guid matchId)
-                throw new AgentWorkflowException(409, "Approval requires a workflow match.");
-            var match = await db.Matches.Include(x => x.Listing).Include(x => x.MaterialRequest)
-                .SingleOrDefaultAsync(x => x.Id == matchId, ct)
-                ?? throw new AgentWorkflowException(409, "The workflow match was not found.");
-            // Serialize decisions for the same requirement and shared inventory.
-            await db.Database.ExecuteSqlInterpolatedAsync(
-                $"SELECT 1 FROM \"MaterialRequests\" WHERE \"Id\" = {match.MaterialRequestId} FOR UPDATE", ct);
-            // Serialize stock changes across different workflows targeting the same listing.
-            await db.Database.ExecuteSqlInterpolatedAsync(
-                $"SELECT 1 FROM \"Listings\" WHERE \"Id\" = {match.ListingId} FOR UPDATE", ct);
-            await db.Entry(match.Listing).ReloadAsync(ct);
-            await db.Entry(match.MaterialRequest).ReloadAsync(ct);
-            if (workflow.MaterialRequestId != match.MaterialRequestId || match.Status != MatchStatus.ROUTED ||
-                match.Distance is null or < 0 || match.DurationMinutes is null or < 0 ||
-                match.EstimatedTransportCost is null or < 0 ||
-                match.Listing.AvailableUntil <= DateTime.UtcNow || match.MaterialRequest.Deadline <= DateTime.UtcNow ||
-                match.DurationMinutes > (decimal)(match.MaterialRequest.Deadline - DateTime.UtcNow).TotalMinutes ||
-                !string.Equals(match.Listing.Unit, match.MaterialRequest.Unit, StringComparison.OrdinalIgnoreCase) ||
-                match.Listing.UnitPrice * match.MaterialRequest.RequiredQuantity + match.EstimatedTransportCost > match.MaterialRequest.MaximumBudget)
-                throw new AgentWorkflowException(409, "The recommendation is no longer eligible. Request a revision.");
-            var pendingOffers = await db.Offers.Where(x => x.MaterialMatchId == match.Id && x.Status == OfferStatus.PENDING).ToListAsync(ct);
-            if (pendingOffers.Any(x => x.Quantity != match.MaterialRequest.RequiredQuantity || x.UnitValue != match.Listing.UnitPrice ||
-                x.TotalValue != x.Quantity * x.UnitValue || x.BuyerId != match.MaterialRequest.BuyerId || x.SellerId != match.Listing.SellerId))
-                throw new AgentWorkflowException(409, "The offered terms changed. Request a revision.");
-            if (MarketplaceMatchPolicy.RejectionReason(match.MaterialRequest.BuyerId, match.Listing.SellerId) is not null)
-                throw new AgentWorkflowException(409, "A workflow cannot approve a self-dealing match.");
-            if (match.Listing.Status != ListingStatus.ACTIVE)
-                throw new AgentWorkflowException(409, "The listing is not available for reservation.");
-            if (match.MaterialRequest.Status is not BuyerRequestStatus.OPEN and not BuyerRequestStatus.MATCH_FOUND and not BuyerRequestStatus.PENDING_APPROVAL)
-                throw new AgentWorkflowException(409, "The material request is not open for reservation.");
-            if (match.Listing.CategoryId != match.MaterialRequest.CategoryId)
-                throw new AgentWorkflowException(409, "The workflow match categories do not match.");
 
-            var existing = await db.Reservations.AnyAsync(x => x.ListingId == match.ListingId &&
-                x.MaterialRequestId == match.MaterialRequestId && x.Status != ReservationStatus.RELEASED &&
-                x.Status != ReservationStatus.CANCELLED, ct);
-            if (!existing)
+            var pendingTransactions = await db.Transactions
+                .Include(x => x.Offer).ThenInclude(x => x.MaterialMatch).ThenInclude(x => x.Listing)
+                .Include(x => x.Offer).ThenInclude(x => x.MaterialMatch).ThenInclude(x => x.MaterialRequest)
+                .Where(x => x.Status == TransactionStatus.PENDING_APPROVAL &&
+                    ((workflow.MaterialRequestId != null && x.Offer.MaterialMatch.MaterialRequestId == workflow.MaterialRequestId) ||
+                     x.Offer.MaterialMatchId == workflow.MaterialMatchId))
+                .ToListAsync(ct);
+
+            if (pendingTransactions.Count == 0)
             {
-                var quantity = match.MaterialRequest.RequiredQuantity;
-                if (match.Listing.ReservedQuantity + quantity > match.Listing.Quantity)
-                    throw new AgentWorkflowException(409, "Insufficient available quantity.");
-                match.Listing.ReservedQuantity += quantity;
-                if (match.Listing.ReservedQuantity == match.Listing.Quantity)
-                    match.Listing.Status = ListingStatus.RESERVED;
-                db.Reservations.Add(new Reservation
+                if (workflow.MaterialMatchId is not Guid fallbackMatchId)
+                    throw new AgentWorkflowException(409, "Approval requires a workflow match.");
+
+                var match = await db.Matches.Include(x => x.Listing).Include(x => x.MaterialRequest)
+                    .SingleOrDefaultAsync(x => x.Id == fallbackMatchId, ct)
+                    ?? throw new AgentWorkflowException(409, "The workflow match was not found.");
+
+                await db.Database.ExecuteSqlInterpolatedAsync(
+                    $"SELECT 1 FROM \"MaterialRequests\" WHERE \"Id\" = {match.MaterialRequestId} FOR UPDATE", ct);
+                await db.Database.ExecuteSqlInterpolatedAsync(
+                    $"SELECT 1 FROM \"Listings\" WHERE \"Id\" = {match.ListingId} FOR UPDATE", ct);
+                await db.Entry(match.Listing).ReloadAsync(ct);
+                await db.Entry(match.MaterialRequest).ReloadAsync(ct);
+
+                if (workflow.MaterialRequestId != match.MaterialRequestId || match.Status != MatchStatus.ROUTED ||
+                    match.Distance is null or < 0 || match.DurationMinutes is null or < 0 ||
+                    match.EstimatedTransportCost is null or < 0 ||
+                    match.Listing.AvailableUntil <= DateTime.UtcNow || match.MaterialRequest.Deadline <= DateTime.UtcNow ||
+                    match.DurationMinutes > (decimal)(match.MaterialRequest.Deadline - DateTime.UtcNow).TotalMinutes ||
+                    !string.Equals(match.Listing.Unit, match.MaterialRequest.Unit, StringComparison.OrdinalIgnoreCase) ||
+                    match.Listing.UnitPrice * match.MaterialRequest.RequiredQuantity + match.EstimatedTransportCost > match.MaterialRequest.MaximumBudget)
+                    throw new AgentWorkflowException(409, "The recommendation is no longer eligible. Request a revision.");
+
+                if (MarketplaceMatchPolicy.RejectionReason(match.MaterialRequest.BuyerId, match.Listing.SellerId) is not null)
+                    throw new AgentWorkflowException(409, "A workflow cannot approve a self-dealing match.");
+                if (match.Listing.Status != ListingStatus.ACTIVE)
+                    throw new AgentWorkflowException(409, "The listing is not available for reservation.");
+                if (match.MaterialRequest.Status is not BuyerRequestStatus.OPEN and not BuyerRequestStatus.MATCH_FOUND and not BuyerRequestStatus.PENDING_APPROVAL)
+                    throw new AgentWorkflowException(409, "The material request is not open for reservation.");
+                if (match.Listing.CategoryId != match.MaterialRequest.CategoryId)
+                    throw new AgentWorkflowException(409, "The workflow match categories do not match.");
+
+                var existingRes = await db.Reservations.AnyAsync(x => x.ListingId == match.ListingId &&
+                    x.MaterialRequestId == match.MaterialRequestId && x.Status != ReservationStatus.RELEASED &&
+                    x.Status != ReservationStatus.CANCELLED, ct);
+                if (!existingRes)
                 {
-                    Id = Guid.NewGuid(), ListingId = match.ListingId, MaterialRequestId = match.MaterialRequestId,
-                    Quantity = quantity, Status = ReservationStatus.ACTIVE
-                });
-                db.AuditLogs.Add(new AuditLog { Id = Guid.NewGuid(), ActorUserId = managerId,
-                    EntityType = nameof(Listing), EntityId = match.ListingId, Action = "QUANTITY_RESERVED" });
+                    var quantity = match.MaterialRequest.RequiredQuantity;
+                    if (match.Listing.ReservedQuantity + quantity > match.Listing.Quantity)
+                        throw new AgentWorkflowException(409, "Insufficient available quantity.");
+                    match.Listing.ReservedQuantity += quantity;
+                    if (match.Listing.ReservedQuantity == match.Listing.Quantity)
+                        match.Listing.Status = ListingStatus.RESERVED;
+                    db.Reservations.Add(new Reservation
+                    {
+                        Id = Guid.NewGuid(), ListingId = match.ListingId, MaterialRequestId = match.MaterialRequestId,
+                        Quantity = quantity, Status = ReservationStatus.ACTIVE
+                    });
+                    db.AuditLogs.Add(new AuditLog { Id = Guid.NewGuid(), ActorUserId = managerId,
+                        EntityType = nameof(Listing), EntityId = match.ListingId, Action = "QUANTITY_RESERVED" });
+                }
+                match.MaterialRequest.Status = BuyerRequestStatus.APPROVED;
             }
-            match.MaterialRequest.Status = BuyerRequestStatus.APPROVED;
+            else
+            {
+                if (workflow.MaterialRequestId is Guid requestId)
+                {
+                    await db.Database.ExecuteSqlInterpolatedAsync(
+                        $"SELECT 1 FROM \"MaterialRequests\" WHERE \"Id\" = {requestId} FOR UPDATE", ct);
+                }
+
+                // Deterministic lock order on all involved listings to avoid deadlocks:
+                var distinctListingIds = pendingTransactions
+                    .Select(x => x.Offer.MaterialMatch.ListingId)
+                    .Distinct()
+                    .OrderBy(x => x)
+                    .ToList();
+
+                foreach (var listingId in distinctListingIds)
+                {
+                    await db.Database.ExecuteSqlInterpolatedAsync(
+                        $"SELECT 1 FROM \"Listings\" WHERE \"Id\" = {listingId} FOR UPDATE", ct);
+                }
+
+                foreach (var txRow in pendingTransactions)
+                {
+                    await db.Entry(txRow.Offer.MaterialMatch.Listing).ReloadAsync(ct);
+                    await db.Entry(txRow.Offer.MaterialMatch.MaterialRequest).ReloadAsync(ct);
+                }
+
+                var request = pendingTransactions.First().Offer.MaterialMatch.MaterialRequest;
+                if (request.Status is not BuyerRequestStatus.OPEN and not BuyerRequestStatus.MATCH_FOUND and not BuyerRequestStatus.PENDING_APPROVAL)
+                    throw new AgentWorkflowException(409, "The material request is not open for reservation.");
+                if (request.Deadline <= DateTime.UtcNow)
+                    throw new AgentWorkflowException(409, "The material request has expired.");
+
+                // Validate every transaction allocation
+                foreach (var txRow in pendingTransactions)
+                {
+                    var match = txRow.Offer.MaterialMatch;
+                    var listing = match.Listing;
+                    var allocatedQty = txRow.Quantity;
+
+                    if (allocatedQty <= 0)
+                        throw new AgentWorkflowException(409, "Allocated quantity must be positive.");
+
+                    if (listing.Status != ListingStatus.ACTIVE)
+                        throw new AgentWorkflowException(409, $"Listing '{listing.Title}' is not available for reservation.");
+
+                    if (listing.AvailableUntil <= DateTime.UtcNow)
+                        throw new AgentWorkflowException(409, $"Listing '{listing.Title}' has expired.");
+
+                    if (listing.CategoryId != request.CategoryId)
+                        throw new AgentWorkflowException(409, $"Listing '{listing.Title}' category does not match requirement.");
+
+                    if (!string.Equals(listing.Unit, request.Unit, StringComparison.OrdinalIgnoreCase))
+                        throw new AgentWorkflowException(409, $"Listing '{listing.Title}' unit does not match requirement.");
+
+                    if (MarketplaceMatchPolicy.RejectionReason(request.BuyerId, listing.SellerId) is not null)
+                        throw new AgentWorkflowException(409, $"A workflow cannot approve a self-dealing match with seller for '{listing.Title}'.");
+
+                    if (match.Status != MatchStatus.ROUTED || match.Distance is null or < 0 || match.DurationMinutes is null or < 0 || match.EstimatedTransportCost is null or < 0)
+                        throw new AgentWorkflowException(409, $"The route data for '{listing.Title}' is incomplete.");
+
+                    if (match.DurationMinutes > (decimal)(request.Deadline - DateTime.UtcNow).TotalMinutes)
+                        throw new AgentWorkflowException(409, $"Delivery duration exceeds deadline for '{listing.Title}'.");
+
+                    // Terms check:
+                    if (txRow.Offer.UnitValue != listing.UnitPrice || txRow.Offer.TotalValue != txRow.Quantity * listing.UnitPrice ||
+                        txRow.Offer.BuyerId != request.BuyerId || txRow.Offer.SellerId != listing.SellerId)
+                        throw new AgentWorkflowException(409, "The offered terms changed. Request a revision.");
+
+                    // Stock re-check:
+                    if (listing.ReservedQuantity + allocatedQty > listing.Quantity)
+                        throw new AgentWorkflowException(409, $"Insufficient available quantity for listing '{listing.Title}'. Required: {allocatedQty}, Available: {listing.Quantity - listing.ReservedQuantity}.");
+                }
+
+                // Total budget check:
+                var totalMaterialCost = pendingTransactions.Sum(x => x.Quantity * x.Offer.UnitValue);
+                var totalTransportCost = pendingTransactions.Select(x => x.Offer.MaterialMatch).DistinctBy(x => x.Id).Sum(x => x.EstimatedTransportCost ?? 0);
+                if (totalMaterialCost + totalTransportCost > request.MaximumBudget)
+                    throw new AgentWorkflowException(409, "Total cost across all selections exceeds the requirement budget.");
+
+                // All checks passed! Now reserve exact allocated quantities:
+                foreach (var txRow in pendingTransactions)
+                {
+                    var match = txRow.Offer.MaterialMatch;
+                    var listing = match.Listing;
+                    var allocatedQty = txRow.Quantity;
+
+                    var existing = await db.Reservations.AnyAsync(x => x.ListingId == listing.Id &&
+                        x.MaterialRequestId == request.Id && x.Status != ReservationStatus.RELEASED &&
+                        x.Status != ReservationStatus.CANCELLED, ct);
+
+                    if (!existing)
+                    {
+                        listing.ReservedQuantity += allocatedQty;
+                        if (listing.ReservedQuantity == listing.Quantity)
+                            listing.Status = ListingStatus.RESERVED;
+
+                        db.Reservations.Add(new Reservation
+                        {
+                            Id = Guid.NewGuid(),
+                            ListingId = listing.Id,
+                            MaterialRequestId = request.Id,
+                            Quantity = allocatedQty,
+                            Status = ReservationStatus.ACTIVE
+                        });
+
+                        db.AuditLogs.Add(new AuditLog
+                        {
+                            Id = Guid.NewGuid(),
+                            ActorUserId = managerId,
+                            EntityType = nameof(Listing),
+                            EntityId = listing.Id,
+                            Action = "QUANTITY_RESERVED"
+                        });
+                    }
+                }
+
+                request.Status = BuyerRequestStatus.APPROVED;
+            }
+
             workflow.Status = AgentWorkflowStatus.APPROVED;
             workflow.CurrentStage = "APPROVED";
             workflow.CompletedAtUtc = null;
@@ -221,7 +351,8 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db)
         TransactionStatus status, CancellationToken ct)
     {
         var transactions = await db.Transactions.Include(x => x.Offer).Where(x =>
-            x.Offer.MaterialMatchId == workflow.MaterialMatchId && x.Status == TransactionStatus.PENDING_APPROVAL).ToListAsync(ct);
+            ((workflow.MaterialRequestId != null && x.Offer.MaterialMatch.MaterialRequestId == workflow.MaterialRequestId) ||
+             x.Offer.MaterialMatchId == workflow.MaterialMatchId) && x.Status == TransactionStatus.PENDING_APPROVAL).ToListAsync(ct);
         foreach (var row in transactions)
         {
             row.Status = status;

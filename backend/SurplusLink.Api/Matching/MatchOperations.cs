@@ -27,7 +27,7 @@ public sealed partial class MatchService
         var request = await LockOpenRequirement(id, actor, manager, ct);
         var listings = await db.Listings.AsNoTracking().Where(x => x.CategoryId == request.CategoryId)
             .OrderByDescending(x => x.Status == ListingStatus.ACTIVE && x.AvailableUntil > DateTime.UtcNow &&
-                x.SellerId != request.BuyerId && x.Quantity - x.ReservedQuantity >= request.RequiredQuantity &&
+                x.SellerId != request.BuyerId && x.Quantity - x.ReservedQuantity > 0 &&
                 x.Unit.ToLower() == request.Unit.ToLower() && x.UnitPrice * request.RequiredQuantity <= request.MaximumBudget)
             .ThenBy(x => x.UnitPrice).ThenBy(x => x.Id).Take(100).ToListAsync(ct);
         foreach (var listing in listings)
@@ -130,20 +130,26 @@ public sealed partial class MatchService
         ?? (listing.AvailableUntil <= DateTime.UtcNow ? "LISTING_EXPIRED" : null)
         ?? (listing.CategoryId != request.CategoryId ? "CATEGORY_MISMATCH" : null)
         ?? (!string.Equals(listing.Unit, request.Unit, StringComparison.OrdinalIgnoreCase) ? "UNIT_MISMATCH" : null)
-        ?? (listing.Quantity - listing.ReservedQuantity < request.RequiredQuantity ? "INSUFFICIENT_QUANTITY" : null)
+        ?? (listing.Quantity - listing.ReservedQuantity <= 0 ? "INSUFFICIENT_QUANTITY" : null)
         ?? (listing.UnitPrice * request.RequiredQuantity > request.MaximumBudget ? "BUDGET_EXCEEDED" : null);
 
-    private static MatchResponse Response(MaterialMatch x) => new(x.Id, x.MaterialRequestId, x.ListingId,
-        x.Score, x.Distance, x.EstimatedTransportCost, x.Status.ToString(), MatchRecommendation.InvalidReason(x.MaterialRequest, x, DateTime.UtcNow) is null,
-        x.Status == MatchStatus.REJECTED, x.RejectionReason, x.CreatedAtUtc, x.DurationMinutes,
-        x.Listing.Title, x.Listing.Category.Name, x.Listing.SellerId, x.MaterialRequest.RequiredQuantity, x.Listing.Unit, x.Listing.UnitPrice,
-        x.Listing.AvailableUntil, x.MaterialRequest.Deadline, x.Listing.Quantity - x.Listing.ReservedQuantity,
-        x.MaterialRequest.MaximumBudget, x.MaterialRequest.Status.ToString(),
-        x.Listing.Seller.FullName, x.Listing.Seller.BusinessName, x.Listing.Condition.ToString(),
-        x.Listing.Latitude, x.Listing.Longitude, x.Listing.Seller.Address,
-        x.Id == x.MaterialRequest.RecommendedMatchId,
-        x.MaterialRequest.RecommendedMatchId,
-        x.MaterialRequest.RecommendationReason ?? (x.Id == x.MaterialRequest.RecommendedMatchId
-            ? "Highest deterministic final score among valid routed candidates; ties use condition, total estimated cost, distance, then listing ID."
-            : null));
+    private static MatchResponse Response(MaterialMatch x)
+    {
+        var available = x.Listing.Quantity - x.Listing.ReservedQuantity;
+        var required = x.MaterialRequest.RequiredQuantity;
+        return new(x.Id, x.MaterialRequestId, x.ListingId,
+            x.Score, x.Distance, x.EstimatedTransportCost, x.Status.ToString(), MatchRecommendation.InvalidReason(x.MaterialRequest, x, DateTime.UtcNow) is null,
+            x.Status == MatchStatus.REJECTED, x.RejectionReason, x.CreatedAtUtc, x.DurationMinutes,
+            x.Listing.Title, x.Listing.Category.Name, x.Listing.SellerId, required, x.Listing.Unit, x.Listing.UnitPrice,
+            x.Listing.AvailableUntil, x.MaterialRequest.Deadline, available,
+            x.MaterialRequest.MaximumBudget, x.MaterialRequest.Status.ToString(),
+            x.Listing.Seller.FullName, x.Listing.Seller.BusinessName, x.Listing.Condition.ToString(),
+            x.Listing.Latitude, x.Listing.Longitude, x.Listing.Seller.Address,
+            x.Id == x.MaterialRequest.RecommendedMatchId,
+            x.MaterialRequest.RecommendedMatchId,
+            x.MaterialRequest.RecommendationReason ?? (x.Id == x.MaterialRequest.RecommendedMatchId
+                ? "Highest deterministic final score among valid routed candidates; ties use condition, total estimated cost, distance, then listing ID."
+                : null),
+            available < required);
+    }
 }

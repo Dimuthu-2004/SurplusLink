@@ -42,7 +42,7 @@ class SelectionFake extends DetailsFake {
   Object? selectionError;
   Completer<void>? pendingSelection;
   @override
-  Future<void> select(String requirementId, String matchId) async {
+  Future<void> select(String requirementId, String matchId, {double? quantity}) async {
     selections.add('$requirementId/$matchId');
     if (selectionError != null) throw selectionError!;
     if (pendingSelection != null) await pendingSelection!.future;

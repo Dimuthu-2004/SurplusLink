@@ -76,7 +76,8 @@ public sealed record MatchResponse(
     string? SellerAddress = null,
     bool AiRecommended = false,
     Guid? RecommendedMatchId = null,
-    string? RecommendationReason = null
+    string? RecommendationReason = null,
+    bool IsPartial = false
 );
 
 public sealed record MatchPage(

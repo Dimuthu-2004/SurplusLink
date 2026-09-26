@@ -53,9 +53,20 @@ class MatchRepository implements MatchGateway {
   }
 
   @override
-  Future<void> select(String requirementId, String matchId) => _guard(
+  Future<void> select(String requirementId, String matchId, {double? quantity}) => _guard(
     () => _api.postJson('/api/requirements/$requirementId/select-match', {
       'matchId': matchId,
+      'quantity': ?quantity,
+    }, authenticated: true),
+  );
+
+  @override
+  Future<void> selectMatches(
+    String requirementId,
+    List<MatchAllocation> allocations,
+  ) => _guard(
+    () => _api.postJson('/api/requirements/$requirementId/select-matches', {
+      'allocations': allocations.map((a) => a.toJson()).toList(),
     }, authenticated: true),
   );
 

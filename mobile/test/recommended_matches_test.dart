@@ -286,7 +286,13 @@ class FakeMatches implements MatchGateway {
   }
 
   @override
-  Future<void> select(String requirementId, String matchId) async {}
+  Future<void> select(String requirementId, String matchId, {double? quantity}) async {}
+
+  @override
+  Future<void> selectMatches(
+    String requirementId,
+    List<MatchAllocation> allocations,
+  ) async {}
 
   @override
   Future<void> cancelPendingApproval(String requirementId) async {}

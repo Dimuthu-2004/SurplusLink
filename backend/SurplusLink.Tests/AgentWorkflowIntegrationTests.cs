@@ -143,6 +143,133 @@ public sealed class AgentWorkflowIntegrationTests(RequirementsDatabase fixture) 
         }
     }
 
+    [PostgresFact]
+    public async Task Multi_match_selection_approval_reserves_atomically_and_shortage_rolls_back()
+    {
+        using var app = fixture.App();
+        using var buyer = fixture.Client(app, fixture.Buyer, "BUYER");
+        using var manager = fixture.Client(app, fixture.Manager, "MANAGER");
+
+        Guid reqId, listingAId, listingBId, matchAId, matchBId;
+        using (var db = fixture.Context())
+        {
+            var category = await db.Categories.FirstAsync();
+            var request = new BuyerRequest
+            {
+                Id = Guid.NewGuid(), BuyerId = fixture.Buyer, CategoryId = category.Id, Title = "Multi-match test",
+                RequiredQuantity = 50, MaximumBudget = 2000, Unit = "pcs", Deadline = DateTime.UtcNow.AddDays(7),
+                Status = BuyerRequestStatus.MATCH_FOUND
+            };
+            var listingA = new Listing
+            {
+                Id = Guid.NewGuid(), SellerId = fixture.Seller, CategoryId = category.Id, Title = "Seller A stock",
+                Quantity = 20, ReservedQuantity = 0, Unit = "pcs", UnitPrice = 10, AvailableUntil = DateTime.UtcNow.AddDays(10),
+                Status = ListingStatus.ACTIVE, Condition = MaterialCondition.GOOD
+            };
+            var listingB = new Listing
+            {
+                Id = Guid.NewGuid(), SellerId = fixture.OtherBuyer, CategoryId = category.Id, Title = "Seller B stock",
+                Quantity = 30, ReservedQuantity = 0, Unit = "pcs", UnitPrice = 12, AvailableUntil = DateTime.UtcNow.AddDays(10),
+                Status = ListingStatus.ACTIVE, Condition = MaterialCondition.GOOD
+            };
+            var matchA = new MaterialMatch
+            {
+                Id = Guid.NewGuid(), MaterialRequestId = request.Id, ListingId = listingA.Id,
+                Status = MatchStatus.ROUTED, Distance = 10, DurationMinutes = 30, EstimatedTransportCost = 50
+            };
+            var matchB = new MaterialMatch
+            {
+                Id = Guid.NewGuid(), MaterialRequestId = request.Id, ListingId = listingB.Id,
+                Status = MatchStatus.ROUTED, Distance = 15, DurationMinutes = 45, EstimatedTransportCost = 60
+            };
+            db.AddRange(request, listingA, listingB, matchA, matchB);
+            await db.SaveChangesAsync();
+            reqId = request.Id;
+            listingAId = listingA.Id;
+            listingBId = listingB.Id;
+            matchAId = matchA.Id;
+            matchBId = matchB.Id;
+        }
+
+        // 1. Over-allocation rejected: 20 + 35 = 55 > 50
+        var overSelect = await buyer.PostAsJsonAsync($"/api/requirements/{reqId}/select-matches", new
+        {
+            allocations = new[]
+            {
+                new { matchId = matchAId, quantity = 20m },
+                new { matchId = matchBId, quantity = 35m }
+            }
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, overSelect.StatusCode);
+
+        // 2. Exceeding single seller available stock rejected: Seller A has 20, asking 25
+        var exceedStock = await buyer.PostAsJsonAsync($"/api/requirements/{reqId}/select-matches", new
+        {
+            allocations = new[]
+            {
+                new { matchId = matchAId, quantity = 25m },
+                new { matchId = matchBId, quantity = 25m }
+            }
+        });
+        Assert.Equal(HttpStatusCode.Conflict, exceedStock.StatusCode);
+
+        // 3. Valid multi-match selection: 20 from A, 30 from B = 50 total
+        var selectOk = await buyer.PostAsJsonAsync($"/api/requirements/{reqId}/select-matches", new
+        {
+            allocations = new[]
+            {
+                new { matchId = matchAId, quantity = 20m },
+                new { matchId = matchBId, quantity = 30m }
+            }
+        });
+        Assert.Equal(HttpStatusCode.OK, selectOk.StatusCode);
+
+        // Verify stock is NOT reserved yet!
+        using (var db = fixture.Context())
+        {
+            Assert.Equal(0, (await db.Listings.FindAsync(listingAId))!.ReservedQuantity);
+            Assert.Equal(0, (await db.Listings.FindAsync(listingBId))!.ReservedQuantity);
+            Assert.Empty(await db.Reservations.Where(x => x.MaterialRequestId == reqId).ToListAsync());
+            var req = await db.BuyerRequests.FindAsync(reqId);
+            Assert.Equal(BuyerRequestStatus.PENDING_APPROVAL, req!.Status);
+            var txs = await db.Transactions.Where(x => x.Offer.MaterialMatch.MaterialRequestId == reqId).ToListAsync();
+            Assert.Equal(2, txs.Count);
+            Assert.All(txs, t => Assert.Equal(0, t.ReservedQuantity));
+        }
+
+        // 4. Manager approval reserves atomically across both listings
+        Guid workflowId;
+        using (var db = fixture.Context())
+        {
+            workflowId = (await db.AgentWorkflows.SingleAsync(x => x.MaterialRequestId == reqId)).Id;
+        }
+        var approved = await manager.PostAsJsonAsync($"/api/workflows/{workflowId}/approve", new { note = "Multi-match approved" });
+        Assert.Equal(HttpStatusCode.OK, approved.StatusCode);
+
+        using (var db = fixture.Context())
+        {
+            var lA = await db.Listings.FindAsync(listingAId);
+            var lB = await db.Listings.FindAsync(listingBId);
+            Assert.Equal(20m, lA!.ReservedQuantity);
+            Assert.Equal(ListingStatus.RESERVED, lA.Status);
+            Assert.Equal(30m, lB!.ReservedQuantity);
+            Assert.Equal(ListingStatus.RESERVED, lB.Status);
+
+            var reservations = await db.Reservations.Where(x => x.MaterialRequestId == reqId).ToListAsync();
+            Assert.Equal(2, reservations.Count);
+            Assert.Contains(reservations, r => r.ListingId == listingAId && r.Quantity == 20m);
+            Assert.Contains(reservations, r => r.ListingId == listingBId && r.Quantity == 30m);
+
+            var req = await db.BuyerRequests.FindAsync(reqId);
+            Assert.Equal(BuyerRequestStatus.APPROVED, req!.Status);
+
+            var txs = await db.Transactions.Where(x => x.Offer.MaterialMatch.MaterialRequestId == reqId).ToListAsync();
+            Assert.Equal(2, txs.Count);
+            Assert.Contains(txs, t => t.SellerId == fixture.Seller && t.Quantity == 20m && t.ReservedQuantity == 20m && t.Status == TransactionStatus.APPROVED);
+            Assert.Contains(txs, t => t.SellerId == fixture.OtherBuyer && t.Quantity == 30m && t.ReservedQuantity == 30m && t.Status == TransactionStatus.APPROVED);
+        }
+    }
+
     private async Task<AgentWorkflow> SeedWorkflow(AgentWorkflowStatus status)
     {
         using var db = fixture.Context();

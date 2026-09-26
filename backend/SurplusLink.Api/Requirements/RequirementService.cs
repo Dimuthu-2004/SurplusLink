@@ -167,41 +167,189 @@ public sealed class RequirementService(SurplusLinkDbContext db, IRequirementWork
         return RequirementResponse.From(request);
     }
 
-    public async Task<RequirementResponse> SelectMatchAsync(Guid id, Guid buyerId, Guid matchId, CancellationToken ct)
+    public Task<RequirementResponse> SelectMatchAsync(Guid id, Guid buyerId, Guid matchId, CancellationToken ct) =>
+        SelectMatchAsync(id, buyerId, matchId, null, ct);
+
+    public async Task<RequirementResponse> SelectMatchAsync(Guid id, Guid buyerId, Guid matchId, decimal? quantity, CancellationToken ct)
     {
+        var match = await db.Matches.Include(x => x.Listing).AsNoTracking().SingleOrDefaultAsync(x => x.Id == matchId && x.MaterialRequestId == id, ct)
+            ?? throw new RequirementException(404, "Match was not found for this requirement.");
+        var request = await db.BuyerRequests.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct)
+            ?? throw new RequirementException(404, "Requirement was not found.");
+
+        var availableStock = match.Listing.Quantity - match.Listing.ReservedQuantity;
+        var selectedQty = quantity ?? Math.Min(request.RequiredQuantity, Math.Max(0, availableStock));
+        return await SelectMatchesAsync(id, buyerId, [new MatchAllocationRequest { MatchId = matchId, Quantity = selectedQty }], ct);
+    }
+
+    public async Task<RequirementResponse> SelectMatchesAsync(Guid id, Guid buyerId, IReadOnlyList<MatchAllocationRequest> allocations, CancellationToken ct)
+    {
+        if (allocations is null || allocations.Count == 0)
+            throw new RequirementException(400, "At least one allocation is required.");
+
+        if (allocations.GroupBy(x => x.MatchId).Any(g => g.Count() > 1))
+            throw new RequirementException(400, "Each match can only be selected once.");
+
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         var request = await LockOwnedAsync(id, buyerId, ct);
         RequireState(request, BuyerRequestStatus.MATCH_FOUND);
+
         if (await db.Reservations.AnyAsync(x => x.MaterialRequestId == id && x.Status != ReservationStatus.RELEASED && x.Status != ReservationStatus.CANCELLED, ct))
             throw new RequirementException(409, "A reservation already protects this requirement.");
-        var match = await db.Matches.Include(x => x.Listing).SingleOrDefaultAsync(x => x.Id == matchId && x.MaterialRequestId == id, ct)
-            ?? throw new RequirementException(404, "Match was not found for this requirement.");
-        if (match.Status != MatchStatus.ROUTED || match.Distance is null || match.DurationMinutes is null || match.EstimatedTransportCost is null ||
-            MatchService.EligibilityReason(request, match.Listing) is not null ||
-            match.DurationMinutes > (decimal)(request.Deadline - DateTime.UtcNow).TotalMinutes ||
-            match.Listing.UnitPrice * request.RequiredQuantity + match.EstimatedTransportCost > request.MaximumBudget)
-            throw new RequirementException(409, "Choose one currently valid routed match.");
+
+        var totalSelected = allocations.Sum(x => x.Quantity);
+        if (totalSelected <= 0)
+            throw new RequirementException(400, "Total selected quantity must be greater than zero.");
+        if (totalSelected > request.RequiredQuantity)
+            throw new RequirementException(400, $"Total selected quantity ({totalSelected}) cannot exceed requested quantity ({request.RequiredQuantity}).");
+
+        var matchIds = allocations.Select(x => x.MatchId).Distinct().ToList();
+        var matches = await db.Matches
+            .Include(x => x.Listing).ThenInclude(x => x.Seller)
+            .Where(x => matchIds.Contains(x.Id) && x.MaterialRequestId == id)
+            .ToListAsync(ct);
+
+        if (matches.Count != matchIds.Count)
+            throw new RequirementException(404, "One or more selected matches were not found for this requirement.");
+
+        if (matches.GroupBy(x => x.ListingId).Any(g => g.Count() > 1))
+            throw new RequirementException(400, "Multiple selections cannot reference the same listing.");
+
+        var allocationList = new List<object>();
+        var offers = new List<Offer>();
+        var transactions = new List<Transaction>();
+
+        decimal totalMaterialCost = 0;
+        decimal totalTransportCost = 0;
+
+        foreach (var allocation in allocations)
+        {
+            if (allocation.Quantity <= 0)
+                throw new RequirementException(400, "Selected quantity must be greater than zero.");
+            if (decimal.Round(allocation.Quantity, 3) != allocation.Quantity)
+                throw new RequirementException(400, "Selected quantity supports at most three decimal places.");
+
+            var match = matches.Single(x => x.Id == allocation.MatchId);
+            var availableStock = match.Listing.Quantity - match.Listing.ReservedQuantity;
+
+            if (allocation.Quantity > availableStock)
+                throw new RequirementException(409, $"Selected quantity ({allocation.Quantity}) exceeds available stock ({availableStock}) for listing '{match.Listing.Title}'.");
+
+            if (match.Status != MatchStatus.ROUTED || match.Distance is null || match.DurationMinutes is null || match.EstimatedTransportCost is null)
+                throw new RequirementException(409, $"Match for listing '{match.Listing.Title}' does not have complete route and transport data.");
+
+            if (match.Listing.Status != ListingStatus.ACTIVE)
+                throw new RequirementException(409, $"Listing '{match.Listing.Title}' is not active.");
+
+            if (match.Listing.AvailableUntil <= DateTime.UtcNow)
+                throw new RequirementException(409, $"Listing '{match.Listing.Title}' has expired.");
+
+            if (match.Listing.CategoryId != request.CategoryId)
+                throw new RequirementException(409, $"Listing '{match.Listing.Title}' category does not match requirement.");
+
+            if (!string.Equals(match.Listing.Unit, request.Unit, StringComparison.OrdinalIgnoreCase))
+                throw new RequirementException(409, $"Listing '{match.Listing.Title}' unit does not match requirement.");
+
+            if (MarketplaceMatchPolicy.RejectionReason(request.BuyerId, match.Listing.SellerId) is not null)
+                throw new RequirementException(409, $"Self-dealing matches are not allowed for listing '{match.Listing.Title}'.");
+
+            if (match.DurationMinutes > (decimal)(request.Deadline - DateTime.UtcNow).TotalMinutes)
+                throw new RequirementException(409, $"Delivery deadline exceeded for listing '{match.Listing.Title}'.");
+
+            var matCost = allocation.Quantity * match.Listing.UnitPrice;
+            var transCost = match.EstimatedTransportCost.Value;
+            totalMaterialCost += matCost;
+            totalTransportCost += transCost;
+
+            var offer = new Offer
+            {
+                Id = Guid.NewGuid(),
+                MaterialMatchId = match.Id,
+                BuyerId = request.BuyerId,
+                SellerId = match.Listing.SellerId,
+                Quantity = allocation.Quantity,
+                UnitValue = match.Listing.UnitPrice,
+                TotalValue = matCost,
+                Status = OfferStatus.PENDING
+            };
+            offers.Add(offer);
+
+            var transaction = new Transaction
+            {
+                Id = Guid.NewGuid(),
+                OfferId = offer.Id,
+                BuyerId = offer.BuyerId,
+                SellerId = offer.SellerId,
+                Quantity = offer.Quantity,
+                TotalValue = offer.TotalValue,
+                ReservedQuantity = 0,
+                Status = TransactionStatus.PENDING_APPROVAL
+            };
+            transactions.Add(transaction);
+
+            allocationList.Add(new
+            {
+                matchId = match.Id,
+                listingId = match.ListingId,
+                sellerId = match.Listing.SellerId,
+                quantity = allocation.Quantity,
+                unitPrice = match.Listing.UnitPrice,
+                materialCost = matCost,
+                transportCost = transCost,
+                totalCost = matCost + transCost
+            });
+        }
+
+        if (totalMaterialCost + totalTransportCost > request.MaximumBudget)
+            throw new RequirementException(409, "Total cost exceeds the requirement maximum budget.");
+
+        var primaryMatch = matches.FirstOrDefault(m => m.Id == request.RecommendedMatchId) ?? matches.First();
+
         var workflow = new AgentWorkflow
         {
-            Id = Guid.NewGuid(), MaterialRequestId = id, MaterialMatchId = match.Id,
-            Status = AgentWorkflowStatus.PENDING_APPROVAL, CurrentStage = "PENDING_APPROVAL",
-            StartedAtUtc = DateTime.UtcNow, CompletedAtUtc = DateTime.UtcNow,
-            InputJson = JsonSerializer.Serialize(new { requirementId = id, selectedMatchId = match.Id, buyerConfirmed = true }),
-            OutputJson = JsonSerializer.Serialize(new { selectedMatchId = match.Id, buyerConfirmed = true }),
-            ValidationJson = JsonSerializer.Serialize(new { valid = true, requiresApproval = true, recommendedMatchId = match.Id })
+            Id = Guid.NewGuid(),
+            MaterialRequestId = id,
+            MaterialMatchId = primaryMatch.Id,
+            Status = AgentWorkflowStatus.PENDING_APPROVAL,
+            CurrentStage = "PENDING_APPROVAL",
+            StartedAtUtc = DateTime.UtcNow,
+            CompletedAtUtc = DateTime.UtcNow,
+            InputJson = JsonSerializer.Serialize(new
+            {
+                requirementId = id,
+                allocations = allocationList,
+                totalQuantity = totalSelected,
+                requiredQuantity = request.RequiredQuantity,
+                totalMaterialCost,
+                totalTransportCost,
+                totalCost = totalMaterialCost + totalTransportCost,
+                buyerConfirmed = true
+            }),
+            OutputJson = JsonSerializer.Serialize(new
+            {
+                allocations = allocationList,
+                totalQuantity = totalSelected,
+                buyerConfirmed = true
+            }),
+            ValidationJson = JsonSerializer.Serialize(new
+            {
+                valid = true,
+                requiresApproval = true,
+                allocations = allocationList,
+                recommendedMatchId = primaryMatch.Id
+            })
         };
-        var offer = new Offer { Id = Guid.NewGuid(), MaterialMatchId = match.Id, BuyerId = request.BuyerId,
-            SellerId = match.Listing.SellerId, Quantity = request.RequiredQuantity, UnitValue = match.Listing.UnitPrice,
-            TotalValue = request.RequiredQuantity * match.Listing.UnitPrice, Status = OfferStatus.PENDING };
+
         db.AgentWorkflows.Add(workflow);
-        db.Offers.Add(offer);
-        db.Transactions.Add(new Transaction { Id = Guid.NewGuid(), OfferId = offer.Id, BuyerId = offer.BuyerId,
-            SellerId = offer.SellerId, Quantity = offer.Quantity, TotalValue = offer.TotalValue,
-            Status = TransactionStatus.PENDING_APPROVAL });
+        db.Offers.AddRange(offers);
+        db.Transactions.AddRange(transactions);
+
         request.Status = BuyerRequestStatus.PENDING_APPROVAL;
-        Audit(request, "MATCH_SELECTED_BY_BUYER");
+        Audit(request, "MATCHES_SELECTED_BY_BUYER");
+
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
+
         return RequirementResponse.From(request) with { WorkflowId = workflow.Id, WorkflowStatus = workflow.Status.ToString() };
     }
 

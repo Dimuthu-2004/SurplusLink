@@ -1,3 +1,20 @@
+import 'package:mobile/materials/quantity_format.dart' as quantities;
+
+class MatchAllocation {
+  const MatchAllocation({
+    required this.matchId,
+    required this.quantity,
+  });
+
+  final String matchId;
+  final double quantity;
+
+  Map<String, dynamic> toJson() => {
+    'matchId': matchId,
+    'quantity': quantity,
+  };
+}
+
 class RecommendedMatch {
   const RecommendedMatch({
     required this.id,
@@ -30,7 +47,9 @@ class RecommendedMatch {
     this.longitude,
     this.sellerAddress,
     this.recommendedMatchId,
-  });
+    bool? isPartial,
+    // ignore: prefer_initializing_formals
+  }) : _isPartial = isPartial;
   final String id, requirementId, listingId, status;
   final double score;
   final bool? valid, rejected;
@@ -45,6 +64,7 @@ class RecommendedMatch {
   final String? sellerName, sellerBusinessName, condition, sellerAddress;
   final double? latitude, longitude;
   final String? recommendedMatchId;
+  final bool? _isPartial;
   bool get aiRecommended => id == recommendedMatchId;
 
   bool get isRejected =>
@@ -52,6 +72,25 @@ class RecommendedMatch {
   double? get estimatedMaterialCost =>
       (quantity != null && unitPrice != null) ? quantity! * unitPrice! : null;
   bool get isSelectable => valid == true && status == 'ROUTED' && !isRejected;
+
+  bool get isPartial =>
+      _isPartial ??
+      (availableQuantity != null &&
+          quantity != null &&
+          availableQuantity! < quantity!);
+
+  String partialWarning({double? requested}) {
+    final req = requested ?? quantity ?? 0;
+    final avail = availableQuantity ?? 0;
+    final u = unit?.trim() ?? '';
+    final reqStr = u.isNotEmpty
+        ? '${quantities.formatQuantity(req, u)} $u'
+        : quantities.formatQuantity(req, '');
+    final availStr = u.isNotEmpty
+        ? '${quantities.formatQuantity(avail, u)} $u'
+        : quantities.formatQuantity(avail, '');
+    return 'You need $reqStr, but this seller currently has only $availStr available.';
+  }
 
   factory RecommendedMatch.fromJson(Map<String, dynamic> json) =>
       RecommendedMatch(
@@ -89,6 +128,7 @@ class RecommendedMatch {
         longitude: _number(json, 'longitude', optional: true),
         sellerAddress: _optionalString(json, 'sellerAddress'),
         recommendedMatchId: _optionalString(json, 'recommendedMatchId'),
+        isPartial: _boolean(json, 'isPartial'),
       );
 }
 
