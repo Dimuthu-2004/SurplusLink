@@ -47,17 +47,25 @@ public sealed class DualRoleAuthTests(RequirementsDatabase fixture) : IClassFixt
     public async Task Registration_login_me_and_permissions_cover_all_marketplace_role_combinations()
     {
         using var app = fixture.App();
+        var registrationNumber = 0;
         foreach (var roles in new[] { new[] { "SELLER" }, new[] { "BUYER" }, new[] { "SELLER", "BUYER" } })
         {
             using var client = app.CreateClient();
-            var registration = Registration(roles);
+            var registration = Registration(roles, $"2000000000{++registrationNumber:D2}");
             var response = await client.PostAsJsonAsync("/api/auth/register", registration);
             Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-            var session = (await response.Content.ReadFromJsonAsync<AuthResponse>())!;
-            AssertRoles(session, roles);
+            var registered = (await response.Content.ReadFromJsonAsync<RegistrationResponse>())!;
+            Assert.Equal(registration.Email, registered.Email);
+            Assert.True(registered.EmailVerificationRequired);
+            using (var db = fixture.Context())
+            {
+                var user = await db.Users.SingleAsync(user => user.Email == registration.Email);
+                user.EmailVerified = true;
+                await db.SaveChangesAsync();
+            }
             var login = await client.PostAsJsonAsync("/api/auth/login", new { registration.Email, registration.Password });
             Assert.Equal(HttpStatusCode.OK, login.StatusCode);
-            session = (await login.Content.ReadFromJsonAsync<AuthResponse>())!;
+            var session = (await login.Content.ReadFromJsonAsync<AuthResponse>())!;
             AssertRoles(session, roles);
             client.DefaultRequestHeaders.Authorization = new("Bearer", session.Token);
             var me = (await client.GetFromJsonAsync<UserResponse>("/api/auth/me"))!;
@@ -138,10 +146,10 @@ public sealed class DualRoleAuthTests(RequirementsDatabase fixture) : IClassFixt
         Assert.Equal(roles.Order(), jwt.Claims.Where(x => x.Type == ClaimTypes.Role).Select(x => x.Value).Order());
     }
 
-    private static RegisterRequest Registration(string[] roles) => new()
+    private static RegisterRequest Registration(string[] roles, string nic = "200000000001") => new()
     {
         Email = Guid.NewGuid() + "@dual.test", Password = "Password123!", Roles = roles,
-        FullName = "Test User", PhoneNumber = "0771234567", Address = "Colombo"
+        FullName = "Test User", Nic = nic, PhoneNumber = "0771234567", Address = "Colombo"
     };
     private static object Material() => new
     {

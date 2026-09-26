@@ -14,6 +14,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 using Npgsql;
+using SurplusLink.Api.Auth;
 using SurplusLink.Api.Materials;
 using SurplusLink.Api.Data;
 using SurplusLink.Api.Matching;
@@ -473,6 +474,9 @@ public sealed class RequirementsDatabase : IAsyncLifetime
             {
                 var worker = services.Single(x => x.ImplementationType == typeof(WorkflowExecutionWorker));
                 services.Remove(worker); // Queue tests explicitly control execution; live worker tests restore it.
+                var emailSender = services.Single(x => x.ServiceType == typeof(IAuthEmailSender));
+                services.Remove(emailSender);
+                services.AddSingleton<IAuthEmailSender, NoOpAuthEmailSender>();
                 if (starter is not null) services.AddSingleton(starter);
             });
         });
@@ -499,5 +503,11 @@ public sealed class RequirementsDatabase : IAsyncLifetime
         await using var command = new NpgsqlCommand($"DROP DATABASE IF EXISTS \"{databaseName}\" WITH (FORCE)", admin);
         await command.ExecuteNonQueryAsync();
         created = false;
+    }
+
+    private sealed class NoOpAuthEmailSender : IAuthEmailSender
+    {
+        public Task SendVerificationAsync(string email, string code, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task SendPasswordResetAsync(string email, string code, CancellationToken cancellationToken) => Task.CompletedTask;
     }
 }
