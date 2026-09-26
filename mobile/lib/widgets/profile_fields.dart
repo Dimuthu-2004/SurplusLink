@@ -5,17 +5,19 @@ class ProfileFieldsController {
   ProfileFieldsController([AppUser? user])
     : name = TextEditingController(text: user?.fullName),
       phone = TextEditingController(text: user?.phoneNumber),
+      nic = TextEditingController(),
       business = TextEditingController(text: user?.businessName),
       address = TextEditingController(text: user?.address);
-  final TextEditingController name, phone, business, address;
+  final TextEditingController name, phone, nic, business, address;
   UserProfile get profile => UserProfile(
     fullName: name.text,
     phoneNumber: phone.text,
+    nic: nic.text,
     businessName: business.text,
     address: address.text,
   );
   void dispose() {
-    for (final field in [name, phone, business, address]) {
+    for (final field in [name, phone, nic, business, address]) {
       field.dispose();
     }
   }
@@ -47,10 +49,11 @@ class ProfileFields extends StatelessWidget {
         type: TextInputType.phone,
         hint: AutofillHints.telephoneNumber,
         validate: (value) =>
-            RegExp(r'^\+?[0-9][0-9 ()-]{6,24}$').hasMatch(value?.trim() ?? '')
+            RegExp(r'^(?:0?94|\+94|0)7\d{8}$').hasMatch((value?.trim() ?? '').replaceAll(RegExp(r'[ -]'), ''))
             ? null
-            : 'Enter a valid phone number.',
+            : 'Enter a valid Sri Lankan phone number.',
       ),
+      _field('Sri Lankan NIC', 'profile-nic', controller.nic, 12, validate: (value) => RegExp(r'^\d{9}[VvXx]$|^\d{12}$').hasMatch((value?.trim() ?? '').replaceAll(' ', '')) ? null : 'Enter a valid Sri Lankan NIC number.'),
       _field(
         'Business / organization (optional)',
         'profile-business',

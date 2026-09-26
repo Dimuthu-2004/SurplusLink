@@ -45,7 +45,7 @@ final class AuthRepository implements AuthGateway {
   }
 
   @override
-  Future<AuthSession> register({
+  Future<void> register({
     required String email,
     required String password,
     required List<AppRole> roles,
@@ -60,14 +60,22 @@ final class AuthRepository implements AuthGateway {
         'Select selling, buying, or both.',
       );
     }
-    final json = await _apiClient.postJson('/api/auth/register', {
+    await _apiClient.postJson('/api/auth/register', {
       'email': email.trim(),
       'password': password,
       'roles': roles.map((role) => role.apiValue).toList(),
       ...?profile?.toJson(),
     });
-    return _persistSession(json);
   }
+
+  @override
+  Future<void> verifyEmail({required String email, required String code}) async { await _apiClient.postJson('/api/auth/email-verification/verify', {'email': email.trim(), 'code': code}); }
+  @override
+  Future<void> resendVerification({required String email}) async { await _apiClient.postJson('/api/auth/email-verification/resend', {'email': email.trim()}); }
+  @override
+  Future<void> forgotPassword({required String email}) async { await _apiClient.postJson('/api/auth/forgot-password', {'email': email.trim()}); }
+  @override
+  Future<void> resetPassword({required String email, required String code, required String newPassword}) async { await _apiClient.postJson('/api/auth/reset-password', {'email': email.trim(), 'code': code, 'newPassword': newPassword}); }
 
   @override
   Future<AppUser> updateProfile(UserProfile profile) async => AppUser.fromJson(

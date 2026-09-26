@@ -3,6 +3,7 @@ import { sessionTokenStorage } from '../auth/tokenStorage';
 import { environment } from '../config/environment';
 
 interface ErrorPayload {
+  code?: unknown;
   message?: unknown;
   detail?: unknown;
   title?: unknown;
@@ -14,6 +15,7 @@ export class ApiError extends Error {
     message: string,
     public readonly status?: number,
     public readonly validationErrors?: Record<string, string[]>,
+    public readonly code?: string,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -87,6 +89,7 @@ export function normalizeApiError(error: unknown): ApiError {
     message,
     axiosError.response.status,
     Object.keys(validationErrors).length ? validationErrors : undefined,
+    stringValue(payload?.code),
   );
 }
 

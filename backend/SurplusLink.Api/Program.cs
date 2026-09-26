@@ -115,6 +115,18 @@ builder.Services.AddOptions<JwtOptions>()
     .Validate(options => options.ExpirationMinutes > 0, "Jwt:ExpirationMinutes must be greater than zero.")
     .ValidateOnStart();
 builder.Services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
+builder.Services.AddOptions<EmailOptions>()
+    .BindConfiguration(EmailOptions.SectionName)
+    .Configure(options =>
+    {
+        options.Host = builder.Configuration["SMTP_HOST"] ?? options.Host;
+        options.Port = int.TryParse(builder.Configuration["SMTP_PORT"], out var port) ? port : options.Port;
+        options.Username = builder.Configuration["SMTP_USERNAME"] ?? options.Username;
+        options.Password = builder.Configuration["SMTP_PASSWORD"] ?? options.Password;
+        options.FromEmail = builder.Configuration["SMTP_FROM_EMAIL"] ?? options.FromEmail;
+        options.FromName = builder.Configuration["SMTP_FROM_NAME"] ?? options.FromName;
+    });
+builder.Services.AddScoped<IAuthEmailSender, SmtpAuthEmailSender>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IReservationService, ReservationService>();
 builder.Services.AddScoped<IMaterialInventoryService, MaterialInventoryService>();
@@ -195,6 +207,12 @@ builder.Services.AddSwaggerGen(options =>
 builder.Services.AddHealthChecks();
 
 var app = builder.Build();
+
+var smtp = app.Services.GetRequiredService<IOptions<EmailOptions>>().Value;
+if (smtp.IsConfigured)
+    app.Logger.LogInformation("SMTP email service configured.");
+else
+    app.Logger.LogWarning("SMTP email service is not configured; authentication emails will return EMAIL_DELIVERY_FAILED.");
 
 var routing = app.Services.GetRequiredService<RoutingOptions>();
 if (!routing.CanRoute)

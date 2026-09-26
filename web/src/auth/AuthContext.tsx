@@ -36,6 +36,10 @@ interface AuthState {
 interface AuthContextValue extends AuthState {
   login(email: string, password: string): Promise<boolean>;
   register(request: PublicRegistration): Promise<boolean>;
+  verifyEmail(email: string, code: string): Promise<boolean>;
+  resendVerification(email: string): Promise<boolean>;
+  forgotPassword(email: string): Promise<boolean>;
+  resetPassword(email: string, code: string, newPassword: string): Promise<boolean>;
   logout(): void;
   clearError(): void;
 }
@@ -141,9 +145,8 @@ export function AuthProvider({
           businessName: request.businessName.trim() || undefined,
           address: request.address.trim(),
         });
-        const session = parseAuthResponse(response.data);
-        storage.write(session.token);
-        dispatch({ type: 'AUTHENTICATED', user: session.user });
+        // Registration deliberately does not mint a JWT. The same account must
+        // prove email ownership in both clients before it can sign in.
         return true;
       } catch (error) {
         dispatch({
@@ -156,10 +159,20 @@ export function AuthProvider({
     [client, storage],
   );
 
+  const unauthenticatedRequest = useCallback(async (path: string, body: object) => {
+    dispatch({ type: 'REQUEST_STARTED' });
+    try { await client.post(path, body); dispatch({ type: 'CLEAR_ERROR' }); return true; }
+    catch (error) { dispatch({ type: 'REQUEST_FAILED', error: normalizeApiError(error).message }); return false; }
+  }, [client]);
+  const verifyEmail = useCallback((email: string, code: string) => unauthenticatedRequest('/api/auth/email-verification/verify', { email: email.trim(), code }), [unauthenticatedRequest]);
+  const resendVerification = useCallback((email: string) => unauthenticatedRequest('/api/auth/email-verification/resend', { email: email.trim() }), [unauthenticatedRequest]);
+  const forgotPassword = useCallback((email: string) => unauthenticatedRequest('/api/auth/forgot-password', { email: email.trim() }), [unauthenticatedRequest]);
+  const resetPassword = useCallback((email: string, code: string, newPassword: string) => unauthenticatedRequest('/api/auth/reset-password', { email: email.trim(), code, newPassword }), [unauthenticatedRequest]);
+
   const clearError = useCallback(() => dispatch({ type: 'CLEAR_ERROR' }), []);
   const value = useMemo(
-    () => ({ ...state, login, register, logout, clearError }),
-    [state, login, register, logout, clearError],
+    () => ({ ...state, login, register, verifyEmail, resendVerification, forgotPassword, resetPassword, logout, clearError }),
+    [state, login, register, verifyEmail, resendVerification, forgotPassword, resetPassword, logout, clearError],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

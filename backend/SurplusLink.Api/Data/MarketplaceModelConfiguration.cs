@@ -33,11 +33,15 @@ public static class MarketplaceModelConfiguration
             entity.HasKey(user => user.Id).HasName("PK_Users");
             entity.Property(user => user.Email).HasColumnType("citext").HasMaxLength(320).IsRequired();
             entity.HasIndex(user => user.Email).IsUnique().HasDatabaseName("UX_Users_Email");
+            entity.HasIndex(user => user.Nic).IsUnique().HasDatabaseName("UX_Users_Nic").HasFilter("\"Nic\" IS NOT NULL");
             entity.Property(user => user.PasswordHash).IsRequired();
             entity.Property(user => user.FullName).HasMaxLength(120);
             entity.Property(user => user.PhoneNumber).HasMaxLength(26);
             entity.Property(user => user.BusinessName).HasMaxLength(160);
             entity.Property(user => user.Address).HasMaxLength(400);
+            entity.Property(user => user.Nic).HasMaxLength(12);
+            entity.Property(user => user.EmailVerificationCodeHash).HasMaxLength(256);
+            entity.Property(user => user.PasswordResetCodeHash).HasMaxLength(256);
         });
         modelBuilder.Entity<UserRoleAssignment>(entity =>
         {

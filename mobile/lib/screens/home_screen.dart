@@ -1,6 +1,7 @@
 import 'package:mobile/marketplace/marketplace_mode.dart';
 import 'package:mobile/widgets/marketplace_mode_switcher.dart';
 import 'package:flutter/material.dart';
+import 'package:mobile/widgets/logout_confirmation.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile/auth/auth_controller.dart';
 import 'package:mobile/auth/auth_models.dart';
@@ -120,7 +121,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         ),
                         glow: _glow,
                         onProfile: () => context.push('/profile'),
-                        onLogout: widget.authController.logout,
+                        onLogout: () async { if (await confirmLogout(context)) await widget.authController.logout(); },
                       ),
                     ),
                     const SizedBox(height: 20),

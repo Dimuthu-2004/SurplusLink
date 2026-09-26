@@ -59,17 +59,22 @@ void main() {
         'password': 'Password123!',
         'roles': ['BUYER'],
       });
-      return http.Response(_authJson('BUYER'), 201);
+      return http.Response(
+        jsonEncode({
+          'email': 'buyer@example.com',
+          'emailVerificationRequired': true,
+        }),
+        201,
+      );
     });
 
-    final session = await repository.register(
+    await repository.register(
       email: 'buyer@example.com',
       password: 'Password123!',
       roles: [AppRole.buyer],
     );
 
-    expect(session.user.roles, [AppRole.buyer]);
-    expect(storage.token, 'signed-jwt');
+    expect(storage.token, isNull);
   });
 
   test(
@@ -82,22 +87,18 @@ void main() {
         expect(jsonDecode(request.body)['roles'], ['SELLER', 'BUYER']);
         return http.Response(
           jsonEncode({
-            'token': 'dual-token',
-            'user': {
-              'id': 'dual',
-              'email': 'dual@test.local',
-              'roles': ['SELLER', 'BUYER'],
-            },
+            'email': 'dual@test.local',
+            'emailVerificationRequired': true,
           }),
           201,
         );
       });
-      final result = await repository.register(
+      await repository.register(
         email: 'dual@test.local',
         password: 'Password123!',
         roles: [AppRole.seller, AppRole.buyer],
       );
-      expect(result.user.roles, [AppRole.seller, AppRole.buyer]);
+      expect(storage.token, isNull);
       for (final roles in <List<AppRole>>[
         [],
         [AppRole.manager],

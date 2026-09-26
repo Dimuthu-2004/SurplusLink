@@ -28,12 +28,16 @@ import 'package:mobile/screens/my_materials_screen.dart';
 import 'package:mobile/offers/offer_gateway.dart';
 import 'package:mobile/screens/my_offers_screen.dart';
 import 'package:mobile/screens/register_screen.dart';
+import 'package:mobile/screens/email_verification_screen.dart';
+import 'package:mobile/screens/forgot_password_screen.dart';
 import 'package:mobile/screens/splash_screen.dart';
 
 abstract final class AppRoutes {
   static const splash = '/splash';
   static const login = '/login';
   static const register = '/register';
+  static const verifyEmail = '/verify-email';
+  static const forgotPassword = '/forgot-password';
   static const home = '/home';
   static const requirements = '/requirements';
   static const materials = '/materials';
@@ -73,7 +77,7 @@ GoRouter createAppRouter({
 
       final location = state.matchedLocation;
       final isAuthRoute =
-          location == AppRoutes.login || location == AppRoutes.register;
+          location == AppRoutes.login || location == AppRoutes.register || location == AppRoutes.verifyEmail || location == AppRoutes.forgotPassword;
 
       if (authController.status == AuthStatus.initializing) {
         if (!isAuthRoute && location != AppRoutes.splash) {
@@ -116,6 +120,8 @@ GoRouter createAppRouter({
           authController: authController,
         ),
       ),
+      GoRoute(path: AppRoutes.verifyEmail, builder: (context, state) => EmailVerificationScreen(authController: authController, email: state.uri.queryParameters['email'] ?? '')),
+      GoRoute(path: AppRoutes.forgotPassword, builder: (_, _) => ForgotPasswordScreen(authController: authController)),
       GoRoute(
         path: AppRoutes.splash,
         builder: (context, state) => const SplashScreen(),

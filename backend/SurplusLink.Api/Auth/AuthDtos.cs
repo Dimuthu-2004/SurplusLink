@@ -6,8 +6,9 @@ public class ProfileRequest
 {
     [Required, MaxLength(120)]
     public string FullName { get; init; } = string.Empty;
-    [Required, RegularExpression(@"^\+?[0-9][0-9 ()-]{6,24}$", ErrorMessage = "Enter a valid phone number.")]
+    [Required, SriLankanPhone]
     public string PhoneNumber { get; init; } = string.Empty;
+    public string? Nic { get; init; }
     [MaxLength(160)]
     public string? BusinessName { get; init; }
     [Required, MaxLength(400)]
@@ -26,6 +27,21 @@ public sealed class RegisterRequest : ProfileRequest
     public string[] Roles { get; init; } = [];
 }
 
+public class EmailCodeRequest
+{
+    [Required, EmailAddress, MaxLength(320)] public string Email { get; init; } = string.Empty;
+}
+
+public class VerifyEmailRequest : EmailCodeRequest
+{
+    [Required, RegularExpression(@"^\d{6}$")] public string Code { get; init; } = string.Empty;
+}
+
+public sealed class ResetPasswordRequest : VerifyEmailRequest
+{
+    [Required, MinLength(8), MaxLength(128)] public string NewPassword { get; init; } = string.Empty;
+}
+
 public sealed class MarketplaceRolesAttribute : ValidationAttribute
 {
     public MarketplaceRolesAttribute() : base("Select SELLER, BUYER, or both, without duplicates.") { }
@@ -34,6 +50,14 @@ public sealed class MarketplaceRolesAttribute : ValidationAttribute
         && roles.Length is >= 1 and <= 2
         && roles.All(role => role is "SELLER" or "BUYER")
         && roles.Distinct(StringComparer.Ordinal).Count() == roles.Length;
+}
+
+public sealed class SriLankanPhoneAttribute : ValidationAttribute
+{
+    public SriLankanPhoneAttribute() : base("Enter a valid Sri Lankan phone number.") { }
+
+    public override bool IsValid(object? value) => value is not string phone ||
+        string.IsNullOrWhiteSpace(phone) || SriLankanContact.TryNormalizePhone(phone, out _);
 }
 
 public sealed class LoginRequest
@@ -53,3 +77,4 @@ public sealed record UserResponse(Guid Id, string Email, string[] Roles,
 }
 
 public sealed record AuthResponse(string Token, UserResponse User);
+public sealed record RegistrationResponse(string Email, bool EmailVerificationRequired = true);

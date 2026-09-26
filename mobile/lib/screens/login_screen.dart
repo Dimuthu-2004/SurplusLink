@@ -79,6 +79,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   : const Text('Sign in'),
             ),
             const SizedBox(height: 12),
+            TextButton(onPressed: widget.authController.isBusy ? null : () => context.go(AppRoutes.forgotPassword), child: const Text('Forgot password?')),
+            const SizedBox(height: 12),
             TextButton(
               key: const Key('go-register'),
               onPressed: widget.authController.isBusy

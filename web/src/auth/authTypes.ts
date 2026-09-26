@@ -18,6 +18,7 @@ export interface PublicRegistration {
   fullName: string;
   email: string;
   phoneNumber: string;
+  nic: string;
   businessName: string;
   address: string;
   password: string;

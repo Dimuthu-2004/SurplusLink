@@ -41,7 +41,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       setState(() => _step = 1);
       return;
     }
-    await widget.authController.register(
+    final registered = await widget.authController.register(
       email: _emailController.text,
       password: _passwordController.text,
       roles: switch (_usage) {
@@ -51,6 +51,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       },
       profile: _profile.profile,
     );
+    if (registered && mounted) context.go('${AppRoutes.verifyEmail}?email=${Uri.encodeComponent(_emailController.text.trim())}');
   }
 
   @override

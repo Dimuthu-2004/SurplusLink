@@ -36,6 +36,7 @@ public static class DevelopmentSeed
             {
                 Id = Guid.NewGuid(),
                 Email = email,
+                EmailVerified = true,
                 RoleAssignments = seed.Roles.Select(role => new UserRoleAssignment { Role = role }).ToList(),
                 CreatedAtUtc = DateTime.UtcNow
             };

@@ -67,7 +67,7 @@ final class AuthController extends ChangeNotifier {
     required String password,
     required List<AppRole> roles,
     UserProfile? profile,
-  }) => _authenticate(
+  }) => _anonymousRequest(
     () => _gateway.register(
       email: email,
       password: password,
@@ -75,6 +75,11 @@ final class AuthController extends ChangeNotifier {
       profile: profile,
     ),
   );
+
+  Future<bool> verifyEmail({required String email, required String code}) => _anonymousRequest(() => _gateway.verifyEmail(email: email, code: code));
+  Future<bool> resendVerification({required String email}) => _anonymousRequest(() => _gateway.resendVerification(email: email));
+  Future<bool> forgotPassword({required String email}) => _anonymousRequest(() => _gateway.forgotPassword(email: email));
+  Future<bool> resetPassword({required String email, required String code, required String newPassword}) => _anonymousRequest(() => _gateway.resetPassword(email: email, code: code, newPassword: newPassword));
 
   Future<bool> updateProfile(UserProfile profile) async {
     if (_isBusy) return false;
@@ -142,6 +147,15 @@ final class AuthController extends ChangeNotifier {
     } finally {
       _setBusy(false);
     }
+  }
+
+  Future<bool> _anonymousRequest(Future<void> Function() request) async {
+    if (_isBusy) return false;
+    _errorMessage = null; _setBusy(true);
+    try { await request(); return true; }
+    on ApiException catch (error) { _errorMessage = error.message; return false; }
+    on Object { _errorMessage = 'Authentication failed. Please try again.'; return false; }
+    finally { _setBusy(false); }
   }
 
   void _setBusy(bool value) {
