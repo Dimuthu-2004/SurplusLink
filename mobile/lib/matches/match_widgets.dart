@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:mobile/core/api_exception.dart';
 import 'package:mobile/materials/quantity_format.dart' as quantities;
 import 'package:mobile/matches/match_formatters.dart';
@@ -378,36 +379,11 @@ class MatchListCard extends StatelessWidget {
                                   ),
                                   SizedBox(
                                     width: 90,
-                                    child: TextFormField(
-                                      key: Key('quantity-input-${match.id}'),
-                                      initialValue: quantities.formatQuantity(
-                                        selectedQuantity ?? 0,
-                                        match.unit ?? '',
-                                      ),
-                                      keyboardType: const TextInputType.numberWithOptions(
-                                        decimal: true,
-                                      ),
-                                      textAlign: TextAlign.center,
-                                      style: const TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                      decoration: InputDecoration(
-                                        contentPadding: const EdgeInsets.symmetric(
-                                          horizontal: 6,
-                                          vertical: 6,
-                                        ),
-                                        isDense: true,
-                                        border: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(6),
-                                        ),
-                                      ),
-                                      onChanged: (text) {
-                                        final parsed = double.tryParse(text.trim());
-                                        if (parsed != null) {
-                                          onQuantityChanged!(parsed);
-                                        }
-                                      },
+                                    child: _QuantityInput(
+                                      fieldKey: Key('quantity-input-${match.id}'),
+                                      quantity: selectedQuantity ?? 0,
+                                      unit: match.unit ?? '',
+                                      onChanged: onQuantityChanged!,
                                     ),
                                   ),
                                   IconButton(
@@ -532,6 +508,86 @@ class MatchListCard extends StatelessWidget {
       ),
     ],
   );
+}
+
+class _QuantityInput extends StatefulWidget {
+  const _QuantityInput({
+    required this.fieldKey,
+    required this.quantity,
+    required this.unit,
+    required this.onChanged,
+  });
+
+  final Key fieldKey;
+  final double quantity;
+  final String unit;
+  final ValueChanged<double> onChanged;
+
+  @override
+  State<_QuantityInput> createState() => _QuantityInputState();
+}
+
+class _QuantityInputState extends State<_QuantityInput> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: _formattedValue);
+  }
+
+  @override
+  void didUpdateWidget(covariant _QuantityInput oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final next = _formattedValue;
+    if (_controller.text != next) {
+      _controller.value = TextEditingValue(
+        text: next,
+        selection: TextSelection.collapsed(offset: next.length),
+      );
+    }
+  }
+
+  String get _formattedValue =>
+      quantities.formatQuantity(widget.quantity, widget.unit);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final discrete = quantities.isDiscreteUnit(widget.unit);
+    return TextFormField(
+      key: widget.fieldKey,
+      controller: _controller,
+      keyboardType: TextInputType.numberWithOptions(decimal: !discrete),
+      inputFormatters: discrete
+          ? [
+              TextInputFormatter.withFunction((oldValue, newValue) {
+                return RegExp(r'^\d*$').hasMatch(newValue.text)
+                    ? newValue
+                    : oldValue;
+              }),
+            ]
+          : null,
+      textAlign: TextAlign.center,
+      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+      decoration: InputDecoration(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+        isDense: true,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
+      ),
+      onChanged: (text) {
+        final parsed = discrete
+            ? int.tryParse(text.trim())?.toDouble()
+            : double.tryParse(text.trim());
+        if (parsed != null) widget.onChanged(parsed);
+      },
+    );
+  }
 }
 
 class _StatusChip extends StatelessWidget {

@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile/matches/match_gateway.dart';
 import 'package:mobile/matches/match_models.dart';
+import 'package:mobile/materials/quantity_format.dart' as quantities;
 import 'package:mobile/screens/match_details_screen.dart';
 import 'package:mobile/screens/recommended_matches_screen.dart';
 import 'package:mobile/theme/surplus_link_theme.dart';
@@ -106,6 +107,16 @@ RecommendedMatch createTestMatch({
 
 void main() {
   group('Partial fulfillment models and formatting', () {
+    test('count units are discrete while measured units remain continuous', () {
+      for (final unit in ['pcs', 'bag', 'bags', 'box', 'boxes', 'set', 'roll', 'sheet']) {
+        expect(quantities.isDiscreteUnit(unit), isTrue, reason: unit);
+      }
+      for (final unit in ['kg', 'L', 'm', 'm2', 'm3']) {
+        expect(quantities.isDiscreteUnit(unit), isFalse, reason: unit);
+      }
+      expect(quantities.formatQuantity(8.25, 'kg'), '8.25');
+    });
+
     test('MatchAllocation serializes to JSON correctly', () {
       const allocation = MatchAllocation(matchId: 'm1', quantity: 20.0);
       expect(allocation.toJson(), {'matchId': 'm1', 'quantity': 20.0});
@@ -260,6 +271,119 @@ void main() {
   });
 
   group('RecommendedMatchesScreen multi-match selection workflow', () {
+    testWidgets(
+      'discrete bag allocations stay integral and visible values drive totals and payload',
+      (tester) async {
+        tester.view.physicalSize = const Size(900, 2000);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+
+        final gateway = FakeMultiMatchGateway()
+          ..matches = [
+            createTestMatch(
+              id: 'bag-a',
+              requirementId: 'r1',
+              listingId: 'la',
+              sellerName: 'Seller A',
+              requiredQuantity: 10,
+              availableQuantity: 8,
+              unit: 'bags',
+              unitPrice: 1150,
+              estimatedTransportCost: 0,
+            ),
+            createTestMatch(
+              id: 'bag-b',
+              requirementId: 'r1',
+              listingId: 'lb',
+              sellerName: 'Seller B',
+              requiredQuantity: 10,
+              availableQuantity: 10,
+              unit: 'bags',
+              unitPrice: 100,
+              estimatedTransportCost: 0,
+            ),
+          ];
+
+        final router = GoRouter(
+          initialLocation: '/matches',
+          routes: [
+            GoRoute(
+              path: '/matches',
+              builder: (_, _) => RecommendedMatchesScreen(
+                gateway: gateway,
+                requirementId: 'r1',
+              ),
+            ),
+            GoRoute(
+              path: '/requirements/r1',
+              builder: (_, _) => const Scaffold(body: Text('Requirement')),
+            ),
+          ],
+        );
+        addTearDown(router.dispose);
+        await tester.pumpWidget(
+          MaterialApp.router(
+            theme: SurplusLinkTheme.light,
+            routerConfig: router,
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byKey(const Key('select-checkbox-bag-a')));
+        await tester.pumpAndSettle();
+        expect(find.text('Selected: 8 bags'), findsOneWidget);
+        expect(find.text('Remaining: 2 bags'), findsOneWidget);
+        expect(find.text('LKR 9,200.00'), findsOneWidget);
+
+        await tester.tap(find.byKey(const Key('qty-decrement-bag-a')));
+        await tester.pumpAndSettle();
+        expect(find.text('Selected: 7 bags'), findsOneWidget);
+        expect(
+          tester
+              .widget<TextFormField>(
+                find.byKey(const Key('quantity-input-bag-a')),
+              )
+              .controller!
+              .text,
+          '7',
+        );
+        await tester.tap(find.byKey(const Key('qty-increment-bag-a')));
+        await tester.pumpAndSettle();
+        expect(find.text('Selected: 8 bags'), findsOneWidget);
+
+        // The seller has only 8, so incrementing cannot allocate a ninth bag.
+        final plusA = tester.widget<IconButton>(
+          find.byKey(const Key('qty-increment-bag-a')),
+        );
+        expect(plusA.onPressed, isNull);
+
+        await tester.tap(find.byKey(const Key('select-checkbox-bag-b')));
+        await tester.pumpAndSettle();
+        expect(find.text('Selected: 10 bags'), findsOneWidget);
+        expect(find.text('Remaining: 0 bags'), findsOneWidget);
+        expect(
+          tester.widget<TextFormField>(find.byKey(const Key('quantity-input-bag-b'))).controller!.text,
+          '2',
+        );
+
+        // Decimal characters are rejected rather than rounded or converted.
+        await tester.enterText(find.byKey(const Key('quantity-input-bag-b')), '3.6');
+        await tester.pumpAndSettle();
+        expect(
+          tester.widget<TextFormField>(find.byKey(const Key('quantity-input-bag-b'))).controller!.text,
+          '2',
+        );
+        expect(find.text('Selected: 10 bags'), findsOneWidget);
+
+        await tester.tap(find.byKey(const Key('submit-selections')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('confirm-multi-selection')));
+        await tester.pumpAndSettle();
+        expect(gateway.submittedAllocations.single.map((item) => item.quantity), [8.0, 2.0]);
+      },
+    );
+
     testWidgets(
       'multi-match selection calculates totals, validates, and submits allocations',
       (tester) async {
