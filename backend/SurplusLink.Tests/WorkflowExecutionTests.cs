@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.DependencyInjection;
 using SurplusLink.Api.Models;
+using SurplusLink.Api.Notifications;
 using SurplusLink.Api.Requirements;
 using SurplusLink.Api.Routing;
 using SurplusLink.Api.Workflows;
@@ -187,7 +188,8 @@ public sealed class WorkflowPersistenceTests(RequirementsDatabase fixture) : ICl
         var id = await Seed();
         using var db = fixture.Context();
         var client = new FakeClient(WorkflowExecutionTests.Success);
-        var processor = new WorkflowQueueProcessor(db, client, new DemoTransport(), Options.Create(new WorkflowExecutionOptions()));
+        var processor = new WorkflowQueueProcessor(db, client, new DemoTransport(),
+            Options.Create(new WorkflowExecutionOptions()), notifications: new NotificationService(db));
         Assert.True(await processor.ProcessNextAsync(default));
         Assert.False(await processor.ProcessNextAsync(default));
         var workflow = await db.AgentWorkflows.Include(x => x.Steps).ThenInclude(x => x.ToolCalls).SingleAsync(x => x.MaterialRequestId == id);
@@ -200,6 +202,12 @@ public sealed class WorkflowPersistenceTests(RequirementsDatabase fixture) : ICl
         Assert.Equal(0, await db.Listings.Where(x => x.CategoryId == db.BuyerRequests.Where(r => r.Id == id).Select(r => r.CategoryId).First()).SumAsync(x => x.ReservedQuantity));
         Assert.Equal(1, client.Calls);
         Assert.True(await db.AuditLogs.AnyAsync(x => x.EntityId == workflow.Id && x.Action == "WORKFLOW_COMPLETED"));
+        var notification = await db.Notifications.SingleAsync(x => x.EntityId == id &&
+            x.Type == NotificationTypes.MatchesReady);
+        Assert.Equal(fixture.Buyer, notification.UserId);
+        Assert.Equal("Matches are ready", notification.Title);
+        Assert.Contains("1 valid match is ready", notification.Message);
+        Assert.Equal($"requirement:{id}:workflow:{workflow.Id}:matches-ready", notification.DeduplicationKey);
     }
 
     [PostgresFact]
@@ -209,12 +217,18 @@ public sealed class WorkflowPersistenceTests(RequirementsDatabase fixture) : ICl
         using var db = fixture.Context();
         var client = new FakeClient(request => new(request.WorkflowId, "REJECTED",
             new(false, false, null, ["TOTAL_COST_EXCEEDS_BUDGET_OR_UNKNOWN"], []), null, [], null));
-        Assert.True(await new WorkflowQueueProcessor(db, client, new DemoTransport(), Options.Create(new WorkflowExecutionOptions())).ProcessNextAsync(default));
+        Assert.True(await new WorkflowQueueProcessor(db, client, new DemoTransport(),
+            Options.Create(new WorkflowExecutionOptions()), notifications: new NotificationService(db)).ProcessNextAsync(default));
         var row = await db.AgentWorkflows.SingleAsync(x => x.MaterialRequestId == id);
         Assert.Equal(AgentWorkflowStatus.REJECTED, row.Status);
         Assert.Null(row.MaterialMatchId);
         Assert.Equal(BuyerRequestStatus.MATCH_FOUND, (await db.BuyerRequests.FindAsync(id))!.Status);
         Assert.Equal(0, await db.Reservations.CountAsync(x => x.MaterialRequestId == id));
+        var noMatches = await db.Notifications.SingleAsync(x => x.EntityId == id &&
+            x.Type == NotificationTypes.NoSuitableMatches);
+        Assert.Equal(fixture.Buyer, noMatches.UserId);
+        Assert.Equal("No suitable matches found", noMatches.Title);
+        Assert.Equal($"requirement:{id}:workflow:{row.Id}:no-matches", noMatches.DeduplicationKey);
         var approval = await Assert.ThrowsAsync<AgentWorkflowException>(() => new AgentWorkflowService(db).ApproveAsync(row.Id, fixture.Manager, null, default));
         Assert.Equal(409, approval.StatusCode);
         // Use a new context after the rejected decision transaction.
@@ -280,6 +294,7 @@ public sealed class WorkflowPersistenceTests(RequirementsDatabase fixture) : ICl
         Assert.Null(row.MaterialMatchId);
         Assert.Equal(BuyerRequestStatus.OPEN, (await db.BuyerRequests.FindAsync(id))!.Status);
         Assert.Equal(0, await db.Reservations.CountAsync(x => x.MaterialRequestId == id));
+        Assert.False(await db.Notifications.AnyAsync(x => x.EntityId == id));
     }
 
     private async Task<Guid> Seed(bool start = true)

@@ -2,10 +2,13 @@ using Npgsql;
 using Microsoft.EntityFrameworkCore;
 using SurplusLink.Api.Data;
 using SurplusLink.Api.Models;
+using SurplusLink.Api.Notifications;
 
 namespace SurplusLink.Api.Materials;
 
-public sealed class MaterialInventoryService(SurplusLinkDbContext dbContext) : IMaterialInventoryService
+public sealed class MaterialInventoryService(
+    SurplusLinkDbContext dbContext,
+    INotificationService? notifications = null) : IMaterialInventoryService
 {
     public async Task<MaterialListingResponse> CreateListingAsync(
         Guid sellerId,
@@ -207,6 +210,29 @@ public sealed class MaterialInventoryService(SurplusLinkDbContext dbContext) : I
         listing.Status = ListingStatus.PENDING_VERIFICATION;
         AddAudit(sellerId, listing.Id, "LISTING_SUBMITTED_FOR_VERIFICATION");
         await dbContext.SaveChangesAsync(cancellationToken);
+        if (notifications is not null)
+        {
+            var submissionNumber = await dbContext.AuditLogs.CountAsync(item =>
+                item.EntityType == nameof(Listing) && item.EntityId == listing.Id &&
+                item.Action == "LISTING_SUBMITTED_FOR_VERIFICATION", cancellationToken);
+            var managerIds = await dbContext.Set<UserRoleAssignment>().AsNoTracking()
+                .Where(item => item.Role == UserRole.MANAGER)
+                .Select(item => item.UserId).Distinct().ToListAsync(cancellationToken);
+            foreach (var managerId in managerIds)
+            {
+                await notifications.CreateAsync(new(
+                    managerId,
+                    NotificationTypes.ListingAwaitingApproval,
+                    "New listing awaiting approval",
+                    "A seller submitted a material listing for review.",
+                    NotificationContext.MANAGER,
+                    NotificationPriority.ACTION_REQUIRED,
+                    nameof(Listing),
+                    listing.Id,
+                    $"/app/manager/materials/{listing.Id}",
+                    $"listing:{listing.Id}:submission:{submissionNumber}:manager:{managerId}"), cancellationToken);
+            }
+        }
         return await GetResponseAsync(listing.Id, cancellationToken);
     }
 
@@ -247,6 +273,25 @@ public sealed class MaterialInventoryService(SurplusLinkDbContext dbContext) : I
 
         AddAudit(managerId, listing.Id, request.Approved ? "LISTING_VERIFIED" : "LISTING_REJECTED");
         await dbContext.SaveChangesAsync(cancellationToken);
+        if (notifications is not null)
+        {
+            var reviewNumber = await dbContext.AuditLogs.CountAsync(item =>
+                item.EntityType == nameof(Listing) && item.EntityId == listing.Id &&
+                (item.Action == "LISTING_VERIFIED" || item.Action == "LISTING_REJECTED"), cancellationToken);
+            await notifications.CreateAsync(new(
+                listing.SellerId,
+                request.Approved ? NotificationTypes.ListingApproved : NotificationTypes.ListingRejected,
+                request.Approved ? "Your material listing was approved" : "Your material listing was rejected",
+                request.Approved
+                    ? "Your material listing is now active."
+                    : "Your listing was not approved. Review the listing details before submitting it again.",
+                NotificationContext.SELLER,
+                request.Approved ? NotificationPriority.SUCCESS : NotificationPriority.WARNING,
+                nameof(Listing),
+                listing.Id,
+                $"/app/seller/materials/{listing.Id}",
+                $"listing:{listing.Id}:review:{reviewNumber}:{(request.Approved ? "approved" : "rejected")}"), cancellationToken);
+        }
         return await GetResponseAsync(listing.Id, cancellationToken);
     }
 

@@ -6,11 +6,15 @@ using Npgsql;
 using SurplusLink.Api.Data;
 using SurplusLink.Api.Matching;
 using SurplusLink.Api.Models;
+using SurplusLink.Api.Notifications;
 using SurplusLink.Api.Workflows;
 
 namespace SurplusLink.Api.Requirements;
 
-public sealed class RequirementService(SurplusLinkDbContext db, IRequirementWorkflowStarter workflowStarter)
+public sealed class RequirementService(
+    SurplusLinkDbContext db,
+    IRequirementWorkflowStarter workflowStarter,
+    INotificationService? notifications = null)
 {
     public async Task<RequirementResponse> CreateAsync(Guid buyerId, SaveRequirementRequest input, CancellationToken ct)
     {
@@ -133,6 +137,20 @@ public sealed class RequirementService(SurplusLinkDbContext db, IRequirementWork
         request.Status = BuyerRequestStatus.OPEN;
         Audit(request, "SUBMITTED");
         await db.SaveChangesAsync(ct);
+        if (notifications is not null)
+        {
+            await notifications.CreateAsync(new(
+                request.BuyerId,
+                NotificationTypes.RequirementSubmitted,
+                "Requirement submitted",
+                "Your material requirement was submitted successfully.",
+                NotificationContext.BUYER,
+                NotificationPriority.SUCCESS,
+                nameof(BuyerRequest),
+                request.Id,
+                $"/app/buyer/requirements/{request.Id}",
+                $"requirement:{request.Id}:submitted"), ct);
+        }
         await tx.CommitAsync(ct);
         return RequirementResponse.From(request);
     }

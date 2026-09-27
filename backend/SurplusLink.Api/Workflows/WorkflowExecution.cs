@@ -7,6 +7,7 @@ using Microsoft.Extensions.Options;
 using SurplusLink.Api.Data;
 using SurplusLink.Api.Matching;
 using SurplusLink.Api.Models;
+using SurplusLink.Api.Notifications;
 using SurplusLink.Api.Routing;
 
 namespace SurplusLink.Api.Workflows;
@@ -88,7 +89,8 @@ public sealed class AgentWorkflowClient(HttpClient client, IOptions<WorkflowExec
 /// </summary>
 public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkflowClient client,
     ITransportEstimateService transport, IOptions<WorkflowExecutionOptions> settings,
-    ILogger<WorkflowQueueProcessor>? logger = null)
+    ILogger<WorkflowQueueProcessor>? logger = null,
+    INotificationService? notifications = null)
 {
     public async Task<bool> ProcessNextAsync(CancellationToken stop)
     {
@@ -102,6 +104,7 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
         var request = await db.BuyerRequests.SingleAsync(x => x.Id == workflow.MaterialRequestId, stop);
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(stop);
         budget.CancelAfter(TimeSpan.FromSeconds(settings.Value.TimeoutSeconds));
+        WorkflowRunResult? completedResult = null;
         try
         {
             var snapshot = await SnapshotAsync(workflow, request, budget.Token);
@@ -116,6 +119,7 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
                     throw new InvalidOperationException("Snapshot changed.");
             }
             await PersistAsync(workflow, request, result, retries, snapshot, budget.Token);
+            completedResult = result;
         }
         catch (OperationCanceledException) when (stop.IsCancellationRequested) { throw; }
         catch (Exception error)
@@ -137,6 +141,26 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
             Action = "WORKFLOW_" + workflow.Status });
         await db.SaveChangesAsync(stop);
         await MatchRecommendation.RefreshAsync(db, request.Id, stop);
+        if (completedResult is not null && notifications is not null)
+        {
+            var validMatchCount = await db.Matches.CountAsync(item =>
+                item.MaterialRequestId == request.Id && item.Status == MatchStatus.ROUTED &&
+                item.RejectionReason == null, stop);
+            var hasValidMatches = completedResult.Status == "MATCH_FOUND" && validMatchCount > 0;
+            await notifications.CreateAsync(new(
+                request.BuyerId,
+                hasValidMatches ? NotificationTypes.MatchesReady : NotificationTypes.NoSuitableMatches,
+                hasValidMatches ? "Matches are ready" : "No suitable matches found",
+                hasValidMatches
+                    ? $"{validMatchCount} valid {(validMatchCount == 1 ? "match is" : "matches are")} ready for review."
+                    : "Matching completed without a suitable material listing.",
+                NotificationContext.BUYER,
+                hasValidMatches ? NotificationPriority.ACTION_REQUIRED : NotificationPriority.INFO,
+                nameof(BuyerRequest),
+                request.Id,
+                $"/app/buyer/requirements/{request.Id}/matches",
+                $"requirement:{request.Id}:workflow:{workflow.Id}:{(hasValidMatches ? "matches-ready" : "no-matches")}"), stop);
+        }
         await tx.CommitAsync(stop);
         return true;
     }
