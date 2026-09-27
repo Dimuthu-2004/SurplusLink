@@ -373,6 +373,29 @@ public sealed class RequirementService(
         Audit(request, "MATCHES_SELECTED_BY_BUYER");
 
         await db.SaveChangesAsync(ct);
+        if (notifications is not null)
+        {
+            var managerIds = await db.Set<UserRoleAssignment>().AsNoTracking()
+                .Where(item => item.Role == UserRole.MANAGER)
+                .Select(item => item.UserId).Distinct().ToListAsync(ct);
+            var sellerCount = matches.Select(item => item.Listing.SellerId).Distinct().Count();
+            var message = $"{request.Title}: {totalSelected} {request.Unit} selected from {sellerCount} " +
+                (sellerCount == 1 ? "seller." : "sellers.");
+            foreach (var managerId in managerIds)
+            {
+                await notifications.CreateAsync(new(
+                    managerId,
+                    NotificationTypes.BuyerSelectionAwaitingApproval,
+                    "Buyer selection awaiting approval",
+                    message,
+                    NotificationContext.MANAGER,
+                    NotificationPriority.ACTION_REQUIRED,
+                    nameof(AgentWorkflow),
+                    workflow.Id,
+                    $"/app/manager/workflows/{workflow.Id}",
+                    $"workflow:{workflow.Id}:selection-awaiting-approval:manager:{managerId}"), ct);
+            }
+        }
         await tx.CommitAsync(ct);
 
         return RequirementResponse.From(request) with { WorkflowId = workflow.Id, WorkflowStatus = workflow.Status.ToString() };
