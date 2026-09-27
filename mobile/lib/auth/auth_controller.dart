@@ -6,6 +6,8 @@ import 'package:mobile/core/api_exception.dart';
 
 enum AuthStatus { initializing, unauthenticated, authenticated }
 
+enum LoginResult { authenticated, emailNotVerified, failed }
+
 final class AuthController extends ChangeNotifier {
   AuthController(this._gateway, {MarketplaceModeController? marketplace})
     : marketplace = marketplace ?? MarketplaceModeController() {
@@ -26,11 +28,13 @@ final class AuthController extends ChangeNotifier {
   AppUser? _user;
   bool _isBusy = false;
   String? _errorMessage;
+  String? _errorCode;
 
   AuthStatus get status => _status;
   AppUser? get user => _user;
   bool get isBusy => _isBusy;
   String? get errorMessage => _errorMessage;
+  String? get errorCode => _errorCode;
   bool get isAuthenticated => _status == AuthStatus.authenticated;
 
   Future<void> initialize() async {
@@ -59,8 +63,10 @@ final class AuthController extends ChangeNotifier {
     }
   }
 
-  Future<bool> login({required String email, required String password}) =>
-      _authenticate(() => _gateway.login(email: email, password: password));
+  Future<LoginResult> login({
+    required String email,
+    required String password,
+  }) => _authenticate(() => _gateway.login(email: email, password: password));
 
   Future<bool> register({
     required String email,
@@ -76,14 +82,28 @@ final class AuthController extends ChangeNotifier {
     ),
   );
 
-  Future<bool> verifyEmail({required String email, required String code}) => _anonymousRequest(() => _gateway.verifyEmail(email: email, code: code));
-  Future<bool> resendVerification({required String email}) => _anonymousRequest(() => _gateway.resendVerification(email: email));
-  Future<bool> forgotPassword({required String email}) => _anonymousRequest(() => _gateway.forgotPassword(email: email));
-  Future<bool> resetPassword({required String email, required String code, required String newPassword}) => _anonymousRequest(() => _gateway.resetPassword(email: email, code: code, newPassword: newPassword));
+  Future<bool> verifyEmail({required String email, required String code}) =>
+      _anonymousRequest(() => _gateway.verifyEmail(email: email, code: code));
+  Future<bool> resendVerification({required String email}) =>
+      _anonymousRequest(() => _gateway.resendVerification(email: email));
+  Future<bool> forgotPassword({required String email}) =>
+      _anonymousRequest(() => _gateway.forgotPassword(email: email));
+  Future<bool> resetPassword({
+    required String email,
+    required String code,
+    required String newPassword,
+  }) => _anonymousRequest(
+    () => _gateway.resetPassword(
+      email: email,
+      code: code,
+      newPassword: newPassword,
+    ),
+  );
 
   Future<bool> updateProfile(UserProfile profile) async {
     if (_isBusy) return false;
     _errorMessage = null;
+    _errorCode = null;
     _setBusy(true);
     try {
       _user = await _gateway.updateProfile(profile);
@@ -116,34 +136,41 @@ final class AuthController extends ChangeNotifier {
   }
 
   void clearError() {
-    if (_errorMessage == null) {
+    if (_errorMessage == null && _errorCode == null) {
       return;
     }
     _errorMessage = null;
+    _errorCode = null;
     notifyListeners();
   }
 
-  Future<bool> _authenticate(Future<AuthSession> Function() request) async {
+  Future<LoginResult> _authenticate(
+    Future<AuthSession> Function() request,
+  ) async {
     if (_isBusy) {
-      return false;
+      return LoginResult.failed;
     }
     _errorMessage = null;
+    _errorCode = null;
     _setBusy(true);
     try {
       final session = await request();
       _user = session.user;
       await marketplace.bind(_user);
       _status = AuthStatus.authenticated;
-      return true;
+      return LoginResult.authenticated;
     } on ApiException catch (exception) {
       _errorMessage = exception.message;
-      return false;
+      _errorCode = exception.code;
+      return exception.code == 'EMAIL_NOT_VERIFIED'
+          ? LoginResult.emailNotVerified
+          : LoginResult.failed;
     } on FormatException {
       _errorMessage = 'The server returned an invalid authentication response.';
-      return false;
+      return LoginResult.failed;
     } on Object {
       _errorMessage = 'Authentication failed. Please try again.';
-      return false;
+      return LoginResult.failed;
     } finally {
       _setBusy(false);
     }
@@ -151,11 +178,22 @@ final class AuthController extends ChangeNotifier {
 
   Future<bool> _anonymousRequest(Future<void> Function() request) async {
     if (_isBusy) return false;
-    _errorMessage = null; _setBusy(true);
-    try { await request(); return true; }
-    on ApiException catch (error) { _errorMessage = error.message; return false; }
-    on Object { _errorMessage = 'Authentication failed. Please try again.'; return false; }
-    finally { _setBusy(false); }
+    _errorMessage = null;
+    _errorCode = null;
+    _setBusy(true);
+    try {
+      await request();
+      return true;
+    } on ApiException catch (error) {
+      _errorMessage = error.message;
+      _errorCode = error.code;
+      return false;
+    } on Object {
+      _errorMessage = 'Authentication failed. Please try again.';
+      return false;
+    } finally {
+      _setBusy(false);
+    }
   }
 
   void _setBusy(bool value) {

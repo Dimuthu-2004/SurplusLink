@@ -263,6 +263,7 @@ final class ApiClient {
       message,
       statusCode: statusCode,
       validationErrors: validationErrors.isEmpty ? null : validationErrors,
+      code: json['code'] is String ? json['code'] as String : null,
     );
   }
 }
