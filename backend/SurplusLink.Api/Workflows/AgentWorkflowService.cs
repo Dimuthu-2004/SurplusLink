@@ -2,10 +2,11 @@ using Microsoft.EntityFrameworkCore;
 using SurplusLink.Api.Data;
 using SurplusLink.Api.Materials;
 using SurplusLink.Api.Models;
+using SurplusLink.Api.Notifications;
 
 namespace SurplusLink.Api.Workflows;
 
-public sealed class AgentWorkflowService(SurplusLinkDbContext db)
+public sealed class AgentWorkflowService(SurplusLinkDbContext db, INotificationService? notifications = null)
 {
     public async Task<(IReadOnlyList<AgentWorkflowListItem> Items, int Total)> ListAsync(WorkflowQuery input, CancellationToken ct)
     {
@@ -51,8 +52,18 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db)
             workflow.StartedAtUtc, workflow.CompletedAtUtc, statuses);
     }
 
-    public Task<AgentWorkflowResponse> ApproveAsync(Guid id, Guid managerId, string? note, CancellationToken ct) =>
-        DecideAsync(id, managerId, ApprovalDecision.APPROVED, note, ct);
+    public async Task<AgentWorkflowResponse> ApproveAsync(Guid id, Guid managerId, string? note, CancellationToken ct)
+    {
+        try
+        {
+            return await DecideAsync(id, managerId, ApprovalDecision.APPROVED, note, ct);
+        }
+        catch (AgentWorkflowException exception) when (IsAvailabilityConflict(exception))
+        {
+            await NotifyAvailabilityChangedAsync(id, managerId, ct);
+            throw;
+        }
+    }
 
     public Task<AgentWorkflowResponse> RejectAsync(Guid id, Guid managerId, string? note, CancellationToken ct) =>
         DecideAsync(id, managerId, ApprovalDecision.REJECTED, note, ct);
@@ -96,6 +107,8 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db)
         });
         Audit(workflow.Id, managerId, "WORKFLOW_REVISION_REQUESTED");
         await UpdateParticipationAsync(workflow, managerId, OfferStatus.REVISION_REQUESTED, TransactionStatus.REJECTED, ct);
+        await NotifyBuyerDecisionAsync(workflow, NotificationTypes.SelectionRevisionRequested,
+            "Changes requested for your selection", cleanNote, NotificationPriority.ACTION_REQUIRED, ct);
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
         return ToResponse(await LoadAsync(id, ct) ?? workflow);
@@ -351,10 +364,119 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db)
             Note = cleanNote, DecidedAtUtc = DateTime.UtcNow
         });
         Audit(workflow.Id, managerId, $"WORKFLOW_{decision}");
+        if (decision == ApprovalDecision.APPROVED)
+        {
+            await NotifyApprovalAsync(workflow, ct);
+        }
+        else
+        {
+            await NotifyBuyerDecisionAsync(workflow, NotificationTypes.SelectionRejected,
+                "Your selected materials were not approved", cleanNote, NotificationPriority.WARNING, ct);
+        }
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
         return ToResponse(await LoadAsync(id, ct) ?? workflow);
     }
+
+    private async Task NotifyApprovalAsync(AgentWorkflow workflow, CancellationToken ct)
+    {
+        if (notifications is null || workflow.MaterialRequestId is not Guid requestId) return;
+        var request = await db.BuyerRequests.AsNoTracking().SingleAsync(item => item.Id == requestId, ct);
+        await notifications.CreateAsync(new(
+            request.BuyerId,
+            NotificationTypes.SelectionApproved,
+            "Your selected materials were approved",
+            $"Your selection for {request.Title} was approved.",
+            NotificationContext.BUYER,
+            NotificationPriority.SUCCESS,
+            nameof(BuyerRequest),
+            request.Id,
+            $"/app/buyer/requirements/{request.Id}",
+            $"workflow:{workflow.Id}:selection-approved:buyer"), ct);
+
+        var allocations = await db.Transactions.AsNoTracking()
+            .Where(item => item.ApprovalWorkflowId == workflow.Id)
+            .Select(item => new
+            {
+                item.Id,
+                item.SellerId,
+                item.Quantity,
+                Unit = item.Offer.MaterialMatch.Listing.Unit,
+                Material = item.Offer.MaterialMatch.MaterialRequest.Title,
+                ListingId = item.Offer.MaterialMatch.ListingId
+            }).ToListAsync(ct);
+        foreach (var allocation in allocations)
+        {
+            await notifications.CreateAsync(new(
+                allocation.SellerId,
+                NotificationTypes.StockReservedForBuyer,
+                "Stock reserved for a buyer",
+                $"{allocation.Material}: {allocation.Quantity} {allocation.Unit} was reserved for a buyer.",
+                NotificationContext.SELLER,
+                NotificationPriority.ACTION_REQUIRED,
+                nameof(Listing),
+                allocation.ListingId,
+                $"/app/seller/materials/{allocation.ListingId}",
+                $"workflow:{workflow.Id}:transaction:{allocation.Id}:stock-reserved"), ct);
+        }
+    }
+
+    private async Task NotifyBuyerDecisionAsync(
+        AgentWorkflow workflow,
+        string type,
+        string title,
+        string safeReason,
+        NotificationPriority priority,
+        CancellationToken ct)
+    {
+        if (notifications is null || workflow.MaterialRequestId is not Guid requestId) return;
+        var request = await db.BuyerRequests.AsNoTracking().SingleAsync(item => item.Id == requestId, ct);
+        var message = string.IsNullOrWhiteSpace(safeReason)
+            ? $"A manager reviewed your selection for {request.Title}."
+            : $"{request.Title}: {safeReason}";
+        await notifications.CreateAsync(new(
+            request.BuyerId, type, title, message,
+            NotificationContext.BUYER, priority,
+            nameof(BuyerRequest), request.Id,
+            $"/app/buyer/requirements/{request.Id}",
+            $"workflow:{workflow.Id}:{type.ToLowerInvariant()}:buyer"), ct);
+    }
+
+    private async Task NotifyAvailabilityChangedAsync(Guid workflowId, Guid managerId, CancellationToken ct)
+    {
+        if (notifications is null) return;
+        db.ChangeTracker.Clear();
+        var workflow = await db.AgentWorkflows.AsNoTracking().SingleOrDefaultAsync(item => item.Id == workflowId, ct);
+        if (workflow?.MaterialRequestId is not Guid requestId) return;
+        var request = await db.BuyerRequests.AsNoTracking().SingleOrDefaultAsync(item => item.Id == requestId, ct);
+        if (request is null) return;
+        const string title = "Selected material availability changed";
+        const string message = "The selected quantity is no longer available. Review the selection before trying again.";
+        try
+        {
+            await notifications.CreateAsync(new(
+                managerId, NotificationTypes.SelectionAvailabilityChanged, title, message,
+                NotificationContext.MANAGER, NotificationPriority.WARNING,
+                nameof(AgentWorkflow), workflowId,
+                $"/app/manager/workflows/{workflowId}",
+                $"workflow:{workflowId}:availability-changed:manager:{managerId}"), ct);
+            await notifications.CreateAsync(new(
+                request.BuyerId, NotificationTypes.SelectionAvailabilityChanged, title, message,
+                NotificationContext.BUYER, NotificationPriority.WARNING,
+                nameof(BuyerRequest), requestId,
+                $"/app/buyer/requirements/{requestId}",
+                $"workflow:{workflowId}:availability-changed:buyer"), ct);
+        }
+        catch (Exception) when (!ct.IsCancellationRequested)
+        {
+            // Preserve the original reservation conflict response if notification persistence fails.
+        }
+    }
+
+    private static bool IsAvailabilityConflict(AgentWorkflowException exception) =>
+        exception.StatusCode == 409 &&
+        (exception.Message.StartsWith("STOCK_CHANGED:", StringComparison.Ordinal) ||
+         exception.Message == "Insufficient available quantity.");
 
     private async Task<ApprovalGroupResponse?> GetApprovalGroupAsync(AgentWorkflow workflow, CancellationToken ct)
     {

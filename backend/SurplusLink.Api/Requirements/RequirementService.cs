@@ -6,11 +6,15 @@ using Npgsql;
 using SurplusLink.Api.Data;
 using SurplusLink.Api.Matching;
 using SurplusLink.Api.Models;
+using SurplusLink.Api.Notifications;
 using SurplusLink.Api.Workflows;
 
 namespace SurplusLink.Api.Requirements;
 
-public sealed class RequirementService(SurplusLinkDbContext db, IRequirementWorkflowStarter workflowStarter)
+public sealed class RequirementService(
+    SurplusLinkDbContext db,
+    IRequirementWorkflowStarter workflowStarter,
+    INotificationService? notifications = null)
 {
     public async Task<RequirementResponse> CreateAsync(Guid buyerId, SaveRequirementRequest input, CancellationToken ct)
     {
@@ -133,6 +137,20 @@ public sealed class RequirementService(SurplusLinkDbContext db, IRequirementWork
         request.Status = BuyerRequestStatus.OPEN;
         Audit(request, "SUBMITTED");
         await db.SaveChangesAsync(ct);
+        if (notifications is not null)
+        {
+            await notifications.CreateAsync(new(
+                request.BuyerId,
+                NotificationTypes.RequirementSubmitted,
+                "Requirement submitted",
+                "Your material requirement was submitted successfully.",
+                NotificationContext.BUYER,
+                NotificationPriority.SUCCESS,
+                nameof(BuyerRequest),
+                request.Id,
+                $"/app/buyer/requirements/{request.Id}",
+                $"requirement:{request.Id}:submitted"), ct);
+        }
         await tx.CommitAsync(ct);
         return RequirementResponse.From(request);
     }
@@ -355,6 +373,29 @@ public sealed class RequirementService(SurplusLinkDbContext db, IRequirementWork
         Audit(request, "MATCHES_SELECTED_BY_BUYER");
 
         await db.SaveChangesAsync(ct);
+        if (notifications is not null)
+        {
+            var managerIds = await db.Set<UserRoleAssignment>().AsNoTracking()
+                .Where(item => item.Role == UserRole.MANAGER)
+                .Select(item => item.UserId).Distinct().ToListAsync(ct);
+            var sellerCount = matches.Select(item => item.Listing.SellerId).Distinct().Count();
+            var message = $"{request.Title}: {totalSelected} {request.Unit} selected from {sellerCount} " +
+                (sellerCount == 1 ? "seller." : "sellers.");
+            foreach (var managerId in managerIds)
+            {
+                await notifications.CreateAsync(new(
+                    managerId,
+                    NotificationTypes.BuyerSelectionAwaitingApproval,
+                    "Buyer selection awaiting approval",
+                    message,
+                    NotificationContext.MANAGER,
+                    NotificationPriority.ACTION_REQUIRED,
+                    nameof(AgentWorkflow),
+                    workflow.Id,
+                    $"/app/manager/workflows/{workflow.Id}",
+                    $"workflow:{workflow.Id}:selection-awaiting-approval:manager:{managerId}"), ct);
+            }
+        }
         await tx.CommitAsync(ct);
 
         return RequirementResponse.From(request) with { WorkflowId = workflow.Id, WorkflowStatus = workflow.Status.ToString() };
