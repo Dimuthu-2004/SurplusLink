@@ -51,7 +51,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
       },
       profile: _profile.profile,
     );
-    if (registered && mounted) context.go('${AppRoutes.verifyEmail}?email=${Uri.encodeComponent(_emailController.text.trim())}');
+    if (registered && mounted) {
+      context.go(
+        '${AppRoutes.verifyEmail}?email=${Uri.encodeComponent(_emailController.text.trim())}&cooldown=60',
+      );
+    }
   }
 
   @override

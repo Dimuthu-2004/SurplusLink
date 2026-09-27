@@ -20,11 +20,16 @@ final class FakeAuthGateway implements AuthGateway {
   AppUser? restoredUser;
   Object? restoreError;
   Object? loginError;
+  Object? verifyError;
+  Object? resendError;
   Completer<AuthSession>? loginCompleter;
   AppUser loginUser = sellerUser;
   List<AppRole>? registeredRoles;
   UserProfile? registeredProfile;
   bool logoutCalled = false;
+  String? verifiedEmail;
+  String? verifiedCode;
+  String? resentEmail;
 
   @override
   Future<AppUser?> restoreSession() async {
@@ -59,10 +64,30 @@ final class FakeAuthGateway implements AuthGateway {
     registeredProfile = profile;
   }
 
-  @override Future<void> verifyEmail({required String email, required String code}) async {}
-  @override Future<void> resendVerification({required String email}) async {}
-  @override Future<void> forgotPassword({required String email}) async {}
-  @override Future<void> resetPassword({required String email, required String code, required String newPassword}) async {}
+  @override
+  Future<void> verifyEmail({
+    required String email,
+    required String code,
+  }) async {
+    verifiedEmail = email;
+    verifiedCode = code;
+    if (verifyError != null) throw verifyError!;
+  }
+
+  @override
+  Future<void> resendVerification({required String email}) async {
+    resentEmail = email;
+    if (resendError != null) throw resendError!;
+  }
+
+  @override
+  Future<void> forgotPassword({required String email}) async {}
+  @override
+  Future<void> resetPassword({
+    required String email,
+    required String code,
+    required String newPassword,
+  }) async {}
 
   @override
   Future<AppUser> updateProfile(UserProfile profile) async => AppUser(

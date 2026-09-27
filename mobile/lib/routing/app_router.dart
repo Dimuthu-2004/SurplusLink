@@ -63,13 +63,16 @@ GoRouter createAppRouter({
     refreshListenable: authController,
     redirect: (context, state) {
       final uri = state.uri;
-      if (uri.scheme == 'surpluslink' && (uri.host == 'handoff' || uri.path.startsWith('/handoff'))) {
+      if (uri.scheme == 'surpluslink' &&
+          (uri.host == 'handoff' || uri.path.startsWith('/handoff'))) {
         final queryCode = uri.queryParameters['code'];
         final code = queryCode != null && queryCode.isNotEmpty
             ? queryCode
             : (uri.host == 'handoff'
-                ? (uri.pathSegments.isNotEmpty ? uri.pathSegments.last : uri.path.replaceAll('/', ''))
-                : uri.pathSegments.last);
+                  ? (uri.pathSegments.isNotEmpty
+                        ? uri.pathSegments.last
+                        : uri.path.replaceAll('/', ''))
+                  : uri.pathSegments.last);
         if (code.isNotEmpty) {
           return '/handoff/$code';
         }
@@ -77,7 +80,10 @@ GoRouter createAppRouter({
 
       final location = state.matchedLocation;
       final isAuthRoute =
-          location == AppRoutes.login || location == AppRoutes.register || location == AppRoutes.verifyEmail || location == AppRoutes.forgotPassword;
+          location == AppRoutes.login ||
+          location == AppRoutes.register ||
+          location == AppRoutes.verifyEmail ||
+          location == AppRoutes.forgotPassword;
 
       if (authController.status == AuthStatus.initializing) {
         if (!isAuthRoute && location != AppRoutes.splash) {
@@ -116,20 +122,32 @@ GoRouter createAppRouter({
     routes: [
       GoRoute(
         path: '/scan-qr',
-        builder: (context, state) => QrScannerScreen(
+        builder: (context, state) =>
+            QrScannerScreen(authController: authController),
+      ),
+      GoRoute(
+        path: AppRoutes.verifyEmail,
+        builder: (context, state) => EmailVerificationScreen(
           authController: authController,
+          email: state.uri.queryParameters['email'] ?? '',
+          initialCooldown:
+              int.tryParse(state.uri.queryParameters['cooldown'] ?? '') ?? 0,
         ),
       ),
-      GoRoute(path: AppRoutes.verifyEmail, builder: (context, state) => EmailVerificationScreen(authController: authController, email: state.uri.queryParameters['email'] ?? '')),
-      GoRoute(path: AppRoutes.forgotPassword, builder: (_, _) => ForgotPasswordScreen(authController: authController)),
+      GoRoute(
+        path: AppRoutes.forgotPassword,
+        builder: (_, _) => ForgotPasswordScreen(authController: authController),
+      ),
       GoRoute(
         path: AppRoutes.splash,
         builder: (context, state) => const SplashScreen(),
       ),
       GoRoute(
         path: AppRoutes.login,
-        builder: (context, state) =>
-            LoginScreen(authController: authController),
+        builder: (context, state) => LoginScreen(
+          authController: authController,
+          initialEmail: state.uri.queryParameters['email'] ?? '',
+        ),
       ),
       GoRoute(
         path: AppRoutes.register,
@@ -204,9 +222,11 @@ GoRouter createAppRouter({
         GoRoute(
           path: '/requirements/new',
           builder: (context, state) {
-            final categoryId = state.uri.queryParameters['categoryId'] ??
+            final categoryId =
+                state.uri.queryParameters['categoryId'] ??
                 (state.extra is Map<String, dynamic>
-                    ? (state.extra as Map<String, dynamic>)['categoryId'] as String?
+                    ? (state.extra as Map<String, dynamic>)['categoryId']
+                          as String?
                     : state.extra as String?);
             return RequirementFormScreen(
               gateway: requirementGateway,

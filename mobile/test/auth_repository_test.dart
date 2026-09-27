@@ -154,6 +154,47 @@ void main() {
       ),
     );
   });
+
+  test('login preserves the structured unverified-account code', () async {
+    final repository = _repository(
+      MemoryTokenStorage(),
+      (request) async => http.Response(
+        jsonEncode({
+          'code': 'EMAIL_NOT_VERIFIED',
+          'message': 'Your email has not been verified.',
+        }),
+        403,
+      ),
+    );
+
+    await expectLater(
+      repository.login(email: 'buyer@example.com', password: 'Password123!'),
+      throwsA(
+        isA<ApiException>()
+            .having((error) => error.statusCode, 'statusCode', 403)
+            .having((error) => error.code, 'code', 'EMAIL_NOT_VERIFIED'),
+      ),
+    );
+  });
+
+  test('verification and resend use the existing email endpoints', () async {
+    final requests = <http.Request>[];
+    final repository = _repository(MemoryTokenStorage(), (request) async {
+      requests.add(request);
+      return http.Response(jsonEncode({'message': 'ok'}), 200);
+    });
+
+    await repository.verifyEmail(email: ' user@example.com ', code: '012345');
+    await repository.resendVerification(email: ' user@example.com ');
+
+    expect(requests[0].url.path, '/api/auth/email-verification/verify');
+    expect(jsonDecode(requests[0].body), {
+      'email': 'user@example.com',
+      'code': '012345',
+    });
+    expect(requests[1].url.path, '/api/auth/email-verification/resend');
+    expect(jsonDecode(requests[1].body), {'email': 'user@example.com'});
+  });
 }
 
 AuthRepository _repository(

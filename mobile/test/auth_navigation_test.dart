@@ -73,7 +73,10 @@ void main() {
         find.byKey(const Key('profile-name')),
         'Test Seller',
       );
-      await tester.enterText(find.byKey(const Key('profile-nic')), '199912345678');
+      await tester.enterText(
+        find.byKey(const Key('profile-nic')),
+        '199912345678',
+      );
       expect(find.text('NIC'), findsOneWidget);
       await tester.enterText(
         find.byKey(const Key('profile-phone')),
@@ -115,8 +118,221 @@ void main() {
       );
       expect(gateway.registeredProfile!.fullName, 'Test Seller');
       expect(find.text('Verify your email'), findsOneWidget);
+      expect(
+        find.text('Enter the six-digit code sent to seller@example.com.'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Resend available in 01:00'), findsOneWidget);
     });
   }
+
+  testWidgets('unverified login offers verify and resend with retained email', (
+    tester,
+  ) async {
+    final gateway = FakeAuthGateway()
+      ..loginError = const ApiException(
+        'Your email has not been verified.',
+        statusCode: 403,
+        code: 'EMAIL_NOT_VERIFIED',
+      );
+    await _pumpApp(tester, gateway);
+    await tester.enterText(
+      find.byKey(const Key('login-email')),
+      'dual@example.com',
+    );
+    await tester.enterText(
+      find.byKey(const Key('login-password')),
+      'Password123!',
+    );
+    await tester.tap(find.byKey(const Key('login-submit')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Your email is not verified yet.'), findsOneWidget);
+    expect(find.text('Verify your email to continue.'), findsOneWidget);
+    expect(find.text('dual@example.com'), findsOneWidget);
+    expect(find.byKey(const Key('unverified-verify')), findsOneWidget);
+    expect(find.byKey(const Key('unverified-resend')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('unverified-verify')));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Enter the six-digit code sent to dual@example.com.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets(
+    'OTP accepts pasted digits, enables verify, and errors remain retryable',
+    (tester) async {
+      final gateway = FakeAuthGateway()
+        ..loginError = const ApiException(
+          'Your email has not been verified.',
+          statusCode: 403,
+          code: 'EMAIL_NOT_VERIFIED',
+        )
+        ..verifyError = const ApiException(
+          'The code is invalid. Please try again.',
+          statusCode: 400,
+          code: 'EMAIL_VERIFICATION_CODE_INVALID',
+        );
+      await _pumpApp(tester, gateway);
+      await _openVerification(tester, 'buyer@example.com');
+
+      final submit = find.byKey(const Key('verify-email-submit'));
+      expect(tester.widget<FilledButton>(submit).onPressed, isNull);
+      await tester.enterText(
+        find.byKey(const Key('verification-code')),
+        '12a34567',
+      );
+      await tester.pump();
+      expect(find.text('123456'), findsOneWidget);
+      expect(tester.widget<FilledButton>(submit).onPressed, isNotNull);
+      await tester.tap(submit);
+      await tester.pumpAndSettle();
+
+      expect(gateway.verifiedEmail, 'buyer@example.com');
+      expect(gateway.verifiedCode, '123456');
+      expect(
+        find.text('The code is invalid. Please try again.'),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<TextField>(find.byKey(const Key('verification-code')))
+            .controller!
+            .text,
+        '123456',
+      );
+      expect(tester.widget<FilledButton>(submit).onPressed, isNotNull);
+    },
+  );
+
+  testWidgets('resend confirms success only after API and starts cooldown', (
+    tester,
+  ) async {
+    final gateway = FakeAuthGateway()
+      ..loginError = const ApiException(
+        'Unverified',
+        statusCode: 403,
+        code: 'EMAIL_NOT_VERIFIED',
+      );
+    await _pumpApp(tester, gateway);
+    await _openVerification(tester, 'seller@example.com');
+    await tester.tap(find.byKey(const Key('verification-resend')));
+    await tester.pump();
+
+    expect(gateway.resentEmail, 'seller@example.com');
+    expect(find.textContaining('Resend available in 01:00'), findsOneWidget);
+    expect(
+      tester
+          .widget<TextButton>(find.byKey(const Key('verification-resend')))
+          .onPressed,
+      isNull,
+    );
+  });
+
+  testWidgets('expired OTP shows a friendly error and remains editable', (
+    tester,
+  ) async {
+    final gateway = FakeAuthGateway()
+      ..loginError = const ApiException(
+        'Unverified',
+        statusCode: 403,
+        code: 'EMAIL_NOT_VERIFIED',
+      )
+      ..verifyError = const ApiException(
+        'This code has expired.',
+        statusCode: 400,
+        code: 'EMAIL_VERIFICATION_CODE_EXPIRED',
+      );
+    await _pumpApp(tester, gateway);
+    await _openVerification(tester, 'buyer@example.com');
+    await tester.enterText(
+      find.byKey(const Key('verification-code')),
+      '123456',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('verify-email-submit')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('This code has expired.'), findsOneWidget);
+    await tester.enterText(
+      find.byKey(const Key('verification-code')),
+      '654321',
+    );
+    await tester.pump();
+    expect(
+      tester
+          .widget<FilledButton>(find.byKey(const Key('verify-email-submit')))
+          .onPressed,
+      isNotNull,
+    );
+  });
+
+  testWidgets('SMTP resend failure shows error without a fake cooldown', (
+    tester,
+  ) async {
+    final gateway = FakeAuthGateway()
+      ..loginError = const ApiException(
+        'Unverified',
+        statusCode: 403,
+        code: 'EMAIL_NOT_VERIFIED',
+      )
+      ..resendError = const ApiException(
+        'We could not send the email. Please try again shortly.',
+        statusCode: 503,
+        code: 'EMAIL_DELIVERY_FAILED',
+      );
+    await _pumpApp(tester, gateway);
+    await _openVerification(tester, 'seller@example.com');
+    await tester.tap(find.byKey(const Key('verification-resend')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('We could not send the email. Please try again shortly.'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Resend available in'), findsNothing);
+    expect(
+      tester
+          .widget<TextButton>(find.byKey(const Key('verification-resend')))
+          .onPressed,
+      isNotNull,
+    );
+  });
+
+  testWidgets(
+    'successful verification returns to sign in with email retained',
+    (tester) async {
+      final gateway = FakeAuthGateway()
+        ..loginError = const ApiException(
+          'Unverified',
+          statusCode: 403,
+          code: 'EMAIL_NOT_VERIFIED',
+        );
+      await _pumpApp(tester, gateway);
+      await _openVerification(tester, 'buyer@example.com');
+      await tester.enterText(
+        find.byKey(const Key('verification-code')),
+        '654321',
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('verify-email-submit')));
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.text('Email verified successfully'), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 950));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Welcome to SurplusLink'), findsOneWidget);
+      expect(
+        tester
+            .widget<TextFormField>(find.byKey(const Key('login-email')))
+            .controller!
+            .text,
+        'buyer@example.com',
+      );
+    },
+  );
 
   testWidgets('login displays progress and API errors', (tester) async {
     final gateway = FakeAuthGateway()
@@ -170,5 +386,17 @@ Future<void> _pumpApp(
       initialLocation: initialLocation,
     ),
   );
+  await tester.pumpAndSettle();
+}
+
+Future<void> _openVerification(WidgetTester tester, String email) async {
+  await tester.enterText(find.byKey(const Key('login-email')), email);
+  await tester.enterText(
+    find.byKey(const Key('login-password')),
+    'Password123!',
+  );
+  await tester.tap(find.byKey(const Key('login-submit')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(const Key('unverified-verify')));
   await tester.pumpAndSettle();
 }
