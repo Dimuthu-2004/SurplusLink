@@ -7,8 +7,15 @@ using SurplusLink.Api.Transactions;
 
 namespace SurplusLink.Tests;
 
-public sealed class TransactionQueryIntegrationTests(RequirementsDatabase fixture) : IClassFixture<RequirementsDatabase>
+public sealed class TransactionQueryIntegrationTests : IAsyncLifetime
 {
+    // Each test owns its database: pending offers and profile edits must not
+    // leak into another test's count, pagination, or participant assertions.
+    private readonly RequirementsDatabase fixture = new();
+
+    public Task InitializeAsync() => fixture.InitializeAsync();
+    public Task DisposeAsync() => fixture.DisposeAsync();
+
     [PostgresFact]
     public async Task Offer_and_group_reads_resolve_names_without_disclosing_private_profile_fields()
     {

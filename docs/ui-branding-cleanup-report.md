@@ -121,7 +121,7 @@
     - PASS: `flutter analyze`: no issues.
     - FAIL: `flutter test`: 190 passed, 1 failed. The failure is `match_details_polish_test.dart: narrow layout remains usable`, an existing 320px match-details bottom-navigation overflow. The failing test and screen are unchanged; this issue was outside the listed scope. New branding/startup tests and existing auth/registration/verification-routing tests pass.
     - PASS: `flutter build apk --debug`: `mobile/build/app/outputs/flutter-apk/app-debug.apk`.
-    - PASS with skips: `dotnet test`: 158 passed, 63 skipped, 0 failed. PostgreSQL integration tests (including the new endpoint/group projection test) require `SURPLUSLINK_TEST_CONNECTION`, which is not configured. New in-process name/privacy and SQL projection tests pass.
+    - PASS with PostgreSQL 18 enabled: `dotnet test SurplusLink.sln --configuration Release --no-restore`: 219 passed, 2 skipped, 0 failed. The two skipped tests require the live AI graph. This supersedes the initial local run with 63 database-dependent skips. The CI count failure was reproduced (expected 1 pending transaction, actual 2): the new DTO test left a pending transaction in a shared class database. Transaction tests now each own a disposable database through `IAsyncLifetime`; assertions and production behavior are unchanged.
     - PASS: runtime source audit found no remaining old logo references, incorrect USD currency formatter, or Sri Lankan NIC user-facing label in React/Flutter.
     - Live browser visual review was unavailable because no connected browser was available. PNG alpha, asset decoding, responsive widget bounds, and rendered React content were covered by automated checks.
 
