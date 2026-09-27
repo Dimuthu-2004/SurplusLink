@@ -8,6 +8,7 @@ import 'package:mobile/auth/auth_models.dart';
 import 'package:mobile/core/api_exception.dart';
 import 'package:mobile/materials/material_inventory_gateway.dart';
 import 'package:mobile/materials/material_models.dart';
+import 'package:mobile/notifications/notification_bell.dart';
 import 'package:mobile/routing/app_router.dart';
 import 'package:mobile/widgets/role_navigation.dart';
 
@@ -104,6 +105,10 @@ class _MyMaterialsScreenState extends State<MyMaterialsScreen> {
       appBar: AppBar(
         leading: const DashboardBackButton(fallback: '/home'),
         title: const Text('My Materials'),
+        actions: const [
+          NotificationBell(),
+          SizedBox(width: 8),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         key: const Key('add-material-button'),

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:mobile/core/api_exception.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:mobile/auth/auth_models.dart';
+import 'package:mobile/notifications/notification_bell.dart';
 import 'package:mobile/offers/offer_gateway.dart';
 import 'package:mobile/offers/offer_models.dart';
 import 'package:mobile/widgets/role_navigation.dart';
@@ -103,6 +104,7 @@ class _MyOffersScreenState extends State<MyOffersScreen> {
             onPressed: loading ? null : load,
             icon: const Icon(Icons.refresh),
           ),
+          const NotificationBell(),
         ],
       ),
       body: ListView(

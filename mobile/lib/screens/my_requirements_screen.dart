@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:mobile/notifications/notification_bell.dart';
 import 'package:mobile/requirements/requirement_gateway.dart';
 import 'package:mobile/requirements/requirement_models.dart';
 import 'package:mobile/requirements/requirement_widgets.dart';
@@ -108,6 +109,7 @@ class _MyRequirementsScreenState extends State<MyRequirementsScreen> {
           onPressed: _loading ? null : _load,
           icon: const Icon(Icons.refresh),
         ),
+        const NotificationBell(),
       ],
     ),
     floatingActionButton: FloatingActionButton.extended(
