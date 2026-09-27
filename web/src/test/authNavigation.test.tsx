@@ -201,6 +201,114 @@ describe('authentication navigation', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('An account with that email already exists.');
   });
 
+  it('turns an unverified login result into verification and real resend actions', async () => {
+    const client = fakeClient();
+    const storage = memoryStorage();
+    client.post.mockRejectedValueOnce(new ApiError(
+      'Your email has not been verified.',
+      403,
+      undefined,
+      'EMAIL_NOT_VERIFIED',
+    ));
+    renderApp('/login', client, storage);
+    const visitor = userEvent.setup();
+
+    await visitor.type(await screen.findByLabelText('Email'), 'dual@example.com');
+    await visitor.type(screen.getByLabelText('Password'), 'Password123!');
+    await visitor.click(screen.getByRole('button', { name: 'Sign in' }));
+
+    expect(await screen.findByRole('heading', { name: 'Your email is not verified yet.' })).toBeInTheDocument();
+    expect(screen.getByText('dual@example.com')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Verify Email/ })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Resend Verification Code' })).toBeEnabled();
+    expect(storage.read()).toBeNull();
+
+    client.post.mockResolvedValueOnce({ data: { message: 'A new verification code was sent.' } });
+    await visitor.click(screen.getByRole('button', { name: 'Resend Verification Code' }));
+    expect(client.post).toHaveBeenLastCalledWith('/api/auth/email-verification/resend', { email: 'dual@example.com' });
+    expect(await screen.findByRole('status')).toHaveTextContent(/Resend available in 0[01]:\d{2}/);
+
+    await visitor.click(screen.getByRole('button', { name: /Verify Email/ }));
+    expect(await screen.findByRole('heading', { name: 'Verify your email' })).toBeInTheDocument();
+    expect(screen.getByText(/sent to dual@example.com/)).toBeInTheDocument();
+  });
+
+  it('verifies the retained login email, shows success, and returns to sign in', async () => {
+    const client = fakeClient();
+    client.post.mockRejectedValueOnce(new ApiError(
+      'Your email has not been verified.',
+      403,
+      undefined,
+      'EMAIL_NOT_VERIFIED',
+    ));
+    renderApp('/login', client);
+    const visitor = userEvent.setup();
+
+    await visitor.type(await screen.findByLabelText('Email'), 'buyer@example.com');
+    await visitor.type(screen.getByLabelText('Password'), 'Password123!');
+    await visitor.click(screen.getByRole('button', { name: 'Sign in' }));
+    await visitor.click(await screen.findByRole('button', { name: /Verify Email/ }));
+    await visitor.type(await screen.findByLabelText('Verification code'), '123456');
+
+    client.post.mockResolvedValueOnce({ data: { message: 'Your email has been verified.' } });
+    await visitor.click(screen.getByRole('button', { name: /Verify email/ }));
+    expect(await screen.findByRole('heading', { name: 'Email verified successfully' })).toBeInTheDocument();
+    expect(client.post).toHaveBeenLastCalledWith('/api/auth/email-verification/verify', { email: 'buyer@example.com', code: '123456' });
+
+    expect(await screen.findByRole('heading', { name: 'Welcome back' }, { timeout: 2500 })).toBeInTheDocument();
+    expect(screen.getByLabelText('Email')).toHaveValue('buyer@example.com');
+  });
+
+  it('does not fake resend success when email delivery fails', async () => {
+    const client = fakeClient();
+    client.post.mockRejectedValueOnce(new ApiError(
+      'Your email has not been verified.',
+      403,
+      undefined,
+      'EMAIL_NOT_VERIFIED',
+    ));
+    renderApp('/login', client);
+    const visitor = userEvent.setup();
+
+    await visitor.type(await screen.findByLabelText('Email'), 'seller@example.com');
+    await visitor.type(screen.getByLabelText('Password'), 'Password123!');
+    await visitor.click(screen.getByRole('button', { name: 'Sign in' }));
+    client.post.mockRejectedValueOnce(new ApiError(
+      'We could not send the email. Please try again shortly.',
+      503,
+      undefined,
+      'EMAIL_DELIVERY_FAILED',
+    ));
+    await visitor.click(await screen.findByRole('button', { name: 'Resend Verification Code' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('We could not send the email. Please try again shortly.');
+    expect(screen.queryByText(/Resend available in/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Resend Verification Code' })).toBeEnabled();
+  });
+
+  it('keeps verification open with a friendly wrong-code error', async () => {
+    const client = fakeClient();
+    client.post.mockRejectedValueOnce(new ApiError(
+      'Your email has not been verified.',
+      403,
+      undefined,
+      'EMAIL_NOT_VERIFIED',
+    ));
+    renderApp('/login', client);
+    const visitor = userEvent.setup();
+
+    await visitor.type(await screen.findByLabelText('Email'), 'seller@example.com');
+    await visitor.type(screen.getByLabelText('Password'), 'Password123!');
+    await visitor.click(screen.getByRole('button', { name: 'Sign in' }));
+    await visitor.click(await screen.findByRole('button', { name: /Verify Email/ }));
+    await visitor.type(await screen.findByLabelText('Verification code'), '654321');
+    client.post.mockRejectedValueOnce(new ApiError('The code is invalid. Please try again.', 400, undefined, 'EMAIL_VERIFICATION_CODE_INVALID'));
+    await visitor.click(screen.getByRole('button', { name: /Verify email/ }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('The code is invalid. Please try again.');
+    expect(screen.getByLabelText('Verification code')).toHaveValue('654321');
+  });
+
   it('clears the token and returns to login on logout', async () => {
     const storage = memoryStorage('stored-jwt');
     const client = fakeClient();

@@ -7,7 +7,7 @@ import { SurplusLinkLogo } from '../components/SurplusLinkLogo';
 import './loginPage.css';
 
 type AuthMode = 'signIn' | 'signUp';
-type AuthStep = AuthMode | 'verify' | 'forgot' | 'reset';
+type AuthStep = AuthMode | 'unverified' | 'verify' | 'forgot' | 'reset';
 type MarketplaceRole = Extract<UserRole, 'SELLER' | 'BUYER'>;
 
 interface RegistrationForm extends PublicRegistration {
@@ -19,7 +19,7 @@ const emptyRegistration: RegistrationForm = {
 };
 
 export function LoginPage() {
-  const { login, register, verifyEmail, resendVerification, forgotPassword, resetPassword, pending, error, clearError } = useAuth();
+  const { login, register, verifyEmail, resendVerification, forgotPassword, resetPassword, pending, error, errorCode, clearError } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [mode, setMode] = useState<AuthMode>('signIn');
@@ -31,16 +31,19 @@ export function LoginPage() {
   const [verification, setVerification] = useState({ email: '', code: '' });
   const [reset, setReset] = useState({ email: '', code: '', password: '', confirmPassword: '' });
   const [resendSeconds, setResendSeconds] = useState(0);
+  const [verificationSucceeded, setVerificationSucceeded] = useState(false);
   const [registration, setRegistration] = useState<RegistrationForm>(emptyRegistration);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [showRegistrationPassword, setShowRegistrationPassword] = useState(false);
   const transitionTimer = useRef<number | undefined>(undefined);
   const formTimer = useRef<number | undefined>(undefined);
+  const verificationTimer = useRef<number | undefined>(undefined);
 
   useEffect(() => () => {
     window.clearTimeout(transitionTimer.current);
     window.clearTimeout(formTimer.current);
+    window.clearTimeout(verificationTimer.current);
   }, []);
   useEffect(() => {
     if (!resendSeconds) return;
@@ -76,7 +79,14 @@ export function LoginPage() {
     if (!isEmail(email)) return setValidationError('Enter a valid email address.');
     if (!loginForm.password) return setValidationError('Enter your password.');
     setValidationError(null);
-    if (await login(email, loginForm.password)) navigate(destination(), { replace: true });
+    const result = await login(email, loginForm.password);
+    if (result === 'authenticated') navigate(destination(), { replace: true });
+    if (result === 'emailNotVerified') {
+      setVerification({ email, code: '' });
+      setResendSeconds(0);
+      setVerificationSucceeded(false);
+      setStep('unverified');
+    }
   }
 
   async function submitRegistration(event: FormEvent<HTMLFormElement>) {
@@ -89,7 +99,19 @@ export function LoginPage() {
     if (await register(request)) { setVerification({ email: request.email.trim(), code: '' }); setStep('verify'); setResendSeconds(60); }
   }
 
-  async function submitVerification(event: FormEvent<HTMLFormElement>) { event.preventDefault(); if (await verifyEmail(verification.email, verification.code)) { setMode('signIn'); setPanelMode('signIn'); setStep('signIn'); setLoginForm({ email: verification.email, password: '' }); } }
+  async function submitVerification(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (await verifyEmail(verification.email, verification.code)) {
+      setVerificationSucceeded(true);
+      setLoginForm(current => ({ ...current, email: verification.email }));
+      verificationTimer.current = window.setTimeout(() => {
+        setMode('signIn');
+        setPanelMode('signIn');
+        setStep('signIn');
+        setVerificationSucceeded(false);
+      }, 1200);
+    }
+  }
   async function resendCode() { if (resendSeconds || !verification.email) return; if (await resendVerification(verification.email)) setResendSeconds(60); }
   async function submitForgot(event: FormEvent<HTMLFormElement>) { event.preventDefault(); if (!isEmail(reset.email)) return setValidationError('Enter a valid email address.'); if (await forgotPassword(reset.email)) { setStep('reset'); setResendSeconds(60); setValidationError('If an account exists for this email, a reset code has been sent.'); } }
   async function submitReset(event: FormEvent<HTMLFormElement>) { event.preventDefault(); if (!/^\d{6}$/.test(reset.code)) return setValidationError('Enter the six-digit code.'); if (reset.password.length < 8) return setValidationError('Your password must be at least 8 characters.'); if (reset.password !== reset.confirmPassword) return setValidationError('Passwords do not match.'); setValidationError(null); clearError(); if (await resetPassword(reset.email, reset.code, reset.password)) { setStep('signIn'); setLoginForm({ email: reset.email, password: '' }); } }
@@ -115,8 +137,42 @@ export function LoginPage() {
         <div className="auth-form-surface">
           <Brand dark />
           <div className="auth-form-stage" aria-busy={changing || pending}>
-            {step === 'verify' ? (
-              <form className="auth-form" onSubmit={submitVerification}><p className="auth-kicker">EMAIL CONFIRMATION</p><h1>Verify your email</h1><p className="auth-subtitle">Enter the six-digit code sent to {verification.email}.</p><FormMessage message={message} /><div className="auth-fields"><Field label="Verification code" htmlFor="verificationCode"><OtpInput id="verificationCode" value={verification.code} disabled={pending} onChange={code => setVerification(current => ({ ...current, code }))} /></Field></div><button className="auth-submit" type="submit" disabled={pending || verification.code.length !== 6}>Verify email <Arrow /></button><button className="auth-panel-action" type="button" onClick={resendCode} disabled={pending || resendSeconds > 0}>{resendSeconds ? `Resend code in 00:${String(resendSeconds).padStart(2, '0')}` : 'Resend code'}</button><p className="auth-mobile-switch"><button type="button" onClick={() => { setStep('signIn'); setMode('signIn'); setPanelMode('signIn'); }}>Back to sign in</button></p></form>
+            {step === 'unverified' ? (
+              <section className="auth-form auth-verification-panel" aria-labelledby="unverified-title">
+                <VerificationIcon state="attention" />
+                <p className="auth-kicker">EMAIL VERIFICATION</p>
+                <h1 id="unverified-title">Your email is not verified yet.</h1>
+                <p className="auth-subtitle">Verify your email to continue using SurplusLink.</p>
+                <p className="auth-verification-email">{verification.email}</p>
+                <FormMessage message={errorCode && errorCode !== 'EMAIL_NOT_VERIFIED' ? error : null} />
+                <div className="auth-verification-actions">
+                  <button className="auth-submit" type="button" onClick={() => { clearError(); setStep('verify'); }}>Verify Email <Arrow /></button>
+                  <button className="auth-secondary-action" type="button" onClick={resendCode} disabled={pending || resendSeconds > 0}>
+                    {pending ? <><Spinner /> Sending...</> : 'Resend Verification Code'}
+                  </button>
+                </div>
+                {resendSeconds > 0 && <p className="auth-countdown" role="status">Resend available in {formatCountdown(resendSeconds)}</p>}
+              </section>
+            ) : step === 'verify' ? (
+              verificationSucceeded ? (
+                <section className="auth-form auth-verification-success" role="status">
+                  <VerificationIcon state="success" />
+                  <p className="auth-kicker">EMAIL CONFIRMED</p>
+                  <h1>Email verified successfully</h1>
+                  <p className="auth-subtitle">Returning you to Sign In...</p>
+                </section>
+              ) : (
+                <form className="auth-form" onSubmit={submitVerification}>
+                  <VerificationIcon state="code" />
+                  <p className="auth-kicker">EMAIL CONFIRMATION</p><h1>Verify your email</h1><p className="auth-subtitle">Enter the six-digit code sent to {verification.email}.</p>
+                  <FormMessage message={message} />
+                  <div className="auth-fields"><Field label="Verification code" htmlFor="verificationCode"><OtpInput id="verificationCode" value={verification.code} disabled={pending} onChange={code => setVerification(current => ({ ...current, code }))} /></Field></div>
+                  <button className="auth-submit" type="submit" disabled={pending || verification.code.length !== 6}>Verify email <Arrow /></button>
+                  <button className="auth-secondary-action" type="button" onClick={resendCode} disabled={pending || resendSeconds > 0}>Resend Verification Code</button>
+                  {resendSeconds > 0 && <p className="auth-countdown" role="status">Resend available in {formatCountdown(resendSeconds)}</p>}
+                  <p className="auth-back-link"><button type="button" onClick={() => { clearError(); setStep('signIn'); setMode('signIn'); setPanelMode('signIn'); }}>Back to sign in</button></p>
+                </form>
+              )
             ) : step === 'forgot' ? (
               <form className="auth-form" onSubmit={submitForgot}><p className="auth-kicker">ACCOUNT RECOVERY</p><h1>Reset your password</h1><p className="auth-subtitle">We will send a six-digit reset code if an account exists.</p><FormMessage message={message} /><div className="auth-fields"><Field label="Email" htmlFor="forgotEmail"><input id="forgotEmail" type="email" value={reset.email} onChange={event => setReset(current => ({ ...current, email: event.target.value }))} /></Field></div><button className="auth-submit" type="submit" disabled={pending}>Send reset code <Arrow /></button><p className="auth-mobile-switch"><button type="button" onClick={() => { setStep('signIn'); setMode('signIn'); setPanelMode('signIn'); }}>Back to sign in</button></p></form>
             ) : step === 'reset' ? (
@@ -130,7 +186,6 @@ export function LoginPage() {
                   <PasswordField id="password" label="Password" autoComplete="current-password" value={loginForm.password} onChange={value => setLoginForm(current => ({ ...current, password: value }))} visible={showLoginPassword} onToggle={() => setShowLoginPassword(visible => !visible)} disabled={pending || changing} />
                 </div>
                 <button className="auth-submit" type="submit" disabled={pending || changing}>{pending ? <><Spinner /> Signing in...</> : <>Sign in <Arrow /></>}</button>
-                {error === 'Your email has not been verified.' && <p className="auth-mobile-switch"><button type="button" onClick={() => { setVerification({ email: loginForm.email.trim(), code: '' }); setStep('verify'); }}>Verify Email</button><button type="button" onClick={async () => { const email = loginForm.email.trim(); setVerification({ email, code: '' }); if (await resendVerification(email)) setResendSeconds(60); }}>Resend Code</button></p>}
                 <p className="auth-forgot-password"><button type="button" onClick={() => { clearError(); setStep('forgot'); }}>Forgot password?</button></p>
                 <p className="auth-mobile-switch">New to SurplusLink? <button type="button" onClick={() => switchMode('signUp')} disabled={pending || changing}>Create account</button></p>
               </form>
@@ -169,5 +224,13 @@ function FormMessage({ message }: { message: string | null }) { return message ?
 function PasswordStrength({ password }: { password: string }) { const score = Number(password.length >= 8) + Number(/[A-Z]/.test(password)) + Number(/[0-9]/.test(password)) + Number(/[^A-Za-z0-9]/.test(password)); return <div className="auth-password-strength" aria-live="polite"><div aria-hidden="true">{[1, 2, 3, 4].map(level => <span key={level} className={score >= level ? 'is-active' : ''} />)}</div><span>{password ? (score >= 4 ? 'Strong password' : score >= 2 ? 'Keep strengthening it' : 'Use 8+ characters, a number and symbol') : 'Use 8+ characters, a number and symbol'}</span></div>; }
 function Arrow() { return <svg aria-hidden="true" viewBox="0 0 20 20" fill="none"><path d="M3 10h13m-5-5 5 5-5 5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" /></svg>; }
 function Spinner() { return <span className="auth-spinner" aria-hidden="true" />; }
+function VerificationIcon({ state }: { state: 'attention' | 'code' | 'success' }) {
+  return <span className={`auth-verification-icon is-${state}`} aria-hidden="true">
+    {state === 'success' ? <svg viewBox="0 0 24 24" fill="none"><path d="m6.5 12 3.4 3.4L17.8 8" /></svg> :
+      state === 'code' ? <svg viewBox="0 0 24 24" fill="none"><path d="M4.5 7.5 12 13l7.5-5.5M5 6h14v12H5z" /></svg> :
+        <svg viewBox="0 0 24 24" fill="none"><path d="M4.5 7.5 12 13l7.5-5.5M5 6h14v12H5z" /><circle cx="18.5" cy="17.5" r="3" /><path d="M18.5 16v2" /></svg>}
+  </span>;
+}
+function formatCountdown(seconds: number) { return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`; }
 function isEmail(value: string) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value); }
 function registrationError(form: RegistrationForm) { if (!form.fullName.trim()) return 'Enter your full name.'; if (!isEmail(form.email.trim())) return 'Enter a valid email address.'; if (!/^\d{9}[VvXx]$|^\d{12}$/.test(form.nic.trim().replace(/\s/g, ''))) return 'Enter a valid NIC number.'; if (!/^(?:0?94|\+94|0)7\d{8}$/.test(form.phoneNumber.trim().replace(/[ -]/g, ''))) return 'Enter a valid Sri Lankan phone number.'; if (!form.address.trim()) return 'Enter your address.'; if (form.password.length < 8) return 'Your password must be at least 8 characters.'; if (form.password !== form.confirmPassword) return 'Passwords do not match.'; if (!form.roles.length) return 'Choose how you want to use SurplusLink.'; return null; }
