@@ -135,6 +135,7 @@ builder.Services.AddScoped<SurplusLink.Api.Matching.MatchService>();
 builder.Services.AddScoped<SurplusLink.Api.Transactions.TransactionService>();
 builder.Services.AddScoped<SurplusLink.Api.Workflows.AgentWorkflowService>();
 builder.Services.AddScoped<SurplusLink.Api.Handoffs.IMobileHandoffService, SurplusLink.Api.Handoffs.MobileHandoffService>();
+builder.Services.AddScoped<SurplusLink.Api.Notifications.INotificationService, SurplusLink.Api.Notifications.NotificationService>();
 builder.Services.AddOptions<SurplusLink.Api.Workflows.WorkflowExecutionOptions>()
     .BindConfiguration("AgentWorkflow")
     .Configure(options =>

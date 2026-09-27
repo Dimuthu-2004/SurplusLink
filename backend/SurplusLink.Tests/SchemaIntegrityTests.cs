@@ -25,6 +25,7 @@ public sealed class SchemaIntegrityTests
         AssertForeignKey<Reservation>(model, nameof(Reservation.ListingId), typeof(Listing));
         AssertForeignKey<Reservation>(model, nameof(Reservation.MaterialRequestId), typeof(BuyerRequest));
         AssertForeignKey<AuditLog>(model, nameof(AuditLog.ActorUserId), typeof(User));
+        AssertForeignKey<Notification>(model, nameof(Notification.UserId), typeof(User));
     }
 
     [Fact]
@@ -63,6 +64,7 @@ public sealed class SchemaIntegrityTests
         Assert.True(indexes["UX_Categories_Name"].IsUnique);
         Assert.True(indexes["UX_Matches_MaterialRequestId_ListingId"].IsUnique);
         Assert.True(indexes["UX_Workflows_MaterialMatchId"].IsUnique);
+        Assert.True(indexes["UX_Notifications_UserId_DeduplicationKey"].IsUnique);
 
         var requiredQueryIndexes = new[]
         {
@@ -74,7 +76,9 @@ public sealed class SchemaIntegrityTests
             "IX_MaterialRequests_DeadlineUtc",
             "IX_Matches_MaterialRequestId_Score",
             "IX_Workflows_Status",
-            "IX_AuditLogs_EntityType_EntityId_CreatedAtUtc"
+            "IX_AuditLogs_EntityType_EntityId_CreatedAtUtc",
+            "IX_Notifications_UserId_CreatedAtUtc",
+            "IX_Notifications_UserId_IsRead_CreatedAtUtc"
         };
 
         Assert.All(requiredQueryIndexes, name => Assert.Contains(name, indexes.Keys));

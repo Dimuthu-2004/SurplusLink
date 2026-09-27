@@ -37,6 +37,8 @@ public sealed class SurplusLinkDbContext(DbContextOptions<SurplusLinkDbContext> 
 
     public DbSet<MobileHandoff> MobileHandoffs => Set<MobileHandoff>();
 
+    public DbSet<Notification> Notifications => Set<Notification>();
+
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
         AuditRequirementStatusChanges();

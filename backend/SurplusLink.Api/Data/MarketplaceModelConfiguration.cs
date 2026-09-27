@@ -21,8 +21,42 @@ public static class MarketplaceModelConfiguration
         ConfigureReservation(modelBuilder);
         ConfigureOffersAndTransactions(modelBuilder);
         ConfigureMobileHandoff(modelBuilder);
+        ConfigureNotification(modelBuilder);
         ConfigureAuditLog(modelBuilder);
         ConfigureTimestamps(modelBuilder);
+    }
+
+    private static void ConfigureNotification(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<Notification>(entity =>
+        {
+            entity.ToTable("Notifications", table =>
+            {
+                table.HasCheckConstraint("CK_Notifications_Context", "\"Context\" IN ('BUYER', 'SELLER', 'MANAGER', 'SYSTEM')");
+                table.HasCheckConstraint("CK_Notifications_Priority", "\"Priority\" IN ('INFO', 'SUCCESS', 'ACTION_REQUIRED', 'WARNING', 'CRITICAL')");
+                table.HasCheckConstraint("CK_Notifications_ReadAt", "(\"IsRead\" = FALSE AND \"ReadAtUtc\" IS NULL) OR (\"IsRead\" = TRUE AND \"ReadAtUtc\" IS NOT NULL)");
+            });
+            entity.HasKey(item => item.Id).HasName("PK_Notifications");
+            entity.Property(item => item.Type).HasMaxLength(80).IsRequired();
+            entity.Property(item => item.Title).HasMaxLength(160).IsRequired();
+            entity.Property(item => item.Message).HasMaxLength(1_000).IsRequired();
+            entity.Property(item => item.Context).HasConversion<string>().HasMaxLength(20).IsRequired();
+            entity.Property(item => item.Priority).HasConversion<string>().HasMaxLength(24).IsRequired();
+            entity.Property(item => item.EntityType).HasMaxLength(80);
+            entity.Property(item => item.ActionRoute).HasMaxLength(500);
+            entity.Property(item => item.DeduplicationKey).HasMaxLength(200);
+            entity.Property(item => item.CreatedAtUtc).HasColumnType("timestamp with time zone");
+            entity.Property(item => item.ReadAtUtc).HasColumnType("timestamp with time zone");
+            entity.HasIndex(item => new { item.UserId, item.CreatedAtUtc })
+                .IsDescending(false, true).HasDatabaseName("IX_Notifications_UserId_CreatedAtUtc");
+            entity.HasIndex(item => new { item.UserId, item.IsRead, item.CreatedAtUtc })
+                .IsDescending(false, false, true).HasDatabaseName("IX_Notifications_UserId_IsRead_CreatedAtUtc");
+            entity.HasIndex(item => new { item.UserId, item.DeduplicationKey })
+                .IsUnique().HasFilter("\"DeduplicationKey\" IS NOT NULL")
+                .HasDatabaseName("UX_Notifications_UserId_DeduplicationKey");
+            entity.HasOne(item => item.User).WithMany().HasForeignKey(item => item.UserId)
+                .OnDelete(DeleteBehavior.Cascade).HasConstraintName("FK_Notifications_Users_UserId");
+        });
     }
 
     private static void ConfigureUser(ModelBuilder modelBuilder)
