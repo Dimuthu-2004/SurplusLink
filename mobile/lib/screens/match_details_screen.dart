@@ -28,6 +28,13 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
   String? _selectionError;
   int _historyPage = 1;
   double? _selectedQuantity;
+  final TextEditingController _quantityController = TextEditingController();
+
+  @override
+  void dispose() {
+    _quantityController.dispose();
+    super.dispose();
+  }
   @override
   void initState() {
     super.initState();
@@ -59,9 +66,14 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
         _match = match;
         _loading = false;
         if (match.availableQuantity != null && match.quantity != null) {
-          _selectedQuantity = match.availableQuantity! < match.quantity!
-              ? match.availableQuantity
-              : match.quantity;
+          _selectedQuantity = (match.availableQuantity! < match.quantity!
+                  ? match.availableQuantity!
+                  : match.quantity!)
+              .toDouble();
+          _quantityController.text = quantities.formatQuantity(
+            _selectedQuantity!,
+            match.unit ?? '',
+          );
         }
       });
       await _loadHistory(1);
@@ -126,7 +138,7 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
                       ),
                     ),
                   ),
-                if (_match!.isPartial) ...[
+                ...[
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     margin: const EdgeInsets.only(bottom: 8),
@@ -146,9 +158,9 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
                           children: [
                             IconButton(
                               icon: const Icon(Icons.remove_circle_outline, size: 20),
-                              onPressed: (_selectedQuantity ?? 1) > 1
+                              onPressed: (_selectedQuantity ?? 1) > _stepFor(_match!.unit)
                                   ? () => setState(
-                                      () => _selectedQuantity = (_selectedQuantity ?? 1) - 1,
+                                      () => _setSelectedQuantity((_selectedQuantity ?? 1) - _stepFor(_match!.unit)),
                                     )
                                   : null,
                             ),
@@ -156,10 +168,7 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
                               width: 80,
                               child: TextFormField(
                                 key: const Key('details-quantity-input'),
-                                initialValue: quantities.formatQuantity(
-                                  _selectedQuantity ?? 0,
-                                  _match!.unit ?? '',
-                                ),
+                                controller: _quantityController,
                                 keyboardType:
                                     const TextInputType.numberWithOptions(decimal: true),
                                 textAlign: TextAlign.center,
@@ -182,9 +191,11 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
                             IconButton(
                               icon: const Icon(Icons.add_circle_outline, size: 20),
                               onPressed: ((_selectedQuantity ?? 0) <
-                                      (_match!.availableQuantity ?? double.infinity))
+                                      _maximumSelectable(_match!))
                                   ? () => setState(
-                                      () => _selectedQuantity = (_selectedQuantity ?? 0) + 1,
+                                      () => _setSelectedQuantity((
+                                        (_selectedQuantity ?? 0) + _stepFor(_match!.unit)
+                                      ).clamp(0.0, _maximumSelectable(_match!)).toDouble()),
                                     )
                                   : null,
                             ),
@@ -199,10 +210,8 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
                   child: FilledButton.icon(
                     key: const Key('select-match'),
                     onPressed: _selecting ||
-                            (_match!.isPartial &&
-                                ((_selectedQuantity ?? 0) <= 0 ||
-                                    (_selectedQuantity ?? 0) >
-                                        (_match!.availableQuantity ?? 0)))
+                            ((_selectedQuantity ?? 0) <= 0 ||
+                                (_selectedQuantity ?? 0) > _maximumSelectable(_match!))
                         ? null
                         : _selectMatch,
                     icon: const Icon(Icons.check_circle_outline),
@@ -435,14 +444,28 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
       await widget.gateway.select(
         widget.requirementId,
         match.id,
-        quantity: match.isPartial ? _selectedQuantity : null,
+        quantity: _selectedQuantity,
       );
-      if (mounted) context.go('/requirements/${widget.requirementId}');
+      await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Allocation saved and sent for manager approval.')),
+        );
+        context.go('/requirements/${widget.requirementId}');
+      }
     } on Object catch (error) {
       if (mounted) setState(() => _selectionError = matchError(error));
     } finally {
       if (mounted) setState(() => _selecting = false);
     }
+  }
+
+  double _stepFor(String? unit) => quantities.isDiscreteUnit(unit ?? '') ? 1 : 0.1;
+  double _maximumSelectable(RecommendedMatch match) =>
+      (match.availableQuantity ?? 0).clamp(0.0, match.quantity ?? double.infinity).toDouble();
+  void _setSelectedQuantity(double value) {
+    _selectedQuantity = value;
+    _quantityController.text = quantities.formatQuantity(value, _match?.unit ?? '');
   }
 
   String _quantity(double? value, String? unit) => value == null

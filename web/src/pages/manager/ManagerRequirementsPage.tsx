@@ -1,3 +1,4 @@
+import { formatLkr } from '../../utils/currency';
 import { useCallback, useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { managerRequirementsApi, requirementStatuses, type ManagerRequirementsApi, type RequirementQuery } from '../../features/requirements/managerRequirementsApi';
@@ -76,7 +77,7 @@ export function ManagerRequirementsPage({ api = managerRequirementsApi }: { api?
               <tbody>{list.data.items.map((row) => <tr key={row.id}>
                 <td><strong>{names.get(row.categoryId) ?? 'Material'} request</strong><small className="requirement-id" title={row.id}>Reference: {row.id.slice(0, 8)}</small><small className="requirement-id" title={row.buyerId}>Buyer {row.buyerId.slice(0, 8)}</small></td>
                 <td>{names.get(row.categoryId) ?? 'Category unavailable'}</td><td><RequirementBadge status={row.status} /></td>
-                <td>{requirementNumber(row.requiredQuantity)} {row.unit}</td><td>{requirementNumber(row.maximumBudget, 2)}</td>
+                <td>{requirementNumber(row.requiredQuantity)} {row.unit}</td><td>{formatLkr(row.maximumBudget)}</td>
                 <td>{requirementDate(row.deadline)}</td><td>{requirementDate(row.createdAt)}</td>
                 <td><Link className="text-button" aria-label={'View requirement ' + row.id} to={'/app/manager/requirements/' + row.id}>View</Link></td>
               </tr>)}</tbody>

@@ -18,7 +18,7 @@ export function ManagerWorkflowDetailsPage({ api = managerWorkflowsApi }: { api?
     catch (error) { setDecisionError(error instanceof Error ? error.message : 'Unable to save this decision.'); }
     finally { setBusy(false); }
   }
-  return <div className="manager-page workflow-page"><Link className="back-link" to="/app/manager/approvals">Back to Pending Approvals</Link><header className="page-heading"><div><p className="eyebrow">Manager review</p><h1>Workflow & recommendation details</h1></div><button className="button button-secondary" type="button" onClick={resource.reload} disabled={resource.loading || busy}>Refresh</button></header>
+  return <div className="manager-page workflow-page"><Link className="back-link" to="/app/manager/requirement-approvals">Back to Buyer Requirement Approvals</Link><header className="page-heading"><div><p className="eyebrow">Manager review</p><h1>Buyer Requirement Approval Details</h1></div><button className="button button-secondary" type="button" onClick={resource.reload} disabled={resource.loading || busy}>Refresh</button></header>
     {resource.loading && <p role="status">Loading workflow...</p>}{resource.error && <RequirementError message={resource.error} retry={resource.reload} />}
     {workflow && <><section className="manager-panel"><div className="section-heading"><h2>Review summary</h2><RequirementBadge status={workflow.status} /></div><WorkflowSummary key={workflow.id + workflow.status + workflow.outputJson} workflow={workflow} /><small className="requirement-id" title={workflow.id}>Workflow reference: {workflow.id.slice(0, 8)}</small></section>
       {notice && <p className="decision-notice" role="status">{notice}</p>}

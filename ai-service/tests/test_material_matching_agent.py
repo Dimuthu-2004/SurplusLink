@@ -75,7 +75,7 @@ class MaterialMatchingAgentTests(unittest.TestCase):
 
     def test_returns_safe_no_candidate_result(self) -> None:
         boundary = FakeActiveMaterialsBoundary(
-            [listing("too-small", quantity="2", unit_price="8")]
+            [listing("unavailable", quantity="0", unit_price="8")]
         )
         response = MaterialMatchingAgent(boundary, clock=lambda: NOW).match(request())
 
@@ -84,6 +84,15 @@ class MaterialMatchingAgentTests(unittest.TestCase):
         self.assertIsNotNone(response.failure)
         self.assertEqual(response.failure.code, "NO_CANDIDATE")
         self.assertIn("No active, verified, non-expired", response.failure.message)
+
+    def test_partial_stock_is_a_ranked_candidate(self) -> None:
+        boundary = FakeActiveMaterialsBoundary(
+            [listing("partial", quantity="2", unit_price="8")]
+        )
+        response = MaterialMatchingAgent(boundary, clock=lambda: NOW).match(request())
+        self.assertEqual(response.status, "ok")
+        self.assertEqual([candidate.listingId for candidate in response.candidates], ["partial"])
+        self.assertEqual(response.candidates[0].availableQuantity, Decimal("2"))
 
     def test_self_match_excluded_while_other_seller_matches(self):
         own = replace(listing("own", quantity="10", unit_price="8"),

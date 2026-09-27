@@ -42,7 +42,7 @@ it('shows readable summary and validation, with technical output collapsed and n
   expect(screen.queryByRole('link', { name: 'Steel offcuts' })).not.toBeInTheDocument();
   expect(await screen.findByRole('link', { name: 'Steel request' })).toHaveAttribute('href', '/app/manager/requirements/request-1');
   expect(screen.getByText('12 kg')).toBeInTheDocument();
-  expect(screen.getByText('1,500')).toBeInTheDocument();
+  expect(screen.getByText('LKR 1,500.00')).toBeInTheDocument();
   expect(screen.queryByText('4 km')).not.toBeInTheDocument();
   expect(screen.getByText('Budget Exceeded')).toBeInTheDocument();
   expect(screen.getByText('Route Estimate Only')).toBeInTheDocument();

@@ -34,6 +34,30 @@ public sealed class MatchScoringTests
         Assert.Equal(0, MatchScoring.Score("EXCELLENT", 1000, 2000, 10, null));
     }
 
+    [Fact]
+    public void Partial_stock_candidate_remains_eligible_and_scored()
+    {
+        var request = new BuyerRequest { BuyerId = Guid.NewGuid(), CategoryId = Guid.NewGuid(),
+            RequiredQuantity = 50, Unit = "pcs", MaximumBudget = 2000, Deadline = DateTime.UtcNow.AddDays(2),
+            Status = BuyerRequestStatus.MATCHING };
+        var listing = new Listing { SellerId = Guid.NewGuid(), CategoryId = request.CategoryId,
+            Quantity = 20, ReservedQuantity = 0, Unit = "pcs", UnitPrice = 10,
+            Status = ListingStatus.ACTIVE, AvailableUntil = DateTime.UtcNow.AddDays(5) };
+        Assert.True(WorkflowQueueProcessor.StillEligible(request, listing, 50));
+
+        var row = new WorkflowListingSnapshot(Guid.NewGuid(), Guid.NewGuid(), listing.SellerId,
+            request.CategoryId, 20, "pcs", 10, "GOOD", "ACTIVE", listing.AvailableUntil,
+            6, 79, 10, 30, 50, null);
+        var input = new WorkflowRunRequest(Guid.NewGuid(), new { }, [row]);
+        var score = MatchScoring.Score(row.Condition, row.UnitPrice * request.RequiredQuantity,
+            request.MaximumBudget, row.DistanceKm, row.TransportCost);
+        var result = new WorkflowRunResult(input.WorkflowId, "MATCH_FOUND",
+            new(true, true, row.MatchId, [], []), new(row.MatchId, row.ListingId, score,
+                row.DistanceKm!.Value, row.TransportCost!.Value), [], null);
+        WorkflowQueueProcessor.ValidateSelection(request, input, result);
+        Assert.True(score > 0);
+    }
+
     [Theory]
     [InlineData("POOR", "EXCELLENT", 500, 500)]
     [InlineData("GOOD", "GOOD", 500.01, 500)]

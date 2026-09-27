@@ -1,3 +1,4 @@
+import { formatLkr } from '../../utils/currency';
 ﻿import type { MatchCandidate } from './managerMatchesApi';
 
 const reasons: Record<string, string> = {
@@ -16,8 +17,7 @@ const reasons: Record<string, string> = {
   TRANSPORT_OVER_BUDGET: 'The transport cost exceeds the budget.',
 };
 export const matchReason = (code: string) => reasons[code] ?? 'Unable to use this match.';
-export const matchCurrency = (value?: number | null) => value == null || !Number.isFinite(value) ? 'Not available' :
-  'LKR ' + new Intl.NumberFormat('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
+export const matchCurrency = formatLkr;
 export function matchRoute(candidate: MatchCandidate) {
   if (candidate.status === 'ROUTE_FAILED' || candidate.rejectionReason === 'ROUTE_UNAVAILABLE') return 'Route unavailable / failed';
   const values = [candidate.routeDistanceKm == null ? null : `${candidate.routeDistanceKm} km`,

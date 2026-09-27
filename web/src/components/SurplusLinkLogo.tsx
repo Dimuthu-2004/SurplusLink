@@ -1,4 +1,4 @@
-import logo from '../assets/surpluslink-logo.png';
+import logo from '../assets/branding/surpluslink-logo-transparent.png';
 
 interface SurplusLinkLogoProps {
   className?: string;

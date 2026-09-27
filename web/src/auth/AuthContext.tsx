@@ -48,6 +48,7 @@ type AuthAction =
   | { type: 'RESTORED'; user: AuthUser }
   | { type: 'ANONYMOUS'; error?: string }
   | { type: 'REQUEST_STARTED' }
+  | { type: 'REQUEST_FINISHED' }
   | { type: 'AUTHENTICATED'; user: AuthUser }
   | { type: 'REQUEST_FAILED'; error: string }
   | { type: 'CLEAR_ERROR' };
@@ -147,6 +148,7 @@ export function AuthProvider({
         });
         // Registration deliberately does not mint a JWT. The same account must
         // prove email ownership in both clients before it can sign in.
+        dispatch({ type: 'REQUEST_FINISHED' });
         return true;
       } catch (error) {
         dispatch({
@@ -161,7 +163,7 @@ export function AuthProvider({
 
   const unauthenticatedRequest = useCallback(async (path: string, body: object) => {
     dispatch({ type: 'REQUEST_STARTED' });
-    try { await client.post(path, body); dispatch({ type: 'CLEAR_ERROR' }); return true; }
+    try { await client.post(path, body); dispatch({ type: 'REQUEST_FINISHED' }); return true; }
     catch (error) { dispatch({ type: 'REQUEST_FAILED', error: normalizeApiError(error).message }); return false; }
   }, [client]);
   const verifyEmail = useCallback((email: string, code: string) => unauthenticatedRequest('/api/auth/email-verification/verify', { email: email.trim(), code }), [unauthenticatedRequest]);
@@ -207,6 +209,8 @@ function authReducer(state: AuthState, action: AuthAction): AuthState {
       return { ...state, pending: true, error: null };
     case 'REQUEST_FAILED':
       return { ...state, pending: false, error: action.error };
+    case 'REQUEST_FINISHED':
+      return { ...state, pending: false, error: null };
     case 'CLEAR_ERROR':
       return { ...state, error: null };
     default:

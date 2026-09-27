@@ -53,7 +53,7 @@ class ProfileFields extends StatelessWidget {
             ? null
             : 'Enter a valid Sri Lankan phone number.',
       ),
-      _field('Sri Lankan NIC', 'profile-nic', controller.nic, 12, validate: (value) => RegExp(r'^\d{9}[VvXx]$|^\d{12}$').hasMatch((value?.trim() ?? '').replaceAll(' ', '')) ? null : 'Enter a valid Sri Lankan NIC number.'),
+      _field('NIC', 'profile-nic', controller.nic, 12, validate: (value) => RegExp(r'^\d{9}[VvXx]$|^\d{12}$').hasMatch((value?.trim() ?? '').replaceAll(' ', '')) ? null : 'Enter a valid NIC number.'),
       _field(
         'Business / organization (optional)',
         'profile-business',

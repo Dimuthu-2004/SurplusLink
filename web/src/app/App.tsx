@@ -1,4 +1,4 @@
-import { Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppLayout } from '../components/AppLayout';
 import { LoginPage } from '../pages/LoginPage';
 import { ManagerCategoriesPage } from '../pages/manager/ManagerCategoriesPage';
@@ -66,7 +66,9 @@ export function App() {
             <Route path="manager/requirements/:requirementId/matches" element={<ManagerMatchComparisonPage />} />
             <Route path="manager/requirements/:requirementId/history" element={<ManagerRequirementHistoryPage />} />
             <Route path="manager/requirements/:requirementId/workflow" element={<ManagerRequirementDetailsPage workflowOnly />} />
-            <Route path="manager/approvals" element={<ManagerApprovalsPage />} />
+            <Route path="manager/approvals" element={<Navigate to="/app/manager/requirement-approvals" replace />} />
+            <Route path="manager/listing-approvals" element={<ManagerListingsPage key="listing-approvals" approvalsOnly />} />
+            <Route path="manager/requirement-approvals" element={<ManagerApprovalsPage />} />
             <Route path="manager/workflows/:workflowId" element={<ManagerWorkflowDetailsPage />} />
           </Route>
         </Route>

@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using SurplusLink.Api.Data;
 using SurplusLink.Api.Models;
@@ -7,14 +8,20 @@ namespace SurplusLink.Api.Transactions;
 
 public sealed class TransactionService(SurplusLinkDbContext db)
 {
+    // Shared SQL projection: public display fields only, without per-offer lookups.
+    internal static readonly Expression<Func<Offer, OfferResponse>> OfferProjection = x => new(
+        x.Id, x.MaterialMatchId, x.BuyerId, x.SellerId, x.Quantity, x.UnitValue, x.TotalValue,
+        x.Status, x.CreatedAtUtc, x.UpdatedAtUtc, x.Buyer.FullName, x.Seller.FullName,
+        x.Seller.BusinessName, x.MaterialMatch.Listing.Title, x.MaterialMatch.MaterialRequest.Title,
+        x.MaterialMatch.Listing.Unit);
+
     public async Task<OfferResponse> GetOfferAsync(Guid id, Guid actor, bool manager, CancellationToken ct)
     {
-        var row = await db.Offers.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct)
+        var row = await db.Offers.AsNoTracking().Where(x => x.Id == id).Select(OfferProjection).SingleOrDefaultAsync(ct)
             ?? throw new TransactionOperationException(404, "Offer was not found.");
         if (!manager && row.BuyerId != actor && row.SellerId != actor)
             throw new TransactionOperationException(403, "This offer belongs to other participants.");
-        return new(row.Id, row.MaterialMatchId, row.BuyerId, row.SellerId, row.Quantity, row.UnitValue,
-            row.TotalValue, row.Status, row.CreatedAtUtc, row.UpdatedAtUtc);
+        return row;
     }
 
     public async Task<TransactionResponse> GetAsync(Guid id, Guid actor, bool manager, CancellationToken ct)
@@ -47,8 +54,7 @@ public sealed class TransactionService(SurplusLinkDbContext db)
         var total = await query.CountAsync(ct);
         var ordered = SortOffers(query, input);
         var items = await ordered.Skip((input.Page - 1) * input.PageSize).Take(input.PageSize)
-            .Select(x => new OfferResponse(x.Id, x.MaterialMatchId, x.BuyerId, x.SellerId, x.Quantity, x.UnitValue, x.TotalValue,
-                x.Status, x.CreatedAtUtc, x.UpdatedAtUtc)).ToListAsync(ct);
+            .Select(OfferProjection).ToListAsync(ct);
         return (items, total);
     }
 
@@ -84,7 +90,10 @@ public sealed class TransactionService(SurplusLinkDbContext db)
         var pending = await db.Transactions.CountAsync(x => x.Status == TransactionStatus.PENDING_APPROVAL, ct);
         var approved = await db.Transactions.CountAsync(x => x.Status == TransactionStatus.APPROVED, ct);
         var rejected = await db.Transactions.CountAsync(x => x.Status == TransactionStatus.REJECTED, ct);
-        var completed = await db.Transactions.CountAsync(x => x.Status == TransactionStatus.COMPLETED, ct);
+        // A buyer requirement is one deal even when it has several seller
+        // allocation transactions. Dashboard completion counts must therefore
+        // be measured at the requirement/group level.
+        var completed = await db.BuyerRequests.CountAsync(x => x.Status == BuyerRequestStatus.COMPLETED, ct);
         var handedOver = await db.Transactions.CountAsync(x => x.Status == TransactionStatus.HANDED_OVER, ct);
         var totalDecisions = approved + handedOver + rejected + completed;
         return new(pending, approved, rejected,

@@ -6,7 +6,19 @@ export type WorkflowStatus = typeof workflowStatuses[number];
 export interface WorkflowListItem {
   id: string; materialRequestId: string | null; materialMatchId: string | null; status: WorkflowStatus;
   currentStage: string; retryCount: number; startedAtUtc: string; completedAtUtc: string | null; errorJson: string | null;
+  approvalGroup?: ApprovalGroupSummary | null;
 }
+export interface ApprovalGroupSummary {
+  requirementTitle: string; buyerName: string; requestedQuantity: number; selectedQuantity: number;
+  remainingQuantity: number; unit: string; fulfillmentStatus: 'FULL' | 'PARTIAL'; sellerCount: number; totalValue: number;
+}
+export interface ApprovalAllocation {
+  transactionId: string; sellerId: string; sellerName: string; sellerBusinessName: string | null;
+  listingId: string; listingTitle: string; allocatedQuantity: number; availableQuantity: number;
+  unit: string; unitPrice: number; materialValue: number; score: number | null;
+  distance: number | null; transportCost: number | null; status: string;
+}
+export interface ApprovalGroup extends ApprovalGroupSummary { allocations: ApprovalAllocation[] }
 export interface ToolCall {
   id: string; toolName: string; inputJson: string; outputJson: string; errorJson: string | null;
   retryCount: number; startedAtUtc: string; completedAtUtc: string | null; durationMilliseconds: number | null;
@@ -19,7 +31,7 @@ export interface AgentStep {
 export interface Approval { id: string; decidedByUserId: string; decision: string; note: string; decidedAtUtc: string }
 export interface Workflow extends WorkflowListItem {
   inputJson: string; outputJson: string; validationJson: string; decision: string | null; steps: AgentStep[]; approvals: Approval[];
-  recommendationReason?: string | null;
+  recommendationReason?: string | null; approvalGroup?: ApprovalGroup | null;
 }
 export interface WorkflowPage { items: WorkflowListItem[]; total: number; page: number; pageSize: number; totalPages: number }
 export interface WorkflowQuery { search: string; status: string; sortBy: 'startedAt' | 'status' | 'stage'; sortDir: 'asc' | 'desc'; page: number; pageSize: number }

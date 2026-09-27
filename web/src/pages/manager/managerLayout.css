@@ -60,3 +60,22 @@
 .metric-trend span { color:#e86f1a; font-size:.9rem; }
 .loading-skeleton { display:grid; gap:.65rem; padding:1.1rem 0; }.loading-skeleton i { display:block; height:1rem; border-radius:99px; background:linear-gradient(90deg,#eef1f5 25%,#fff 45%,#eef1f5 65%); background-size:220% 100%; animation:manager-shimmer 1.45s linear infinite; }.loading-skeleton i:last-child { width:72%; }
 @keyframes live-pulse { 70% { box-shadow:0 0 0 .42rem transparent; } 100% { box-shadow:0 0 0 .18rem transparent; } }
+.approval-results { width: 100%; }
+.responsive-business-table { width: 100%; table-layout: fixed; }
+.responsive-business-table th, .responsive-business-table td { padding: 12px 8px; white-space: normal; overflow-wrap: anywhere; }
+.responsive-business-table th:first-child { width: 15%; }
+.fulfillment-badge { display: inline-block; padding: 4px 9px; border-radius: 20px; font-size: .8rem; font-weight: 650; }
+.fulfillment-badge.is-full { background: #e7f5ed; color: #226443; }
+.fulfillment-badge.is-partial { background: #fff0da; color: #86520c; }
+.allocation-cards { display: grid; gap: 16px; }
+.allocation-card { padding: 20px; border: 1px solid #e2e5e8; border-radius: 12px; background: #fff; }
+.allocation-card h4 { margin: 0 0 8px; }
+@media (max-width: 1100px) {
+  .responsive-business-table, .responsive-business-table tbody { display: block; min-width: 0; }
+  .responsive-business-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .responsive-business-table tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border: 1px solid #e2e5e8; border-radius: 12px; padding: 12px; margin-bottom: 16px; }
+  .responsive-business-table td { display: block; border: 0; min-width: 0; }
+  .responsive-business-table td::before { content: attr(data-label); display: block; color: #64748b; font-size: .75rem; font-weight: 600; margin-bottom: 5px; }
+  .responsive-business-table td:first-child, .responsive-business-table td:last-child { grid-column: 1 / -1; }
+  .responsive-business-table td:first-child { font-size: 1.1rem; }
+}

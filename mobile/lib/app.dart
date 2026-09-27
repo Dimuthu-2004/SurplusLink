@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:mobile/widgets/startup_transition.dart';
+
 import 'package:mobile/marketplace/marketplace_mode_controller.dart';
 
 import 'package:mobile/handoff/mobile_handoff_gateway.dart';
@@ -93,7 +95,13 @@ class _SurplusLinkAppState extends State<SurplusLinkApp> {
     routerConfig: _router,
     builder: (context, child) => MarketplaceModeScope(
       controller: widget.authController.marketplace,
-      child: child!,
+      child: ListenableBuilder(
+        listenable: widget.authController,
+        builder: (context, _) => StartupTransition(
+          initializing: widget.authController.status == AuthStatus.initializing,
+          child: child!,
+        ),
+      ),
     ),
   );
 }

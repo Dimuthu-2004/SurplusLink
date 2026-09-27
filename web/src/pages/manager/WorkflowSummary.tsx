@@ -1,10 +1,11 @@
+import { formatLkr } from '../../utils/currency';
 import { apiClient } from '../../api/apiClient';
 import { useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { managerRequirementsApi } from '../../features/requirements/managerRequirementsApi';
 import { managerMaterialsApi } from '../../features/materials/managerMaterialsApi';
 import { requirementNumber, statusLabel, useRequirementResource } from '../../features/requirements/requirementUi';
-import type { Workflow } from '../../features/workflows/managerWorkflowsApi';
+import type { ApprovalGroup, Workflow } from '../../features/workflows/managerWorkflowsApi';
 
 function jsonObject(value: string): Record<string, unknown> {
   try { const parsed: unknown = JSON.parse(value); return object(parsed); } catch { return {}; }
@@ -29,7 +30,7 @@ function useRequest(id: string | null) {
 export function ApprovalRequest({ id }: { id: string | null }) {
   const { data, loading } = useRequest(id);
   return <><strong>{data ? `${data.category ?? 'Material'} request` : loading ? 'Loading request...' : 'Buyer request'}</strong>
-    {data && <small className="requirement-id">{requirementNumber(data.requiredQuantity)} {data.unit} · Budget LKR {requirementNumber(data.maximumBudget, 2)}</small>}
+    {data && <small className="requirement-id">{requirementNumber(data.requiredQuantity)} {data.unit} · Budget {formatLkr(data.maximumBudget)}</small>}
     {!data && !loading && <small className="muted">{id ? 'Request details unavailable' : 'No linked request'}</small>}
   </>;
 }
@@ -41,7 +42,7 @@ export function WorkflowSummary({ workflow }: { workflow: Workflow }) {
   const validation = jsonObject(workflow.validationJson);
   const recommendedId = typeof validation.recommendedMatchId === 'string' ? validation.recommendedMatchId : null;
   const current = useRequirementResource(useCallback(async () => {
-    if (!recommendedId || validation.valid !== true || messages(validation.violations).length > 0 || !workflow.materialRequestId ||
+    if (workflow.approvalGroup || !recommendedId || validation.valid !== true || messages(validation.violations).length > 0 || !workflow.materialRequestId ||
       !['PENDING_APPROVAL', 'COMPLETED'].includes(workflow.status)) return null;
     const [matchResponse, requirement] = await Promise.all([
       apiClient.get<CurrentMatch>('/api/matches/' + encodeURIComponent(recommendedId)),
@@ -60,6 +61,9 @@ export function WorkflowSummary({ workflow }: { workflow: Workflow }) {
     return { match, listing };
   }, [recommendedId, workflow, validation.valid]));
   const selected = !current.loading && !current.error ? current.data : null;
+  if (workflow.approvalGroup) return <><ApprovalGroupDetails group={workflow.approvalGroup} />
+    {request.data && <dl className="detail-grid"><div><dt>Category</dt><dd>{request.data.category || 'Not available'}</dd></div><div><dt>Requirement notes</dt><dd>{request.data.notes || 'No additional notes'}</dd></div><div><dt>Maximum budget</dt><dd>{formatLkr(request.data.maximumBudget)}</dd></div><div><dt>Required by</dt><dd>{new Date(request.data.deadline).toLocaleDateString()}</dd></div></dl>}
+    {workflow.materialRequestId && <Link to={'/app/manager/requirements/' + workflow.materialRequestId}>View requirement details</Link>}</>;
   const warnings = messages(validation.warnings ?? object(output.validation).warnings);
   const violations = messages(validation.violations ?? object(output.validation).violations);
   const row = request.data;
@@ -75,7 +79,7 @@ export function WorkflowSummary({ workflow }: { workflow: Workflow }) {
     <dl className="detail-grid">
       <div><dt>Buyer / request</dt><dd>{workflow.materialRequestId ? <Link to={'/app/manager/requirements/' + workflow.materialRequestId}>{requestLabel}</Link> : 'No linked request'}</dd><small className="muted">Buyer name unavailable</small></div>
       <div><dt>Required quantity</dt><dd>{row ? `${requirementNumber(row.requiredQuantity)} ${row.unit}` : 'Not available'}</dd></div>
-      <div><dt>Maximum budget (LKR)</dt><dd>{number(row?.maximumBudget)}</dd></div>
+      <div><dt>Maximum budget (LKR)</dt><dd>{formatLkr(row?.maximumBudget)}</dd></div>
     </dl>
     {request.error && <p className="muted">Request summary unavailable. <button className="text-button" onClick={request.reload}>Retry request summary</button></p>}
     <section className="recommendation-card" aria-label="Current recommendation">
@@ -89,8 +93,8 @@ export function WorkflowSummary({ workflow }: { workflow: Workflow }) {
           <div><dt>Score</dt><dd>{number(selected.match.score * 100, '%')}</dd></div>
           <div><dt>Route distance</dt><dd>{number(selected.match.distance, ' km')}</dd></div>
           <div><dt>Delivery duration</dt><dd>{number(selected.match.durationMinutes, ' min')}</dd></div>
-          <div><dt>Unit price (LKR)</dt><dd>{number(selected.listing.unitPrice)} / {selected.listing.unit}</dd></div>
-          <div><dt>Transport cost (LKR)</dt><dd>{number(selected.match.estimatedTransportCost)}</dd></div>
+          <div><dt>Unit price (LKR)</dt><dd>{formatLkr(selected.listing.unitPrice)} / {selected.listing.unit}</dd></div>
+          <div><dt>Transport cost (LKR)</dt><dd>{formatLkr(selected.match.estimatedTransportCost)}</dd></div>
         </dl>
         <h4>Recommendation reason</h4><p>{displayReason}</p>
       </> : <p className="empty-state">No current valid recommendation is available.</p>}
@@ -98,6 +102,42 @@ export function WorkflowSummary({ workflow }: { workflow: Workflow }) {
     <h3>Warnings and violations</h3>
     {warnings.length + violations.length > 0 ? <ul>{violations.map((text, index) => <li key={'v' + index}><strong>Violation:</strong> {text}</li>)}{warnings.map((text, index) => <li key={'w' + index}><strong>Warning:</strong> {text}</li>)}</ul> : <p>{Array.isArray(validation.warnings) && Array.isArray(validation.violations) ? 'None recorded.' : 'No warning or violation details recorded.'}</p>}
     {workflow.errorJson && <p className="error-message">Workflow error: {typeof jsonObject(workflow.errorJson).code === 'string' ? statusLabel(jsonObject(workflow.errorJson).code as string) : 'See Technical details.'}</p>}
+  </>;
+}
+
+function ApprovalGroupDetails({ group }: { group: ApprovalGroup }) {
+  const full = group.fulfillmentStatus === 'FULL';
+  return <>
+    <dl className="detail-grid">
+      <div><dt>Buyer</dt><dd>{group.buyerName}</dd></div>
+      <div><dt>Requirement</dt><dd>{group.requirementTitle}</dd></div>
+      <div><dt>Total requested</dt><dd>{requirementNumber(group.requestedQuantity)} {group.unit}</dd></div>
+      <div><dt>Total selected</dt><dd>{requirementNumber(group.selectedQuantity)} {group.unit}</dd></div>
+      <div><dt>Remaining</dt><dd>{requirementNumber(group.remainingQuantity)} {group.unit}</dd></div>
+      <div><dt>Fulfillment</dt><dd>{full ? 'Full' : 'Partial fulfillment'}</dd></div>
+      <div><dt>Total deal value</dt><dd>{formatLkr(group.totalValue)}</dd></div>
+    </dl>
+    {!full && <p className="decision-notice">Partial fulfillment: {requirementNumber(group.remainingQuantity)} {group.unit} remains unfulfilled.</p>}
+    <section className="recommendation-card" aria-label="Seller allocation breakdown">
+      <h3>Seller allocations ({group.sellerCount})</h3>
+      <div className="allocation-cards">
+        {group.allocations.map(allocation => <article className="allocation-card" key={allocation.transactionId}>
+          <h4>{allocation.sellerBusinessName || allocation.sellerName}</h4>
+          {allocation.sellerBusinessName && <p className="muted">{allocation.sellerName}</p>}
+          <dl className="detail-grid">
+            <div><dt>Material</dt><dd><Link to={'/app/manager/materials/' + allocation.listingId}>{allocation.listingTitle}</Link></dd></div>
+            <div><dt>Allocated quantity</dt><dd>{requirementNumber(allocation.allocatedQuantity)} {allocation.unit}</dd></div>
+            <div><dt>Available quantity</dt><dd>{requirementNumber(allocation.availableQuantity)} {allocation.unit}</dd></div>
+            <div><dt>Unit price</dt><dd>{formatLkr(allocation.unitPrice)} / {allocation.unit}</dd></div>
+            <div><dt>Allocation value</dt><dd>{formatLkr(allocation.materialValue)}</dd></div>
+            <div><dt>Score</dt><dd>{allocation.score === null ? 'Not available' : `${requirementNumber(allocation.score * 100, 1)}%`}</dd></div>
+            <div><dt>Distance</dt><dd>{allocation.distance === null ? 'Not available' : `${requirementNumber(allocation.distance, 2)} km`}</dd></div>
+            <div><dt>Transport cost</dt><dd>{formatLkr(allocation.transportCost)}</dd></div>
+            <div><dt>Status</dt><dd>{statusLabel(allocation.status)}</dd></div>
+          </dl>
+        </article>)}
+      </div>
+    </section>
   </>;
 }
 

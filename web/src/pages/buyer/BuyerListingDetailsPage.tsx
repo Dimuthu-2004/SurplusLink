@@ -1,3 +1,4 @@
+import { formatLkr } from '../../utils/currency';
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
@@ -159,7 +160,7 @@ export function BuyerListingDetailsPage() {
             <div className="details-price-label">Unit Price</div>
             <div>
               <span className="details-price-amount">
-                LKR {listing.unitPrice.toLocaleString()}
+                {formatLkr(listing.unitPrice)}
               </span>
               <span className="details-price-unit"> / {listing.unit}</span>
             </div>

@@ -36,6 +36,9 @@ public sealed class Transaction : AuditableEntity
 {
     public Guid Id { get; set; }
     public Guid OfferId { get; set; }
+    // New selections are explicitly grouped by their buyer-confirmed workflow.
+    // Null preserves historical single-match transaction records.
+    public Guid? ApprovalWorkflowId { get; set; }
     public Guid BuyerId { get; set; }
     public Guid SellerId { get; set; }
     public decimal Quantity { get; set; }

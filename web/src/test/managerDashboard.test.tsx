@@ -108,8 +108,8 @@ it('loads the manager dashboard from authenticated summaries, isolates errors, r
   metric('Approved transactions', '13');
   metric('Pending Match / Requirement Approvals', '6');
   metric('Pending Listing Approvals', '0');
-  expect(screen.getByRole('link', { name: /Pending Listing Approvals/ })).toHaveAttribute('href', '/app/manager/materials?status=PENDING_VERIFICATION');
-  expect(screen.getByRole('link', { name: /Pending Match \/ Requirement Approvals/ })).toHaveAttribute('href', '/app/manager/approvals');
+  expect(screen.getByRole('link', { name: /Pending Listing Approvals/ })).toHaveAttribute('href', '/app/manager/listing-approvals');
+  expect(screen.getByRole('link', { name: /Pending Match \/ Requirement Approvals/ })).toHaveAttribute('href', '/app/manager/requirement-approvals');
   metric('Total Users', '150');
   metric('Sellers', '60');
   metric('Buyers', '50');

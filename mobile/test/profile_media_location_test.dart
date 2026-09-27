@@ -137,8 +137,9 @@ void main() {
     expect(form.currentState!.validate(), isFalse);
     await tester.pump();
     expect(find.text('Full name is required.'), findsOneWidget);
-    expect(find.text('Enter a valid phone number.'), findsOneWidget);
-    fields.name.text = 'A Buyer';
+    expect(find.text('Enter a valid Sri Lankan phone number.'), findsOneWidget);
+      fields.name.text = 'A Buyer';
+      fields.nic.text = '199912345678';
     fields.phone.text = '0771234567';
     fields.address.text = 'Colombo';
     expect(form.currentState!.validate(), isTrue);

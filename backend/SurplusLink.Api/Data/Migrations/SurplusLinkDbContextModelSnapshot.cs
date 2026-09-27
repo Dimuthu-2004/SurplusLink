@@ -920,6 +920,9 @@ namespace SurplusLink.Api.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("ApprovalWorkflowId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid>("BuyerId")
                         .HasColumnType("uuid");
 
@@ -966,6 +969,9 @@ namespace SurplusLink.Api.Data.Migrations
                         .HasColumnName("xmin");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ApprovalWorkflowId")
+                        .HasDatabaseName("IX_Transactions_ApprovalWorkflowId");
 
                     b.HasIndex("BuyerId")
                         .HasDatabaseName("IX_Transactions_BuyerId");

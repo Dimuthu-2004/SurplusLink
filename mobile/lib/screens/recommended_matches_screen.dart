@@ -115,10 +115,21 @@ class _RecommendedMatchesScreenState extends State<RecommendedMatchesScreen> {
     });
   }
 
+  double _maximumFor(RecommendedMatch match, double requestedQuantity) {
+    final otherTotal = _selectedQuantities.entries
+        .where((entry) => entry.key != match.id)
+        .fold(0.0, (total, entry) => total + entry.value);
+    final remaining = (requestedQuantity - otherTotal).clamp(0.0, double.infinity);
+    return (match.availableQuantity ?? 0).clamp(0.0, remaining).toDouble();
+  }
+
   String? _getQuantityError(RecommendedMatch match) {
     final qty = _selectedQuantities[match.id];
     if (qty == null) return null;
     if (qty <= 0) return 'Quantity must be greater than 0.';
+    if (quantities.isDiscreteUnit(match.unit ?? '') && qty != qty.roundToDouble()) {
+      return 'This unit must use a whole quantity.';
+    }
     final avail = match.availableQuantity ?? 0;
     if (qty > avail) {
       return 'Exceeds seller available stock (${quantities.formatQuantity(avail, match.unit ?? '')}).';
@@ -246,6 +257,27 @@ class _RecommendedMatchesScreenState extends State<RecommendedMatchesScreen> {
               ],
             ),
             const SizedBox(height: 6),
+            ..._selectedQuantities.entries.map((entry) {
+              final match = _selectedMatches[entry.key]!;
+              return Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  '${match.sellerBusinessName ?? match.sellerName ?? 'Seller'} — Available: ${quantities.formatQuantity(match.availableQuantity ?? 0, unit)} $unit · Allocated: ${quantities.formatQuantity(entry.value, unit)} $unit',
+                  style: const TextStyle(fontSize: 11, color: SurplusLinkTheme.slate700),
+                ),
+              );
+            }),
+            const SizedBox(height: 4),
+            Text(
+              isComplete ? 'Requirement fully covered' : 'Partial fulfillment — ${quantities.formatQuantity(remaining, unit)} $unit will remain unfulfilled.',
+              key: const Key('fulfillment-status'),
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: isComplete ? const Color(0xFF15803D) : SurplusLinkTheme.amberDark,
+              ),
+            ),
+            const SizedBox(height: 6),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -330,6 +362,13 @@ class _RecommendedMatchesScreenState extends State<RecommendedMatchesScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
+              if (requestedQuantity - _selectedQuantities.values.fold(0.0, (sum, quantity) => sum + quantity) > 0)
+                Text(
+                  'Partial fulfillment: you requested ${quantities.formatQuantity(requestedQuantity, unit)} $unit and selected ${quantities.formatQuantity(_selectedQuantities.values.fold(0.0, (sum, quantity) => sum + quantity), unit)} $unit. ${quantities.formatQuantity(requestedQuantity - _selectedQuantities.values.fold(0.0, (sum, quantity) => sum + quantity), unit)} $unit will remain unfulfilled.',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              if (requestedQuantity - _selectedQuantities.values.fold(0.0, (sum, quantity) => sum + quantity) > 0)
+                const SizedBox(height: 12),
               const Text(
                 'Your selections will be sent for manager approval. No stock is reserved until manager approval.',
               ),
@@ -406,6 +445,11 @@ class _RecommendedMatchesScreenState extends State<RecommendedMatchesScreen> {
           .toList();
       await widget.gateway.selectMatches(widget.requirementId, allocations);
       if (mounted) {
+        await _load(page: 1);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Selections saved and sent for manager approval.')),
+        );
         context.go('/requirements/${widget.requirementId}');
       }
     } on Object catch (error) {
@@ -512,6 +556,8 @@ class _RecommendedMatchesScreenState extends State<RecommendedMatchesScreen> {
                   selectedQuantity: _selectedQuantities[match.id],
                   onQuantityChanged: (qty) =>
                       _updateMatchQuantity(match.id, qty),
+                  maximumQuantity: _maximumFor(match, requestedQuantity),
+                  onRemove: () => _toggleSelectMatch(match, false, requestedQuantity),
                   quantityError: _getQuantityError(match),
                   onTap: () => context.push(
                     '/requirements/${widget.requirementId}/matches/${match.id}',

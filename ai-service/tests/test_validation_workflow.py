@@ -39,7 +39,7 @@ class ValidationTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_each_deterministic_failure_blocks_approval(self):
         cases = [dict(listingStatus="DRAFT"), dict(availableUntil=datetime.now(timezone.utc) - timedelta(seconds=1)),
-                 dict(availableQuantity=9), dict(maximumBudget=1499), dict(transportCost=None),
+                 dict(availableQuantity=0), dict(maximumBudget=1499), dict(transportCost=None),
                  dict(deliveryFeasible=False), dict(categoryMatches=False), dict(unitMatches=False),
                  dict(distanceKm=None), dict(sellerId=demo_request().buyerRequest["buyerId"])]
         for changes in cases:
@@ -56,6 +56,13 @@ class ValidationTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result.valid)
         self.assertTrue(result.requiresApproval)
         self.assertEqual(result.warnings, ("TRANSACTION_THRESHOLD_REQUIRES_REVIEW",))
+
+    async def test_partial_available_quantity_is_valid(self):
+        result, _ = await ValidationAgent(DeterministicValidationTools()).validate(
+            validation_input(quantity=50, availableQuantity=20, maximumBudget=20000)
+        )
+        self.assertTrue(result.valid)
+        self.assertTrue(result.requiresApproval)
 
     async def test_timeout_retries_are_bounded_and_errors_are_redacted(self):
         class Tools(DeterministicValidationTools):
