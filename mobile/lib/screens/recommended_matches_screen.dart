@@ -98,9 +98,12 @@ class _RecommendedMatchesScreenState extends State<RecommendedMatchesScreen> {
             _selectedQuantities.values.fold(0.0, (s, q) => s + q);
         final remainingNeeded = requestedQuantity - currentTotal;
         final avail = match.availableQuantity ?? requestedQuantity;
-        final defaultQty = (remainingNeeded > 0 && remainingNeeded <= avail)
+        var defaultQty = (remainingNeeded > 0 && remainingNeeded <= avail)
             ? remainingNeeded
             : (avail > 0 ? avail : 1.0);
+        if (quantities.isDiscreteUnit(match.unit ?? '')) {
+          defaultQty = defaultQty.floorToDouble();
+        }
         _selectedQuantities[match.id] = defaultQty > 0 ? defaultQty : 1.0;
       } else {
         _selectedQuantities.remove(match.id);
@@ -109,9 +112,16 @@ class _RecommendedMatchesScreenState extends State<RecommendedMatchesScreen> {
     });
   }
 
-  void _updateMatchQuantity(String matchId, double quantity) {
+  void _updateMatchQuantity(
+    RecommendedMatch match,
+    double quantity,
+  ) {
+    if (quantities.isDiscreteUnit(match.unit ?? '') &&
+        quantity != quantity.roundToDouble()) {
+      return;
+    }
     setState(() {
-      _selectedQuantities[matchId] = quantity;
+      _selectedQuantities[match.id] = quantity;
     });
   }
 
@@ -120,7 +130,10 @@ class _RecommendedMatchesScreenState extends State<RecommendedMatchesScreen> {
         .where((entry) => entry.key != match.id)
         .fold(0.0, (total, entry) => total + entry.value);
     final remaining = (requestedQuantity - otherTotal).clamp(0.0, double.infinity);
-    return (match.availableQuantity ?? 0).clamp(0.0, remaining).toDouble();
+    final maximum = (match.availableQuantity ?? 0).clamp(0.0, remaining).toDouble();
+    return quantities.isDiscreteUnit(match.unit ?? '')
+        ? maximum.floorToDouble()
+        : maximum;
   }
 
   String? _getQuantityError(RecommendedMatch match) {
@@ -174,6 +187,12 @@ class _RecommendedMatchesScreenState extends State<RecommendedMatchesScreen> {
         if (entry.value <= 0) {
           hasErrors = true;
           errorMsg = 'Allocated quantity must be greater than 0.';
+          break;
+        }
+        if (quantities.isDiscreteUnit(match?.unit ?? unit) &&
+            entry.value != entry.value.roundToDouble()) {
+          hasErrors = true;
+          errorMsg = 'Allocated quantity for ${match?.sellerName ?? "seller"} must be a whole number.';
           break;
         }
         if (entry.value > avail) {
@@ -554,8 +573,10 @@ class _RecommendedMatchesScreenState extends State<RecommendedMatchesScreen> {
                         )
                       : null,
                   selectedQuantity: _selectedQuantities[match.id],
-                  onQuantityChanged: (qty) =>
-                      _updateMatchQuantity(match.id, qty),
+                  onQuantityChanged: (qty) => _updateMatchQuantity(
+                    match,
+                    qty,
+                  ),
                   maximumQuantity: _maximumFor(match, requestedQuantity),
                   onRemove: () => _toggleSelectMatch(match, false, requestedQuantity),
                   quantityError: _getQuantityError(match),

@@ -12,12 +12,19 @@ export 'material_quantity_display.dart' show formatMaterialQuantity;
 const _discreteUnits = {
   'pcs',
   'bag',
+  'bags',
   'box',
+  'boxes',
   'set',
+  'sets',
   'roll',
+  'rolls',
   'sheet',
+  'sheets',
   'pair',
+  'pairs',
   'tonne',
+  'tonnes',
 };
 
 /// Returns true when [unit] should display as a whole number when possible.

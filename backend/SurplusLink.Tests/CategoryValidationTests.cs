@@ -48,6 +48,15 @@ public sealed class CategoryValidationTests
     public void IsDiscrete_classifies_units_correctly(string unit, bool expected) =>
         Assert.Equal(expected, MaterialUnits.IsDiscrete(unit));
 
+    [Theory]
+    [InlineData("bags")]
+    [InlineData("boxes")]
+    [InlineData("sets")]
+    [InlineData("rolls")]
+    [InlineData("sheets")]
+    public void IsDiscrete_treats_legacy_plural_count_units_as_discrete(string unit) =>
+        Assert.True(MaterialUnits.IsDiscrete(unit));
+
     // ── Case-insensitive duplicate messages ───────────────────────────────────
 
     [Fact]

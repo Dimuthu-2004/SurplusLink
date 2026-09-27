@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SurplusLink.Api.Data;
+using SurplusLink.Api.Materials;
 using SurplusLink.Api.Models;
 
 namespace SurplusLink.Api.Workflows;
@@ -239,6 +240,9 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db)
 
                     if (allocatedQty <= 0)
                         throw new AgentWorkflowException(409, "Allocated quantity must be positive.");
+
+                    if (MaterialUnits.IsDiscrete(request.Unit) && decimal.Truncate(allocatedQty) != allocatedQty)
+                        throw new AgentWorkflowException(409, $"Allocated quantity for '{request.Unit}' must be a whole number.");
 
                     if (listing.Status != ListingStatus.ACTIVE)
                         throw new AgentWorkflowException(409, $"Listing '{listing.Title}' is not available for reservation.");

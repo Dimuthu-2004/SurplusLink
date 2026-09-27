@@ -228,7 +228,7 @@ public sealed class RequirementService(SurplusLinkDbContext db, IRequirementWork
                 throw new RequirementException(400, "Selected quantity must be greater than zero.");
             if (decimal.Round(allocation.Quantity, 3) != allocation.Quantity)
                 throw new RequirementException(400, "Selected quantity supports at most three decimal places.");
-            if (IsDiscreteUnit(request.Unit) && decimal.Truncate(allocation.Quantity) != allocation.Quantity)
+            if (MaterialUnits.IsDiscrete(request.Unit) && decimal.Truncate(allocation.Quantity) != allocation.Quantity)
                 throw new RequirementException(400, $"Selected quantity for '{request.Unit}' must be a whole number.");
 
             var match = matches.Single(x => x.Id == allocation.MatchId);
@@ -420,9 +420,6 @@ public sealed class RequirementService(SurplusLinkDbContext db, IRequirementWork
         if (deadline <= DateTime.UtcNow)
             throw new RequirementException(400, "Deadline must be in the future.");
     }
-
-    private static bool IsDiscreteUnit(string unit) => unit.Trim().ToLowerInvariant() is
-        "pcs" or "bag" or "box" or "set" or "roll" or "sheet";
 
     private static void Own(BuyerRequest request, Guid buyerId)
     {
