@@ -31,10 +31,13 @@ interface AuthState {
   user: AuthUser | null;
   pending: boolean;
   error: string | null;
+  errorCode: string | null;
 }
 
+export type LoginResult = 'authenticated' | 'emailNotVerified' | 'failed';
+
 interface AuthContextValue extends AuthState {
-  login(email: string, password: string): Promise<boolean>;
+  login(email: string, password: string): Promise<LoginResult>;
   register(request: PublicRegistration): Promise<boolean>;
   verifyEmail(email: string, code: string): Promise<boolean>;
   resendVerification(email: string): Promise<boolean>;
@@ -50,7 +53,7 @@ type AuthAction =
   | { type: 'REQUEST_STARTED' }
   | { type: 'REQUEST_FINISHED' }
   | { type: 'AUTHENTICATED'; user: AuthUser }
-  | { type: 'REQUEST_FAILED'; error: string }
+  | { type: 'REQUEST_FAILED'; error: string; code?: string }
   | { type: 'CLEAR_ERROR' };
 
 const initialState: AuthState = {
@@ -58,6 +61,7 @@ const initialState: AuthState = {
   user: null,
   pending: false,
   error: null,
+  errorCode: null,
 };
 
 export const AuthContext = createContext<AuthContextValue | null>(null);
@@ -122,13 +126,15 @@ export function AuthProvider({
         const session = parseAuthResponse(response.data);
         storage.write(session.token);
         dispatch({ type: 'AUTHENTICATED', user: session.user });
-        return true;
+        return 'authenticated';
       } catch (error) {
+        const apiError = normalizeApiError(error);
         dispatch({
           type: 'REQUEST_FAILED',
-          error: normalizeApiError(error).message,
+          error: apiError.message,
+          code: apiError.code,
         });
-        return false;
+        return apiError.code === 'EMAIL_NOT_VERIFIED' ? 'emailNotVerified' : 'failed';
       }
     },
     [client, storage],
@@ -151,9 +157,11 @@ export function AuthProvider({
         dispatch({ type: 'REQUEST_FINISHED' });
         return true;
       } catch (error) {
+        const apiError = normalizeApiError(error);
         dispatch({
           type: 'REQUEST_FAILED',
-          error: normalizeApiError(error).message,
+          error: apiError.message,
+          code: apiError.code,
         });
         return false;
       }
@@ -164,7 +172,7 @@ export function AuthProvider({
   const unauthenticatedRequest = useCallback(async (path: string, body: object) => {
     dispatch({ type: 'REQUEST_STARTED' });
     try { await client.post(path, body); dispatch({ type: 'REQUEST_FINISHED' }); return true; }
-    catch (error) { dispatch({ type: 'REQUEST_FAILED', error: normalizeApiError(error).message }); return false; }
+    catch (error) { const apiError = normalizeApiError(error); dispatch({ type: 'REQUEST_FAILED', error: apiError.message, code: apiError.code }); return false; }
   }, [client]);
   const verifyEmail = useCallback((email: string, code: string) => unauthenticatedRequest('/api/auth/email-verification/verify', { email: email.trim(), code }), [unauthenticatedRequest]);
   const resendVerification = useCallback((email: string) => unauthenticatedRequest('/api/auth/email-verification/resend', { email: email.trim() }), [unauthenticatedRequest]);
@@ -197,6 +205,7 @@ function authReducer(state: AuthState, action: AuthAction): AuthState {
         user: action.user,
         pending: false,
         error: null,
+        errorCode: null,
       };
     case 'ANONYMOUS':
       return {
@@ -204,15 +213,16 @@ function authReducer(state: AuthState, action: AuthAction): AuthState {
         user: null,
         pending: false,
         error: action.error ?? null,
+        errorCode: null,
       };
     case 'REQUEST_STARTED':
-      return { ...state, pending: true, error: null };
+      return { ...state, pending: true, error: null, errorCode: null };
     case 'REQUEST_FAILED':
-      return { ...state, pending: false, error: action.error };
+      return { ...state, pending: false, error: action.error, errorCode: action.code ?? null };
     case 'REQUEST_FINISHED':
-      return { ...state, pending: false, error: null };
+      return { ...state, pending: false, error: null, errorCode: null };
     case 'CLEAR_ERROR':
-      return { ...state, error: null };
+      return { ...state, error: null, errorCode: null };
     default:
       return state;
   }
