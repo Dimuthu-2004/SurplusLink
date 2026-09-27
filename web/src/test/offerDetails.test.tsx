@@ -8,7 +8,7 @@ describe('offer details', () => {
   it('loads an older offer directly rather than searching the first page', async () => {
     const api: TransactionsApi = { offer: vi.fn().mockResolvedValue({ id: 'older-offer', buyerId: 'buyer', sellerId: 'seller', quantity: 400, unitValue: 800, totalValue: 320000, status: 'ACCEPTED', createdAt: '2026-09-22T00:00:00Z' }), offers: vi.fn(), transactions: vi.fn().mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 1, totalPages: 0 }), history: vi.fn() };
     render(<MemoryRouter initialEntries={['/offers/older-offer']}><Routes><Route path="/offers/:offerId" element={<OfferDetailsPage api={api} />} /></Routes></MemoryRouter>);
-    await screen.findByText('Participation context');
+    await screen.findByText('Offer summary');
     expect(api.offer).toHaveBeenCalledWith('older-offer');
     expect(api.offers).not.toHaveBeenCalled();
     expect(api.transactions).toHaveBeenCalledWith(expect.objectContaining({ offerId: 'older-offer', pageSize: 1 }));

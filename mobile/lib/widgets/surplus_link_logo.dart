@@ -1,11 +1,7 @@
 import 'package:flutter/material.dart';
 
 class SurplusLinkLogo extends StatelessWidget {
-  const SurplusLinkLogo({
-    this.size = 36,
-    this.showWordmark = true,
-    super.key,
-  });
+  const SurplusLinkLogo({this.size = 36, this.showWordmark = true, super.key});
 
   final double size;
   final bool showWordmark;
@@ -14,14 +10,24 @@ class SurplusLinkLogo extends StatelessWidget {
   Widget build(BuildContext context) => Semantics(
     label: 'SurplusLink',
     image: true,
-    child: Image.asset(
-      showWordmark
-          ? 'assets/branding/surpluslink-logo.png'
-          : 'assets/branding/surpluslink-mark.png',
-      width: showWordmark ? null : size,
-      height: size,
-      fit: BoxFit.contain,
-      filterQuality: FilterQuality.high,
-    ),
+    child: showWordmark
+        ? Image.asset(
+            'assets/branding/surpluslink_logo_transparent.png',
+            height: size,
+            fit: BoxFit.contain,
+            filterQuality: FilterQuality.high,
+          )
+        : ClipRect(
+            child: Align(
+              alignment: Alignment.centerLeft,
+              widthFactor: .22,
+              child: Image.asset(
+                'assets/branding/surpluslink_logo_transparent.png',
+                height: size,
+                fit: BoxFit.contain,
+                filterQuality: FilterQuality.high,
+              ),
+            ),
+          ),
   );
 }

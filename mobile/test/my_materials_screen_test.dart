@@ -134,6 +134,8 @@ void main() {
       }
       await tester.tap(find.byKey(const Key('logout-button')));
       await tester.pumpAndSettle();
+      await tester.tap(find.text('Log Out'));
+      await tester.pumpAndSettle();
       router.go('/requirements/new');
       await tester.pumpAndSettle();
       expect(router.routeInformationProvider.value.uri.path, '/login');

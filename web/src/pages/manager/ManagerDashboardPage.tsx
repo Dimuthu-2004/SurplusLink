@@ -45,7 +45,7 @@ export function ManagerDashboardPage() {
           {(data) => <>
             <div className="analytics-metrics">
               <AnalyticsMetric label="Active listings" value={data.activeCount} tone="success" />
-              <Link className="approval-card" to="/app/manager/materials?status=PENDING_VERIFICATION"><AnalyticsMetric label="Pending Listing Approvals" value={data.listingsByStatus.find(item => item.key === 'PENDING_VERIFICATION')?.count ?? 0} tone="pending" detail="Review listings" /></Link>
+              <Link className="approval-card" to="/app/manager/listing-approvals"><AnalyticsMetric label="Pending Listing Approvals" value={data.listingsByStatus.find(item => item.key === 'PENDING_VERIFICATION')?.count ?? 0} tone="pending" detail="Review listings" /></Link>
               <AnalyticsMetric label="Expiring soon" value={data.expiringListings.length} tone="pending" />
             </div>
             <h3>Category totals</h3>
@@ -105,7 +105,7 @@ export function ManagerDashboardPage() {
         </AnalyticsPanel>
 
         <AnalyticsPanel title="Approval queue" load={managerDashboardApi.approvals}>
-          {data => <Link className="approval-card" to="/app/manager/approvals"><AnalyticsMetric label="Pending Match / Requirement Approvals" value={data.total} tone="pending" detail="Review buyer-confirmed workflows" /></Link>}
+          {data => <Link className="approval-card" to="/app/manager/requirement-approvals"><AnalyticsMetric label="Pending Match / Requirement Approvals" value={data.total} tone="pending" detail="Review buyer-confirmed workflows" /></Link>}
         </AnalyticsPanel>
         <AnalyticsPanel title="Transactions" load={managerDashboardApi.transactions}>
           {(data) => <>
@@ -114,7 +114,7 @@ export function ManagerDashboardPage() {
               <AnalyticsMetric label="Approved transactions" value={data.approvedCount} tone="success" />
               <AnalyticsMetric label="Completed Transactions" value={data.completionCount} tone="success" detail="Completed buyer requirement/deal groups" />
             </div>
-            <Link className="back-link" to="/app/manager/approvals">Review pending approvals</Link>
+            <Link className="back-link" to="/app/manager/requirement-approvals">Review pending approvals</Link>
             {data.pendingApprovalCount + data.approvedCount + data.rejectedCount + data.completionCount === 0 && (
               <p className="empty-state">No transactions yet.</p>
             )}

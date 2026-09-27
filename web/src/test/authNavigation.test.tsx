@@ -125,7 +125,7 @@ describe('authentication navigation', () => {
     expect(await screen.findByRole('heading', { name: 'Welcome back' })).toBeInTheDocument();
   });
 
-  it('sends the supported registration DTO and signs in the new dual-role account', async () => {
+  it('sends the supported registration DTO and requires email verification', async () => {
     const client = fakeClient();
     const storage = memoryStorage();
     client.post.mockResolvedValue({ data: { token: 'new-account-jwt', user: { ...seller, roles: ['SELLER', 'BUYER'] } } });
@@ -135,6 +135,7 @@ describe('authentication navigation', () => {
     await visitor.click(panelAction());
     await waitFor(() => expect(screen.getByLabelText('Full name')).toBeEnabled());
     await visitor.type(screen.getByLabelText('Full name'), 'Ava Builder');
+    await visitor.type(screen.getByLabelText('NIC'), '199912345678');
     await visitor.type(screen.getByLabelText('Email'), ' ava@example.com ');
     await visitor.type(screen.getByLabelText('Phone number'), '+94771234567');
     await visitor.type(screen.getByLabelText('Business name (optional)'), 'Build Better');
@@ -145,12 +146,18 @@ describe('authentication navigation', () => {
     await visitor.click(screen.getByRole('button', { name: 'Sell materials' }));
     await visitor.click(screen.getByRole('button', { name: 'Create account' }));
 
-    expect(await screen.findByRole('heading', { name: 'Seller home' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Verify your email' })).toBeInTheDocument();
     expect(client.post).toHaveBeenCalledWith('/api/auth/register', {
-      fullName: 'Ava Builder', email: 'ava@example.com', phoneNumber: '+94771234567',
+      fullName: 'Ava Builder', email: 'ava@example.com', phoneNumber: '+94771234567', nic: '199912345678',
       businessName: 'Build Better', address: '10 Reuse Road', password: 'Password123!', roles: ['BUYER', 'SELLER'],
     });
-    expect(storage.read()).toBe('new-account-jwt');
+    expect(storage.read()).toBeNull();
+    expect(screen.getByLabelText('Verification code')).toBeEnabled();
+    await visitor.type(screen.getByLabelText('Verification code'), '123456');
+    expect(screen.getByRole('button', { name: /Verify email/ })).toBeEnabled();
+    await visitor.click(screen.getByRole('button', { name: /Verify email/ }));
+    expect(await screen.findByRole('heading', { name: 'Welcome back' })).toBeInTheDocument();
+    expect(storage.read()).toBeNull();
   });
 
   it('rejects a mismatched confirmation before calling public registration', async () => {
@@ -160,6 +167,7 @@ describe('authentication navigation', () => {
     await visitor.click(panelAction());
     await waitFor(() => expect(screen.getByLabelText('Full name')).toBeEnabled());
     await visitor.type(screen.getByLabelText('Full name'), 'Ava Builder');
+    await visitor.type(screen.getByLabelText('NIC'), '199912345678');
     await visitor.type(screen.getByLabelText('Email'), 'ava@example.com');
     await visitor.type(screen.getByLabelText('Phone number'), '+94771234567');
     await visitor.type(screen.getByLabelText('Address'), '10 Reuse Road');
@@ -181,6 +189,7 @@ describe('authentication navigation', () => {
     await visitor.click(panelAction());
     await waitFor(() => expect(screen.getByLabelText('Full name')).toBeEnabled());
     await visitor.type(screen.getByLabelText('Full name'), 'Ava Builder');
+    await visitor.type(screen.getByLabelText('NIC'), '199912345678');
     await visitor.type(screen.getByLabelText('Email'), 'ava@example.com');
     await visitor.type(screen.getByLabelText('Phone number'), '+94771234567');
     await visitor.type(screen.getByLabelText('Address'), '10 Reuse Road');
@@ -200,6 +209,7 @@ describe('authentication navigation', () => {
     const visitor = userEvent.setup();
 
     await visitor.click(await screen.findByRole('button', { name: 'Log out' }));
+    await visitor.click(screen.getByRole('button', { name: 'Log Out' }));
 
     expect(await screen.findByRole('heading', { name: 'Welcome back' })).toBeInTheDocument();
     expect(storage.read()).toBeNull();
@@ -250,3 +260,35 @@ function panelAction(): HTMLButtonElement {
   if (!action) throw new Error('Expected the desktop auth panel action.');
   return action;
 }
+
+
+it('recovers a password with editable numeric OTP, paste, backspace, Enter and API retry', async () => {
+  const client = fakeClient();
+  client.post.mockResolvedValue({ data: {} });
+  renderApp('/login', client);
+  const visitor = userEvent.setup();
+  await visitor.click(await screen.findByRole('button', { name: 'Forgot password?' }));
+  await visitor.type(screen.getByLabelText('Email'), 'buyer@example.com');
+  await visitor.click(screen.getByRole('button', { name: /Send reset code/ }));
+  const code = await screen.findByLabelText('Reset code');
+  expect(code).toBeEnabled();
+  await visitor.type(code, '12a34x56');
+  expect(code).toHaveValue('123456');
+  await visitor.keyboard('{Backspace}');
+  expect(code).toHaveValue('12345');
+  await visitor.clear(code);
+  await visitor.paste('123456');
+  expect(code).toHaveValue('123456');
+  await visitor.type(screen.getByLabelText('New password'), 'Password123!');
+  await visitor.type(screen.getByLabelText('Confirm new password'), 'Password123!');
+  expect(screen.getByRole('button', { name: /Reset password/ })).toBeEnabled();
+  client.post.mockRejectedValueOnce(new ApiError('Code expired. Try again.', 400));
+  await visitor.keyboard('{Enter}');
+  expect(await screen.findByRole('alert')).toHaveTextContent('Code expired');
+  expect(code).toBeEnabled();
+  await visitor.clear(code);
+  await visitor.type(code, '654321');
+  await visitor.click(screen.getByRole('button', { name: /Reset password/ }));
+  expect(client.post).toHaveBeenLastCalledWith('/api/auth/reset-password', { email: 'buyer@example.com', code: '654321', newPassword: 'Password123!' });
+  expect(await screen.findByRole('heading', { name: 'Welcome back' })).toBeInTheDocument();
+});

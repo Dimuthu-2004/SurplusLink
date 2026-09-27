@@ -10,6 +10,47 @@ namespace SurplusLink.Tests;
 public sealed class TransactionQueryIntegrationTests(RequirementsDatabase fixture) : IClassFixture<RequirementsDatabase>
 {
     [PostgresFact]
+    public async Task Offer_and_group_reads_resolve_names_without_disclosing_private_profile_fields()
+    {
+        var seeded = await Seed();
+        Guid workflowId;
+        using (var db = fixture.Context())
+        {
+            var buyer = await db.Users.SingleAsync(x => x.Id == fixture.Buyer);
+            var seller = await db.Users.SingleAsync(x => x.Id == fixture.Seller);
+            buyer.FullName = "Nimal Perera";
+            seller.FullName = "Kamal Silva";
+            seller.BusinessName = "ABC Materials";
+            await db.SaveChangesAsync();
+            workflowId = await db.AgentWorkflows.Where(x => x.MaterialMatchId == seeded.Offer.MaterialMatchId).Select(x => x.Id).SingleAsync();
+        }
+        using var app = fixture.App();
+        using var buyerClient = fixture.Client(app, fixture.Buyer, "BUYER");
+        using var sellerClient = fixture.Client(app, fixture.Seller, "SELLER");
+        using var manager = fixture.Client(app, fixture.Manager, "MANAGER");
+        foreach (var client in new[] { buyerClient, sellerClient, manager })
+        {
+            var offer = await client.GetFromJsonAsync<OfferResponse>($"/api/offers/{seeded.Offer.Id}");
+            Assert.Equal("Nimal Perera", offer!.BuyerName);
+            Assert.Equal("Kamal Silva", offer.SellerName);
+            Assert.Equal("ABC Materials", offer.SellerBusinessName);
+            Assert.Equal("Transaction listing", offer.MaterialName);
+            Assert.Equal("kg", offer.Unit);
+            Assert.Equal(seeded.Offer.BuyerId, offer.BuyerId);
+            var list = await client.GetFromJsonAsync<JsonElement>("/api/offers");
+            var row = list.GetProperty("items").EnumerateArray().Single(x => x.GetProperty("id").GetGuid() == seeded.Offer.Id);
+            Assert.Equal("Nimal Perera", row.GetProperty("buyerName").GetString());
+            Assert.False(row.TryGetProperty("nic", out _));
+            Assert.False(row.TryGetProperty("email", out _));
+            Assert.False(row.TryGetProperty("passwordHash", out _));
+        }
+        var workflow = await manager.GetFromJsonAsync<JsonElement>($"/api/workflows/{workflowId}");
+        var group = workflow.GetProperty("approvalGroup");
+        Assert.Equal("Nimal Perera", group.GetProperty("buyerName").GetString());
+        Assert.Equal("ABC Materials", group.GetProperty("allocations")[0].GetProperty("sellerBusinessName").GetString());
+    }
+
+    [PostgresFact]
     public async Task Marketplace_roles_read_only_participant_records_and_cannot_decide()
     {
         var seeded = await Seed();

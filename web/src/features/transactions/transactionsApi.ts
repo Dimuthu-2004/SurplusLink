@@ -5,7 +5,7 @@ export const offerStatuses = ['PENDING', 'ACCEPTED', 'REJECTED', 'REVISION_REQUE
 export type OfferStatus = typeof offerStatuses[number];
 export const transactionStatuses = ['PENDING_APPROVAL', 'APPROVED', 'HANDED_OVER', 'REJECTED', 'COMPLETED'] as const;
 export type TransactionStatus = typeof transactionStatuses[number];
-export interface Offer { id: string; materialMatchId: string; buyerId: string; sellerId: string; quantity: number; unitValue: number; totalValue: number; status: OfferStatus; createdAt: string; updatedAt: string }
+export interface Offer { buyerName?: string | null; sellerName?: string | null; sellerBusinessName?: string | null; materialName?: string | null; requirementTitle?: string | null; unit?: string | null; id: string; materialMatchId: string; buyerId: string; sellerId: string; quantity: number; unitValue: number; totalValue: number; status: OfferStatus; createdAt: string; updatedAt: string }
 export interface Transaction { id: string; offerId: string; buyerId: string; sellerId: string; quantity: number; totalValue: number; reservedQuantity: number; status: TransactionStatus; createdAt: string; updatedAt: string; completedAt: string | null }
 export interface TransactionHistoryEntry { id: string; actorUserId: string | null; action: string; createdAt: string; note: string | null }
 export interface Page<T> { items: T[]; total: number; page: number; pageSize: number; totalPages: number }

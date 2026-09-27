@@ -130,7 +130,7 @@ describe('Buyer React Marketplace & Handoff', () => {
     expect(screen.getByText('TMT Rebar 12mm 6m lengths')).toBeInTheDocument();
 
     // Prices and available quantities render
-    expect(screen.getByText('2,400')).toBeInTheDocument();
+    expect(screen.getByText('LKR 2,400.00')).toBeInTheDocument();
     expect(screen.getByText('80 bags available')).toBeInTheDocument();
     expect(screen.getByText('Lanka Builders Mart')).toBeInTheDocument();
 
@@ -215,6 +215,8 @@ describe('Buyer React Marketplace & Handoff', () => {
 
     const ctaButton = await screen.findByRole('button', { name: /continue with surpluslink mobile/i });
     await userEvent.click(ctaButton);
+    const introduction = screen.queryByRole('button', { name: 'Continue to QR' });
+    if (introduction) await userEvent.click(introduction);
 
     await waitFor(() => {
       expect(api.createMobileHandoff).toHaveBeenCalledWith('cat-1', 'REACT_MARKETPLACE');

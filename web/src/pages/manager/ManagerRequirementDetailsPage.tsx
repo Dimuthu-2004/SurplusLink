@@ -1,3 +1,4 @@
+import { formatLkr } from '../../utils/currency';
 import { useCallback } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { managerRequirementsApi, type ManagerRequirementsApi } from '../../features/requirements/managerRequirementsApi';
@@ -36,7 +37,7 @@ export function ManagerRequirementDetailsPage({ api = managerRequirementsApi, wo
         <dl className="detail-grid">
 
           <div><dt>Required quantity</dt><dd>{requirementNumber(row.requiredQuantity)} {row.unit}</dd></div>
-          <div><dt>Maximum budget</dt><dd>{requirementNumber(row.maximumBudget, 2)}</dd></div>
+          <div><dt>Maximum budget</dt><dd>{formatLkr(row.maximumBudget)}</dd></div>
           <div><dt>Deadline (local time)</dt><dd>{requirementDate(row.deadline)}</dd></div>
           <div><dt>Delivery location</dt><dd>{row.deliveryAddress?.trim() || 'Address unavailable'}</dd></div>
           <div><dt>Created</dt><dd>{requirementDate(row.createdAt)}</dd></div>

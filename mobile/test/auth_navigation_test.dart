@@ -73,6 +73,8 @@ void main() {
         find.byKey(const Key('profile-name')),
         'Test Seller',
       );
+      await tester.enterText(find.byKey(const Key('profile-nic')), '199912345678');
+      expect(find.text('NIC'), findsOneWidget);
       await tester.enterText(
         find.byKey(const Key('profile-phone')),
         '0771234567',
@@ -112,16 +114,7 @@ void main() {
             : [AppRole.buyer],
       );
       expect(gateway.registeredProfile!.fullName, 'Test Seller');
-      expect(
-        find.text(
-          choice == 'Both'
-              ? 'Buyer Mode'
-              : choice == 'Sell surplus materials'
-              ? 'Seller'
-              : 'Buyer',
-        ),
-        findsOneWidget,
-      );
+      expect(find.text('Verify your email'), findsOneWidget);
     });
   }
 
@@ -156,6 +149,8 @@ void main() {
     await _pumpApp(tester, gateway);
 
     await tester.tap(find.byKey(const Key('logout-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Log Out'));
     await tester.pumpAndSettle();
 
     expect(gateway.logoutCalled, isTrue);

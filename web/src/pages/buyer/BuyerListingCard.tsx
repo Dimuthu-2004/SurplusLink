@@ -1,3 +1,4 @@
+import { formatLkr } from '../../utils/currency';
 import React from 'react';
 import { Link } from 'react-router-dom';
 import type { MaterialListingItem } from '../../api/buyerMarketplaceApi';
@@ -64,9 +65,9 @@ export function BuyerListingCard({ listing }: BuyerListingCardProps) {
         <h3 className="marketplace-card-title">{listing.title}</h3>
 
         <div className="marketplace-card-price-row">
-          <span className="marketplace-card-price-currency">LKR</span>
+
           <span className="marketplace-card-price-value">
-            {listing.unitPrice.toLocaleString()}
+            {formatLkr(listing.unitPrice)}
           </span>
           <span className="marketplace-card-price-unit">/ {listing.unit}</span>
         </div>

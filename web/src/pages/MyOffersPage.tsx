@@ -1,3 +1,4 @@
+import { formatLkr } from '../utils/currency';
 import { useCallback, useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
@@ -7,6 +8,8 @@ import { RequirementBadge, RequirementError, RequirementPagination, requirementD
 const defaults: TransactionQuery = { status: '', sortBy: 'createdAt', sortDir: 'desc', page: 1, pageSize: 20 };
 export function MyOffersPage({ api = transactionsApi }: { api?: TransactionsApi }) {
   const { user } = useAuth();
+  const buyerOnly = user?.roles.includes('BUYER') && !user?.roles.includes('SELLER');
+  const sellerOnly = user?.roles.includes('SELLER') && !user?.roles.includes('BUYER');
   const [draft, setDraft] = useState(defaults);
   const [filters, setFilters] = useState(defaults);
   const [page, setPage] = useState(1);
@@ -26,7 +29,7 @@ export function MyOffersPage({ api = transactionsApi }: { api?: TransactionsApi 
     </form></section>
     <section className="manager-panel" aria-labelledby="offers-heading"><div className="section-heading"><h2 id="offers-heading">Offers</h2>{resource.data && <span className="muted">{resource.data.total} matching</span>}</div>
       {resource.loading && <p role="status">Loading offers...</p>}{resource.error && <RequirementError message={resource.error} retry={resource.reload} />}
-      {resource.data && (resource.data.items.length === 0 ? <p className="empty-state">No offers match these filters.</p> : <div className="table-scroll"><table><thead><tr><th>Offer</th><th>Context</th><th>Quantity</th><th>Value</th><th>Status</th><th>Created</th><th /></tr></thead><tbody>{resource.data.items.map((offer: Offer) => <tr key={offer.id}><td title={offer.id}>{offer.id.slice(0, 8)}</td><td>{offer.buyerId === user?.id ? 'Buyer participation' : 'Seller participation'}</td><td>{requirementNumber(offer.quantity)}</td><td>{requirementNumber(offer.totalValue, 2)}</td><td><RequirementBadge status={offer.status} /></td><td>{requirementDate(offer.createdAt)}</td><td><Link className="text-button" to={`/app/offers/${offer.id}`}>Details</Link></td></tr>)}</tbody></table></div>)}
+      {resource.data && (resource.data.items.length === 0 ? <p className="empty-state">No offers match these filters.</p> : <div className="table-scroll"><table><thead><tr><th>{sellerOnly ? 'Material' : 'Material / Requirement'}</th><th>{buyerOnly ? 'Seller' : sellerOnly ? 'Buyer' : 'Trading partner'}</th><th>{sellerOnly ? 'Allocated Quantity' : 'Quantity'}</th><th>Unit</th><th>Total Value</th><th>Status</th><th>Created</th><th>Details</th></tr></thead><tbody>{resource.data.items.map((offer: Offer) => <tr key={offer.id}><td>{offer.materialName || offer.requirementTitle || 'Material unavailable'}</td><td>{offer.buyerId === user?.id ? offer.sellerBusinessName || offer.sellerName || 'Seller name unavailable' : offer.buyerName || 'Buyer name unavailable'}</td><td>{requirementNumber(offer.quantity)}</td><td>{offer.unit || '—'}</td><td>{formatLkr(offer.totalValue)}</td><td><RequirementBadge status={offer.status} /></td><td>{requirementDate(offer.createdAt)}</td><td><Link className="text-button" to={`/app/offers/${offer.id}`}>Details</Link></td></tr>)}</tbody></table></div>)}
       {resource.data && <RequirementPagination page={resource.data.page} total={resource.data.total} pageSize={resource.data.pageSize} onPage={setPage} />}
     </section>
   </div>;

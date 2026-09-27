@@ -1,7 +1,8 @@
+import { formatLkr } from '../../utils/currency';
 import { formatMaterialQuantity } from '../../features/materials/quantityFormat';
 import { environment } from '../../config/environment';
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import {
   managerMaterialsApi,
   type ListingHistoryItem,
@@ -15,6 +16,8 @@ export function ManagerMaterialDetailsPage({
   api?: ManagerMaterialsApi;
 }) {
   const { listingId } = useParams();
+  const location = useLocation();
+  const fromApprovals = Boolean(location.state?.fromListingApprovals);
   const [listing, setListing] = useState<MaterialListing | null>(null);
   const [history, setHistory] = useState<ListingHistoryItem[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -74,7 +77,7 @@ export function ManagerMaterialDetailsPage({
 
   return (
     <div className="manager-page">
-      <Link className="back-link" to="/app/manager/materials">Back to all listings</Link>
+      <Link className="back-link" to={fromApprovals ? "/app/manager/listing-approvals" : "/app/manager/materials"}>{fromApprovals ? "Back to Seller Listing Approvals" : "Back to all listings"}</Link>
       {error && <p className="error-message" role="alert">{error}</p>}
       <section className="manager-panel">
         <div className="section-heading">
@@ -138,7 +141,7 @@ function Detail({ label, value }: { label: string; value: string }) {
 }
 
 function formatPrice(value: number): string {
-  return new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD' }).format(value);
+  return formatLkr(value);
 }
 
 function formatDate(value: string): string {

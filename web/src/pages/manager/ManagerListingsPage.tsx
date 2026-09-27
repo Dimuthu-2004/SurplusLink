@@ -1,3 +1,4 @@
+import { formatLkr } from '../../utils/currency';
 import { formatMaterialQuantity } from '../../features/materials/quantityFormat';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -23,11 +24,13 @@ const defaults: Omit<ListingSearch, 'page' | 'pageSize'> = {
 
 export function ManagerListingsPage({
   api = managerMaterialsApi,
+  approvalsOnly = false,
 }: {
   api?: ManagerMaterialsApi;
+  approvalsOnly?: boolean;
 }) {
   const [params] = useSearchParams();
-  const initial = { ...defaults, status: params.get('status') === 'PENDING_VERIFICATION' ? 'PENDING_VERIFICATION' : '' };
+  const initial = { ...defaults, status: approvalsOnly || params.get('status') === 'PENDING_VERIFICATION' ? 'PENDING_VERIFICATION' : '' };
   const [draft, setDraft] = useState<Omit<ListingSearch, 'page' | 'pageSize'>>(initial);
   const [filters, setFilters] = useState<Omit<ListingSearch, 'page' | 'pageSize'>>(initial);
   const [page, setPage] = useState(1);
@@ -36,8 +39,8 @@ export function ManagerListingsPage({
   const [error, setError] = useState<string | null>(null);
 
   const query = useMemo<ListingSearch>(
-    () => ({ ...filters, page, pageSize: 20 }),
-    [filters, page],
+    () => ({ ...filters, ...(approvalsOnly ? { status: 'PENDING_VERIFICATION' } : {}), page, pageSize: 20 }),
+    [filters, page, approvalsOnly],
   );
 
   useEffect(() => {
@@ -77,13 +80,13 @@ export function ManagerListingsPage({
       <section className="page-heading">
         <div>
           <p className="eyebrow">Manager workspace</p>
-          <h1>Material listings</h1>
+          <h1>{approvalsOnly ? 'Seller Listing Approvals' : 'Material listings'}</h1>
           <p className="muted">Review, verify, and monitor every submitted listing.</p>
         </div>
         <Link className="button button-secondary" to="/app/manager/categories">Manage categories</Link>
       </section>
 
-      <InventoryAnalyticsWidget api={api} />
+      {!approvalsOnly && <InventoryAnalyticsWidget api={api} />}
 
       <section className="manager-panel">
         <form className="filter-form" onSubmit={applyFilters}>
@@ -111,7 +114,7 @@ export function ManagerListingsPage({
           <label>
             Status
             <select
-              aria-label="Status"
+              aria-label="Status" disabled={approvalsOnly}
               value={draft.status ?? ''}
               onChange={(event) => setDraft({ ...draft, status: event.target.value })}
             >
@@ -211,7 +214,7 @@ export function ManagerListingsPage({
                     <td>{formatMaterialQuantity(listing.quantity - listing.reservedQuantity, listing.unit)} {listing.unit}</td>
                     <td>{formatPrice(listing.unitPrice)}</td>
                     <td>{formatDate(listing.availableUntil)}</td>
-                    <td><Link className="text-button" to={`/app/manager/materials/${listing.id}`}>Review</Link></td>
+                    <td><Link className="text-button" to={`/app/manager/materials/${listing.id}`} state={approvalsOnly ? { fromListingApprovals: true } : undefined}>Review</Link></td>
                   </tr>
                 ))}
               </tbody>
@@ -235,7 +238,7 @@ function numberOrUndefined(value: string): number | undefined {
 }
 
 function formatPrice(value: number): string {
-  return new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD' }).format(value);
+  return formatLkr(value);
 }
 
 function formatDate(value: string): string {

@@ -55,7 +55,8 @@ export function AppLayout() {
                 {navItem('/app/manager/materials', 'Material listings', 'materials')}
                 {navItem('/app/manager/categories', 'Material categories', 'categories')}
                 {navItem('/app/manager/requirements', 'Buyer Requirements', 'requirements')}
-                {navItem('/app/manager/approvals', 'Pending Approvals', 'approvals')}
+                {navItem('/app/manager/listing-approvals', 'Seller Listing Approvals', 'approvals')}
+                {navItem('/app/manager/requirement-approvals', 'Buyer Requirement Approvals', 'approvals')}
               </>
             )}
           </nav>
