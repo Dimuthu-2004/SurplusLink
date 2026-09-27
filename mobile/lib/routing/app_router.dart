@@ -30,6 +30,8 @@ import 'package:mobile/screens/my_offers_screen.dart';
 import 'package:mobile/screens/register_screen.dart';
 import 'package:mobile/screens/email_verification_screen.dart';
 import 'package:mobile/screens/forgot_password_screen.dart';
+import 'package:mobile/notifications/notification_controller.dart';
+import 'package:mobile/screens/notifications_screen.dart';
 import 'package:mobile/screens/splash_screen.dart';
 
 abstract final class AppRoutes {
@@ -42,6 +44,7 @@ abstract final class AppRoutes {
   static const requirements = '/requirements';
   static const materials = '/materials';
   static const addMaterial = '/materials/new';
+  static const notifications = '/notifications';
 }
 
 GoRouter createAppRouter({
@@ -51,6 +54,7 @@ GoRouter createAppRouter({
   MatchGateway? matchGateway,
   OfferGateway? offerGateway,
   MobileHandoffGateway? handoffGateway,
+  NotificationController? notificationController,
   RequirementLocationSource requirementLocation =
       const DeviceRequirementLocation(),
   AddressLookup? locationLookup,
@@ -157,6 +161,12 @@ GoRouter createAppRouter({
       GoRoute(
         path: '/profile',
         builder: (_, _) => ProfileScreen(authController: authController),
+      ),
+      GoRoute(
+        path: AppRoutes.notifications,
+        builder: (context, state) => NotificationsScreen(
+          controller: notificationController,
+        ),
       ),
       GoRoute(
         path: AppRoutes.home,

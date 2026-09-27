@@ -245,7 +245,11 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Select this match'), findsOneWidget);
-    await tester.scrollUntilVisible(find.text('Total estimated cost'), 250);
+    await tester.scrollUntilVisible(
+      find.text('Total estimated cost'),
+      250,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(tester.takeException(), isNull);
   });
 }

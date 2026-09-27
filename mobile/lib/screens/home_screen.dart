@@ -9,6 +9,9 @@ import 'package:mobile/home/home_dashboard_controller.dart';
 import 'package:mobile/materials/material_inventory_gateway.dart';
 import 'package:mobile/offers/offer_gateway.dart';
 import 'package:mobile/requirements/requirement_gateway.dart';
+import 'package:mobile/notifications/notification_banner.dart';
+import 'package:mobile/notifications/notification_bell.dart';
+import 'package:mobile/notifications/notification_controller.dart';
 import 'package:mobile/theme/surplus_link_theme.dart';
 import 'package:mobile/widgets/role_navigation.dart';
 import 'package:mobile/widgets/surplus_link_logo.dart';
@@ -104,7 +107,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             child: SafeArea(
               key: ValueKey(mode),
               child: RefreshIndicator(
-                onRefresh: dashboard.load,
+                onRefresh: () async {
+                  final notif = NotificationScope.maybeOf(context);
+                  await dashboard.load();
+                  if (!mounted) return;
+                  if (notif != null) {
+                    await notif.refreshUnreadCount();
+                    await notif.load(reset: true);
+                  }
+                },
                 child: ListView(
                   key: const Key('home-dashboard-scroll'),
                   physics: const AlwaysScrollableScrollPhysics(),
@@ -124,7 +135,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         onLogout: () async { if (await confirmLogout(context)) await widget.authController.logout(); },
                       ),
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 16),
+                    const NotificationActionBanner(),
                     _Entrance(
                       index: 1,
                       controller: _entrance,
@@ -240,6 +252,12 @@ class _Hero extends StatelessWidget {
                       ),
                     ),
                   ),
+                  const NotificationBell(
+                    color: Colors.white,
+                    badgeColor: SurplusLinkTheme.amber,
+                    badgeTextColor: Colors.white,
+                  ),
+                  const SizedBox(width: 8),
                   Material(
                     color: Colors.white.withValues(alpha: .13),
                     borderRadius: BorderRadius.circular(14),
