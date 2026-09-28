@@ -324,7 +324,7 @@ describe('ManagerCatalogPage', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('Construction Item Catalog')).toBeInTheDocument();
+      expect(screen.getByText('Item Catalog')).toBeInTheDocument();
       expect(screen.getByText('Paint')).toBeInTheDocument();
       expect(screen.getByText('Generator')).toBeInTheDocument();
       expect(screen.getByText('Sand')).toBeInTheDocument();
@@ -349,7 +349,7 @@ describe('ManagerCatalogPage', () => {
     });
   });
 
-  it('opens schema viewer modal on clicking Schema', async () => {
+  it('opens form fields viewer modal on clicking Form Fields', async () => {
     render(
       <MemoryRouter>
         <ManagerCatalogPage />
@@ -357,14 +357,35 @@ describe('ManagerCatalogPage', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getAllByText('Schema')[0]).toBeInTheDocument();
+      expect(screen.getAllByText('Form Fields')[0]).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getAllByText('Schema')[0]);
+    fireEvent.click(screen.getAllByText('Form Fields')[0]);
 
     await waitFor(() => {
-      expect(screen.getByText(/Dynamic Attributes: Paint/i)).toBeInTheDocument();
+      expect(screen.getByText(/Seller Form Fields: Paint/i)).toBeInTheDocument();
       expect(screen.getByText('Colour')).toBeInTheDocument();
+    });
+  });
+
+  it('opens add catalog item modal with visual field builder', async () => {
+    render(
+      <MemoryRouter>
+        <ManagerCatalogPage />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('create-template-btn')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId('create-template-btn'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Add Catalog Item')).toBeInTheDocument();
+      expect(screen.getByText('Seller details to request')).toBeInTheDocument();
+      expect(screen.getByText('+ Add field')).toBeInTheDocument();
+      expect(screen.getByTestId('save-template-submit')).toBeInTheDocument();
     });
   });
 });

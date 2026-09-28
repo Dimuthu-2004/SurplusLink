@@ -80,6 +80,10 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
   bool _isLoading = false;
   bool _isSaving = false;
   String? _error;
+  bool _hasAttemptedSubmit = false;
+  final _tileWidthController = TextEditingController(text: '600');
+  final _tileHeightController = TextEditingController(text: '600');
+  final _tilesPerBoxController = TextEditingController(text: '4');
 
   @override
   void initState() {
@@ -96,6 +100,9 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
     _packageCountController.dispose();
     _priceController.dispose();
     _addressController.dispose();
+    _tileWidthController.dispose();
+    _tileHeightController.dispose();
+    _tilesPerBoxController.dispose();
     super.dispose();
   }
 
@@ -115,6 +122,12 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
       setState(() {
         _categories = loadedCategories;
         _templates = loadedTemplates;
+        if (loadedTemplates.isEmpty && !widget.isEditing) {
+          _isCustom = true;
+          _customSaleType = 'CONTINUOUS';
+          _quantityMode = 'CONTINUOUS';
+          _category = null;
+        }
       });
       if (!widget.isEditing) return;
       final listing = await widget.gateway.getById(widget.listingId!);
@@ -140,6 +153,11 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
             loadedSpecs = decoded;
           }
         } catch (_) {}
+      }
+      if (foundTemplate != null && foundTemplate.name.toLowerCase().contains('tile')) {
+        if (loadedSpecs['widthMm'] != null) _tileWidthController.text = loadedSpecs['widthMm'].toString();
+        if (loadedSpecs['heightMm'] != null) _tileHeightController.text = loadedSpecs['heightMm'].toString();
+        if (loadedSpecs['piecesPerBox'] != null) _tilesPerBoxController.text = loadedSpecs['piecesPerBox'].toString();
       }
       setState(() {
         _selectedTemplate = foundTemplate;
@@ -333,16 +351,28 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
       _titleController.text = template.name;
       _unit = template.baseUnit;
       _specs.clear();
+
+      final isTile = template.name.toLowerCase().contains('tile');
+      if (isTile) {
+        _tileWidthController.text = '600';
+        _tileHeightController.text = '600';
+        _tilesPerBoxController.text = '4';
+        _recalcTileCoverage();
+      }
+
       if (template.isPackage) {
         _quantityMode = 'PACKAGE';
-        _packageType = template.packageType ?? 'can';
-        if (template.allowedPackageSizes.isNotEmpty) {
-          _packageSizeController.text = template.allowedPackageSizes.first.toString();
-        } else {
-          _packageSizeController.text = '1';
+        _packageType = template.packageType ?? (isTile ? 'box' : 'can');
+        if (!isTile) {
+          if (template.allowedPackageSizes.isNotEmpty) {
+            _packageSizeController.text = template.allowedPackageSizes.first.toString();
+          } else {
+            _packageSizeController.text = '1';
+          }
         }
         _packageCountController.text = '1';
-        _quantityController.text = _packageSizeController.text;
+        final size = double.tryParse(_packageSizeController.text) ?? 1;
+        _quantityController.text = size.toString();
       } else if (template.isPiece) {
         _quantityMode = 'PIECE';
         _packageSizeController.text = '1';
@@ -357,24 +387,50 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
     });
   }
 
+  void _recalcTileCoverage() {
+    final w = double.tryParse(_tileWidthController.text.trim()) ?? 0;
+    final h = double.tryParse(_tileHeightController.text.trim()) ?? 0;
+    final pcs = int.tryParse(_tilesPerBoxController.text.trim()) ?? 0;
+    if (w > 0 && h > 0 && pcs > 0) {
+      final cov = ((w * h * pcs) / 1000000.0 * 100).round() / 100.0;
+      _packageSizeController.text = cov.toString();
+      _specs['widthMm'] = w;
+      _specs['heightMm'] = h;
+      _specs['piecesPerBox'] = pcs;
+      _specs['coveragePerBoxSqm'] = cov;
+      _specs['dimensionsMm'] = '${w.toInt()}x${h.toInt()} mm';
+      final count = int.tryParse(_packageCountController.text.trim()) ?? 1;
+      _quantityController.text = (cov * count).toString();
+    }
+  }
+
   void _onSelectCustom() {
     setState(() {
       _selectedTemplate = null;
       _isCustom = true;
+      _customSaleType = 'PIECE';
+      _quantityMode = 'PIECE';
       _specs.clear();
       _category ??= _categories.isNotEmpty ? _categories.first.id : null;
-      _quantityMode = _customSaleType;
     });
   }
 
   Future<void> _save() async {
+    setState(() {
+      _hasAttemptedSubmit = true;
+      _error = null;
+    });
     if (_isSaving ||
         _mediaBusy ||
-        _locating ||
-        !_formKey.currentState!.validate()) {
+        _locating) {
       return;
     }
-    if (_category == null || _category!.isEmpty) {
+    if (!_formKey.currentState!.validate()) {
+      _showMessage('Please review the highlighted fields before saving.');
+      return;
+    }
+    final effectiveCategoryId = _selectedTemplate?.categoryId ?? _category;
+    if (effectiveCategoryId == null || effectiveCategoryId.isEmpty) {
       _showMessage('Please select a material category.');
       return;
     }
@@ -407,7 +463,7 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
         final count = int.tryParse(_packageCountController.text.trim()) ?? 1;
         computedPackageSize = size;
         computedPackageCount = count;
-        computedQuantity = size * count;
+        computedQuantity = ((size * count) * 10000).round() / 10000.0;
         computedPackageType = _selectedTemplate?.packageType ?? _packageType;
         final enteredPrice = double.tryParse(_priceController.text.trim()) ?? 0.0;
         computedUnitPrice = size > 0 ? enteredPrice / size : enteredPrice;
@@ -429,7 +485,7 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
       }
 
       final draft = MaterialListingDraft(
-        categoryId: _category!,
+        categoryId: effectiveCategoryId,
         title: _titleController.text,
         description: _descriptionController.text,
         quantity: computedQuantity,
@@ -480,15 +536,51 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
     final count = int.tryParse(_packageCountController.text.trim());
     if (size == null || count == null) return 'Total sellable stock: —';
     final unitLabel = _unit ?? _selectedTemplate?.baseUnit ?? '';
-    final pkgLabel = _selectedTemplate?.packageType ?? 'package';
-    return 'Total sellable stock: ${size * count} $unitLabel ($count ${pkgLabel}s × $size $unitLabel)'.trim();
+    final pkgLabel = _selectedTemplate?.packageType ?? _packageType;
+    final isTile = _selectedTemplate?.name.toLowerCase().contains('tile') == true;
+    final pkgPlural = pkgLabel.toLowerCase() == 'box' ? 'boxes' : '${pkgLabel}s';
+    final countDesc = count == 1 ? '1 $pkgLabel' : '$count $pkgPlural';
+    final totalQuantity = size * count;
+    if (isTile) {
+      final pcs = int.tryParse(_tilesPerBoxController.text.trim()) ?? 0;
+      final totalStr = totalQuantity == totalQuantity.roundToDouble()
+          ? totalQuantity.toStringAsFixed(1)
+          : totalQuantity.toStringAsFixed(2);
+      return '$countDesc • $pcs tiles per box • Coverage per box: $size $unitLabel • Total coverage: $totalStr $unitLabel';
+    }
+    return 'Total sellable stock: $totalQuantity $unitLabel ($countDesc × $size $unitLabel)'.trim();
+  }
+
+  String? _getFieldHelperText(String fieldId, String? unit) {
+    switch (fieldId) {
+      case 'capacity_kva':
+        return 'Example: 5 kVA';
+      case 'dimensions_mm':
+      case 'width_mm':
+      case 'height_mm':
+        return 'Example: 600 mm';
+      case 'diameter_mm':
+        return 'Example: 12 mm';
+      case 'length_m':
+        return 'Example: 6 m';
+      case 'fuel_type':
+        return 'Primary fuel required';
+      case 'running_hours':
+        return 'Current meter reading';
+      default:
+        return null;
+    }
   }
 
   String? _wholePackageCount(String? value) {
-    final count = int.tryParse(value?.trim() ?? '');
+    final input = value?.trim() ?? '';
+    if (input.isEmpty) {
+      return 'Enter the number of packages.';
+    }
+    final count = int.tryParse(input);
     return count != null && count > 0
         ? null
-        : 'Enter a whole package count';
+        : 'Enter a whole number of packages (at least 1).';
   }
 
   @override
@@ -522,7 +614,9 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
         : SafeArea(
             child: Form(
               key: _formKey,
-              autovalidateMode: AutovalidateMode.onUserInteraction,
+              autovalidateMode: _hasAttemptedSubmit
+                  ? AutovalidateMode.onUserInteraction
+                  : AutovalidateMode.disabled,
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
@@ -587,22 +681,58 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                   ),
                   const SizedBox(height: 12),
 
-                  // If custom item or no template chosen, show CategoryDropdown
-                  if (_isCustom || _selectedTemplate == null) ...[
-                    CategoryDropdown(
-                      key: const Key('material-category'),
-                      categories: _categories,
-                      value: _category,
-                      onChanged: _isSaving
-                          ? null
-                          : (value) => setState(() {
-                              _category = value;
-                              _unit = null;
-                            }),
-                    ),
-                    const SizedBox(height: 12),
-                    // If custom, allow selecting friendly sale type
+                  // If neither catalog item nor custom selected yet, show clean empty state
+                  if (_selectedTemplate == null && !_isCustom)
+                    Card(
+                      elevation: 0,
+                      color: Colors.grey.shade100,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      child: const Padding(
+                        padding: EdgeInsets.all(24),
+                        child: Column(
+                          children: [
+                            Icon(Icons.inventory_2_outlined, size: 48, color: Colors.grey),
+                            SizedBox(height: 12),
+                            Text(
+                              'Choose an item above to continue',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                            ),
+                            SizedBox(height: 6),
+                            Text(
+                              'Select from standard construction materials, tools, equipment, or add a custom item to configure quantity and pricing.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: Colors.grey, fontSize: 13),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  else ...[
+                    // Custom Item: Seller enters title, selects category, and chooses friendly sale type
                     if (_isCustom) ...[
+                      TextFormField(
+                        key: const Key('material-title'),
+                        controller: _titleController,
+                        maxLength: 200,
+                        decoration: const InputDecoration(
+                          labelText: 'Item name *',
+                          hintText: 'e.g. Hydraulic Breaker Attachment',
+                        ),
+                        validator: (value) => _requiredLength(value, 'Item name', 200),
+                      ),
+                      const SizedBox(height: 12),
+                      CategoryDropdown(
+                        key: const Key('material-category'),
+                        categories: _categories,
+                        value: _category,
+                        onChanged: _isSaving
+                            ? null
+                            : (value) => setState(() {
+                                _category = value;
+                                _unit = null;
+                              }),
+                      ),
+                      const SizedBox(height: 12),
                       const Text('How is this item sold?', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
                       const SizedBox(height: 6),
                       SegmentedButton<String>(
@@ -621,226 +751,337 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                         },
                       ),
                       const SizedBox(height: 12),
+                    ] else ...[
+                      // Catalog Item: Category is auto-derived, seller customizes title if needed
+                      TextFormField(
+                        key: const Key('material-title'),
+                        controller: _titleController,
+                        maxLength: 200,
+                        decoration: const InputDecoration(labelText: 'Title / Model *'),
+                        validator: (value) => _requiredLength(value, 'Title', 200),
+                      ),
+                      const SizedBox(height: 12),
                     ],
-                  ],
 
-                  TextFormField(
-                    key: const Key('material-title'),
-                    controller: _titleController,
-                    maxLength: 200,
-                    decoration: const InputDecoration(labelText: 'Title'),
-                    validator: (value) => _requiredLength(value, 'Title', 200),
-                  ),
-                  const SizedBox(height: 12),
+                    TextFormField(
+                      key: const Key('material-description'),
+                      controller: _descriptionController,
+                      minLines: 3,
+                      maxLines: 6,
+                      maxLength: 2000,
+                      decoration: const InputDecoration(labelText: 'Description / Notes'),
+                      validator: (value) => _requiredLength(value, 'Description', 2000),
+                    ),
+                    const SizedBox(height: 12),
 
-                  TextFormField(
-                    key: const Key('material-description'),
-                    controller: _descriptionController,
-                    minLines: 3,
-                    maxLines: 6,
-                    maxLength: 2000,
-                    decoration: const InputDecoration(labelText: 'Description / Notes'),
-                    validator: (value) =>
-                        _requiredLength(value, 'Description', 2000),
-                  ),
-                  const SizedBox(height: 12),
+                    // Dynamic Specifications: Tile Form or Standard Attributes
+                    if (_selectedTemplate != null && _selectedTemplate!.name.toLowerCase().contains('tile')) ...[
+                      Card(
+                        elevation: 0,
+                        color: Colors.blueGrey.shade50,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Tile Dimensions & Packaging',
+                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                              ),
+                              const SizedBox(height: 10),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: TextFormField(
+                                      key: const Key('tile-width-mm'),
+                                      controller: _tileWidthController,
+                                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                      decoration: const InputDecoration(
+                                        labelText: 'Width (mm) *',
+                                        hintText: '600',
+                                        helperText: 'Example: 600 mm',
+                                      ),
+                                      onChanged: (_) => setState(_recalcTileCoverage),
+                                      validator: (v) => _positiveNumber(v, 'Tile width'),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: TextFormField(
+                                      key: const Key('tile-height-mm'),
+                                      controller: _tileHeightController,
+                                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                      decoration: const InputDecoration(
+                                        labelText: 'Height (mm) *',
+                                        hintText: '600',
+                                        helperText: 'Example: 600 mm',
+                                      ),
+                                      onChanged: (_) => setState(_recalcTileCoverage),
+                                      validator: (v) => _positiveNumber(v, 'Tile height'),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              TextFormField(
+                                key: const Key('tile-pieces-per-box'),
+                                controller: _tilesPerBoxController,
+                                keyboardType: TextInputType.number,
+                                decoration: const InputDecoration(
+                                  labelText: 'Tiles per box *',
+                                  hintText: '4',
+                                  helperText: 'How many individual tiles are inside one unopened box?',
+                                ),
+                                onChanged: (_) => setState(_recalcTileCoverage),
+                                validator: (v) => _positiveNumber(v, 'Tiles per box'),
+                              ),
+                              const SizedBox(height: 10),
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue.shade50,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: Colors.blue.shade200),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.calculate_outlined, size: 20, color: Colors.blue.shade800),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        'Coverage per box: ${_packageSizeController.text.isEmpty ? "1.44" : _packageSizeController.text} m² (auto-calculated)',
+                                        style: TextStyle(fontWeight: FontWeight.w600, color: Colors.blue.shade900, fontSize: 13),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              for (final field in _selectedTemplate!.parsedAttributes) ...[
+                                if (!['dimensionsMm', 'dimensions_mm', 'widthMm', 'heightMm', 'piecesPerBox', 'coveragePerBoxSqm'].contains(field.id)) ...[
+                                  if (field.type == 'select' && field.options.isNotEmpty)
+                                    DropdownButtonFormField<String>(
+                                      key: Key('spec-field-${field.id}'),
+                                      initialValue: _specs[field.id] as String?,
+                                      decoration: InputDecoration(
+                                        labelText: '${field.label}${field.required ? " *" : ""}',
+                                        helperText: _getFieldHelperText(field.id, field.unit),
+                                      ),
+                                      items: field.options.map((opt) => DropdownMenuItem(value: opt, child: Text(opt))).toList(),
+                                      onChanged: _isSaving ? null : (v) => setState(() => _specs[field.id] = v),
+                                      validator: (v) => field.required && (v == null || v.isEmpty) ? '${field.label} is required.' : null,
+                                    )
+                                  else
+                                    TextFormField(
+                                      key: Key('spec-field-${field.id}'),
+                                      initialValue: _specs[field.id]?.toString(),
+                                      decoration: InputDecoration(
+                                        labelText: '${field.label}${field.required ? " *" : ""}',
+                                        helperText: _getFieldHelperText(field.id, field.unit),
+                                      ),
+                                      onChanged: (v) => _specs[field.id] = v,
+                                      validator: (v) => field.required && (v == null || v.trim().isEmpty) ? '${field.label} is required.' : null,
+                                    ),
+                                  const SizedBox(height: 8),
+                                ],
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ] else if (_selectedTemplate != null && _selectedTemplate!.parsedAttributes.isNotEmpty) ...[
+                      Card(
+                        elevation: 0,
+                        color: Colors.blueGrey.shade50,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '${_selectedTemplate!.name} Specifications',
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                              ),
+                              const SizedBox(height: 8),
+                              for (final field in _selectedTemplate!.parsedAttributes) ...[
+                                if (field.type == 'select' && field.options.isNotEmpty)
+                                  DropdownButtonFormField<String>(
+                                    key: Key('spec-field-${field.id}'),
+                                    initialValue: _specs[field.id] as String?,
+                                    decoration: InputDecoration(
+                                      labelText: '${field.label}${field.required ? " *" : ""}',
+                                      helperText: _getFieldHelperText(field.id, field.unit),
+                                    ),
+                                    items: field.options.map((opt) => DropdownMenuItem(value: opt, child: Text(opt))).toList(),
+                                    onChanged: _isSaving ? null : (v) => setState(() => _specs[field.id] = v),
+                                    validator: (v) => field.required && (v == null || v.isEmpty) ? '${field.label} is required.' : null,
+                                  )
+                                else if (field.type == 'number')
+                                  TextFormField(
+                                    key: Key('spec-field-${field.id}'),
+                                    initialValue: _specs[field.id]?.toString(),
+                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                    decoration: InputDecoration(
+                                      labelText: '${field.label}${field.required ? " *" : ""}${field.unit != null ? " (${field.unit})" : ""}',
+                                      helperText: _getFieldHelperText(field.id, field.unit),
+                                    ),
+                                    onChanged: (v) => _specs[field.id] = double.tryParse(v) ?? v,
+                                    validator: (v) => field.required && (v == null || v.trim().isEmpty) ? '${field.label} is required.' : null,
+                                  )
+                                else
+                                  TextFormField(
+                                    key: Key('spec-field-${field.id}'),
+                                    initialValue: _specs[field.id]?.toString(),
+                                    decoration: InputDecoration(
+                                      labelText: '${field.label}${field.required ? " *" : ""}',
+                                      helperText: _getFieldHelperText(field.id, field.unit),
+                                    ),
+                                    onChanged: (v) => _specs[field.id] = v,
+                                    validator: (v) => field.required && (v == null || v.trim().isEmpty) ? '${field.label} is required.' : null,
+                                  ),
+                                const SizedBox(height: 8),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
 
-                  // 2. Dynamic Specifications (e.g. Paint: Colour, Finish; Generator: Capacity, Fuel, Phase, Running Hours)
-                  if (_selectedTemplate != null && _selectedTemplate!.parsedAttributes.isNotEmpty) ...[
+                    // Quantity & Pricing (Clean, full-width fields to prevent truncation)
                     Card(
                       elevation: 0,
-                      color: Colors.blueGrey.shade50,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        side: BorderSide(color: Colors.grey.shade300),
+                      ),
                       child: Padding(
                         padding: const EdgeInsets.all(12),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              '${_selectedTemplate!.name} Specifications',
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                            ),
-                            const SizedBox(height: 8),
-                            for (final field in _selectedTemplate!.parsedAttributes) ...[
-                              if (field.type == 'select' && field.options.isNotEmpty)
-                                DropdownButtonFormField<String>(
-                                  key: Key('spec-field-${field.id}'),
-                                  initialValue: _specs[field.id] as String?,
-                                  decoration: InputDecoration(
-                                    labelText: '${field.label}${field.required ? " *" : ""}',
-                                  ),
-                                  items: field.options.map((opt) => DropdownMenuItem(value: opt, child: Text(opt))).toList(),
-                                  onChanged: _isSaving ? null : (v) => setState(() => _specs[field.id] = v),
-                                )
-                              else if (field.type == 'number')
-                                TextFormField(
-                                  key: Key('spec-field-${field.id}'),
-                                  initialValue: _specs[field.id]?.toString(),
-                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                  decoration: InputDecoration(
-                                    labelText: '${field.label}${field.required ? " *" : ""}${field.unit != null ? " (${field.unit})" : ""}',
-                                  ),
-                                  onChanged: (v) => _specs[field.id] = double.tryParse(v) ?? v,
-                                )
-                              else
-                                TextFormField(
-                                  key: Key('spec-field-${field.id}'),
-                                  initialValue: _specs[field.id]?.toString(),
-                                  decoration: InputDecoration(
-                                    labelText: '${field.label}${field.required ? " *" : ""}',
-                                  ),
-                                  onChanged: (v) => _specs[field.id] = v,
+                            const Text('Quantity & Pricing', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                            const SizedBox(height: 10),
+
+                            if (_selectedTemplate?.isPackage == true || (_isCustom && _customSaleType == 'PACKAGE') || _quantityMode == 'PACKAGE') ...[
+                              TextFormField(
+                                key: const Key('material-package-size'),
+                                controller: _packageSizeController,
+                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                decoration: InputDecoration(
+                                  labelText: 'Amount in each ${_selectedTemplate?.packageType ?? _packageType} (${_unit ?? _selectedTemplate?.baseUnit ?? "unit"}) *',
+                                  helperText: _selectedTemplate?.name == 'Paint' ? 'Example: 4 L can' : 'Amount contained in one unopened package',
                                 ),
-                              const SizedBox(height: 8),
+                                onChanged: (_) {
+                                  final size = double.tryParse(_packageSizeController.text.trim()) ?? 0;
+                                  final count = int.tryParse(_packageCountController.text.trim()) ?? 0;
+                                  setState(() => _quantityController.text = (size * count).toString());
+                                },
+                                validator: (v) => _positiveNumber(v, 'Package size'),
+                              ),
+                              const SizedBox(height: 10),
+                              TextFormField(
+                                key: const Key('material-package-count'),
+                                controller: _packageCountController,
+                                keyboardType: TextInputType.number,
+                                decoration: InputDecoration(
+                                  labelText: 'Number of ${_selectedTemplate?.packageType != null ? (_selectedTemplate!.packageType!.toLowerCase() == 'box' ? 'boxes' : "${_selectedTemplate!.packageType}s") : (_packageType.toLowerCase() == 'box' ? 'boxes' : "${_packageType}s")} available *',
+                                  helperText: 'Whole number of packages in stock',
+                                ),
+                                onChanged: (_) {
+                                  final size = double.tryParse(_packageSizeController.text.trim()) ?? 0;
+                                  final count = int.tryParse(_packageCountController.text.trim()) ?? 0;
+                                  setState(() => _quantityController.text = (size * count).toString());
+                                },
+                                validator: _wholePackageCount,
+                              ),
+                              const SizedBox(height: 10),
+                              TextFormField(
+                                key: const Key('material-unit-price'),
+                                controller: _priceController,
+                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                decoration: InputDecoration(
+                                  labelText: 'Price per ${_selectedTemplate?.packageType ?? _packageType} (LKR) *',
+                                  helperText: 'Price for one complete package',
+                                ),
+                                validator: (v) => _positiveNumber(v, 'Price'),
+                              ),
+                              const SizedBox(height: 10),
+                              Text(
+                                _packageTotalSummary(),
+                                style: TextStyle(fontWeight: FontWeight.w600, color: Colors.blueGrey.shade800),
+                              ),
+                            ] else if (_selectedTemplate?.isPiece == true || (_isCustom && _customSaleType == 'PIECE') || _quantityMode == 'PIECE') ...[
+                              TextFormField(
+                                key: const Key('material-quantity'),
+                                controller: _quantityController,
+                                keyboardType: TextInputType.number,
+                                decoration: const InputDecoration(
+                                  labelText: 'Number of units / items *',
+                                  helperText: 'Quantity of individual pieces or equipment units',
+                                ),
+                                validator: (v) => _positiveNumber(v, 'Number of units'),
+                              ),
+                              const SizedBox(height: 10),
+                              TextFormField(
+                                key: const Key('material-unit-price'),
+                                controller: _priceController,
+                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                decoration: const InputDecoration(
+                                  labelText: 'Price per item / unit (LKR) *',
+                                  helperText: 'Price for one piece or unit',
+                                ),
+                                validator: (v) => _positiveNumber(v, 'Price per unit'),
+                              ),
+                              const SizedBox(height: 10),
+                              Text(
+                                'Total sellable stock: ${_quantityController.text.isEmpty ? "—" : _quantityController.text} units',
+                                style: TextStyle(fontWeight: FontWeight.w600, color: Colors.blueGrey.shade800),
+                              ),
+                            ] else ...[
+                              TextFormField(
+                                key: const Key('material-quantity'),
+                                controller: _quantityController,
+                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                decoration: const InputDecoration(
+                                  labelText: 'Total quantity *',
+                                  helperText: 'Total available bulk quantity',
+                                ),
+                                validator: (v) => _positiveNumber(v, 'Quantity'),
+                              ),
+                              const SizedBox(height: 10),
+                              SellerUnitField(
+                                key: const Key('material-unit'),
+                                categoryId: _category,
+                                initialUnit: _unit,
+                                load: widget.gateway.categoryUnits,
+                                enabled: !_isSaving,
+                                onChanged: (value) => setState(() => _unit = value),
+                              ),
+                              const SizedBox(height: 10),
+                              TextFormField(
+                                key: const Key('material-unit-price'),
+                                controller: _priceController,
+                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                decoration: InputDecoration(
+                                  labelText: 'Price per ${_unit ?? "unit"} (LKR) *',
+                                ),
+                                validator: (v) => _positiveNumber(v, 'Unit price'),
+                              ),
+                              const SizedBox(height: 10),
+                              Text(
+                                'Total sellable stock: ${_quantityController.text.isEmpty ? "—" : _quantityController.text} ${_unit ?? ""}',
+                                style: TextStyle(fontWeight: FontWeight.w600, color: Colors.blueGrey.shade800),
+                              ),
                             ],
                           ],
                         ),
                       ),
                     ),
                     const SizedBox(height: 12),
-                  ],
-
-                  // 3. Quantity & Pricing (Clean, zero technical jargon)
-                  Card(
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      side: BorderSide(color: Colors.grey.shade300),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Quantity & Pricing', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                          const SizedBox(height: 10),
-
-                          if (_selectedTemplate?.isPackage == true || (_isCustom && _customSaleType == 'PACKAGE') || _quantityMode == 'PACKAGE') ...[
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: TextFormField(
-                                    key: const Key('material-package-size'),
-                                    controller: _packageSizeController,
-                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                    decoration: InputDecoration(
-                                      labelText: 'Container size (${_unit ?? _selectedTemplate?.baseUnit ?? "unit"})',
-                                    ),
-                                    onChanged: (_) {
-                                      final size = double.tryParse(_packageSizeController.text.trim()) ?? 0;
-                                      final count = int.tryParse(_packageCountController.text.trim()) ?? 0;
-                                      setState(() => _quantityController.text = (size * count).toString());
-                                    },
-                                    validator: (v) => _positiveNumber(v, 'Container size'),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: TextFormField(
-                                    key: const Key('material-package-count'),
-                                    controller: _packageCountController,
-                                    keyboardType: TextInputType.number,
-                                    decoration: InputDecoration(
-                                      labelText: 'Number of ${_selectedTemplate?.packageType != null ? "${_selectedTemplate!.packageType}s" : "containers"}',
-                                    ),
-                                    onChanged: (_) {
-                                      final size = double.tryParse(_packageSizeController.text.trim()) ?? 0;
-                                      final count = int.tryParse(_packageCountController.text.trim()) ?? 0;
-                                      setState(() => _quantityController.text = (size * count).toString());
-                                    },
-                                    validator: _wholePackageCount,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            TextFormField(
-                              key: const Key('material-unit-price'),
-                              controller: _priceController,
-                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                              decoration: InputDecoration(
-                                labelText: 'Price per ${_selectedTemplate?.packageType ?? "container"} (LKR)',
-                              ),
-                              validator: (v) => _positiveNumber(v, 'Price'),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              _packageTotalSummary(),
-                              style: TextStyle(fontWeight: FontWeight.w600, color: Colors.blueGrey.shade800),
-                            ),
-                          ] else if (_selectedTemplate?.isPiece == true || (_isCustom && _customSaleType == 'PIECE') || _quantityMode == 'PIECE') ...[
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: TextFormField(
-                                    key: const Key('material-quantity'),
-                                    controller: _quantityController,
-                                    keyboardType: TextInputType.number,
-                                    decoration: const InputDecoration(labelText: 'Number of units / items'),
-                                    validator: (v) => _positiveNumber(v, 'Number of units'),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: TextFormField(
-                                    key: const Key('material-unit-price'),
-                                    controller: _priceController,
-                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                    decoration: const InputDecoration(labelText: 'Price per item / unit (LKR)'),
-                                    validator: (v) => _positiveNumber(v, 'Price per unit'),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Total sellable stock: ${_quantityController.text.isEmpty ? "—" : _quantityController.text} units',
-                              style: TextStyle(fontWeight: FontWeight.w600, color: Colors.blueGrey.shade800),
-                            ),
-                          ] else ...[
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: TextFormField(
-                                    key: const Key('material-quantity'),
-                                    controller: _quantityController,
-                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                    decoration: const InputDecoration(labelText: 'Total quantity'),
-                                    validator: (v) => _positiveNumber(v, 'Quantity'),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: SellerUnitField(
-                                    key: const Key('material-unit'),
-                                    categoryId: _category,
-                                    initialUnit: _unit,
-                                    load: widget.gateway.categoryUnits,
-                                    enabled: !_isSaving,
-                                    onChanged: (value) => setState(() => _unit = value),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            TextFormField(
-                              key: const Key('material-unit-price'),
-                              controller: _priceController,
-                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                              decoration: InputDecoration(labelText: 'Price per ${_unit ?? "unit"} (LKR)'),
-                              validator: (v) => _positiveNumber(v, 'Unit price'),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Total sellable stock: ${_quantityController.text.isEmpty ? "—" : _quantityController.text} ${_unit ?? ""}',
-                              style: TextStyle(fontWeight: FontWeight.w600, color: Colors.blueGrey.shade800),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
 
                   DropdownButtonFormField<String>(
                     key: const Key('material-condition'),
@@ -1025,6 +1266,7 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                       widget.isEditing ? 'Save draft changes' : 'Save draft',
                     ),
                   ),
+                ],
                 ],
               ),
             ),

@@ -92,6 +92,30 @@ export function TemplateDrivenMaterialForm({
   const [customPackageTypeName, setCustomPackageTypeName] = useState('box');
   const [customUnit, setCustomUnit] = useState('unit');
 
+  // Tile dimensions calculator state (Section 4 & 9)
+  const isTileTemplate = Boolean(selectedTemplate?.name.toLowerCase().includes('tile'));
+  const [tileWidth, setTileWidth] = useState<number>(600);
+  const [tileHeight, setTileHeight] = useState<number>(600);
+  const [tilesPerBox, setTilesPerBox] = useState<number>(4);
+
+  const handleTileDimChange = (w: number, h: number, pcs: number) => {
+    setTileWidth(w);
+    setTileHeight(h);
+    setTilesPerBox(pcs);
+    if (w > 0 && h > 0 && pcs > 0) {
+      const cov = Math.round(((w * h * pcs) / 1000000) * 100) / 100;
+      setPackageSize(cov);
+      setSpecs((prev) => ({
+        ...prev,
+        widthMm: w,
+        heightMm: h,
+        piecesPerBox: pcs,
+        coveragePerBoxSqm: cov,
+        dimensionsMm: `${w}x${h} mm`,
+      }));
+    }
+  };
+
   // Form submission & feedback
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -338,6 +362,59 @@ export function TemplateDrivenMaterialForm({
               <div style={{ fontWeight: 650, fontSize: '0.95rem', color: '#1e293b' }}>
                 {selectedTemplate?.name} Specifications
               </div>
+
+              {isTileTemplate && (
+                <div
+                  style={{
+                    background: '#f0fdf4',
+                    border: '1px solid #bbf7d0',
+                    borderRadius: '8px',
+                    padding: '0.9rem',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.65rem',
+                  }}
+                  data-testid="tile-dimensions-calculator"
+                >
+                  <div style={{ fontWeight: 650, fontSize: '0.85rem', color: '#166534' }}>
+                    Structured Tile Dimensions & Coverage Calculator
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.75rem' }}>
+                    <div className="catalog-field">
+                      <label style={{ fontSize: '0.8rem' }}>Tile Width (mm) *</label>
+                      <input
+                        type="number"
+                        placeholder="600"
+                        value={tileWidth || ''}
+                        onChange={(e) => handleTileDimChange(parseFloat(e.target.value) || 0, tileHeight, tilesPerBox)}
+                      />
+                    </div>
+                    <div className="catalog-field">
+                      <label style={{ fontSize: '0.8rem' }}>Tile Height (mm) *</label>
+                      <input
+                        type="number"
+                        placeholder="600"
+                        value={tileHeight || ''}
+                        onChange={(e) => handleTileDimChange(tileWidth, parseFloat(e.target.value) || 0, tilesPerBox)}
+                      />
+                    </div>
+                    <div className="catalog-field">
+                      <label style={{ fontSize: '0.8rem' }}>Pieces per Box *</label>
+                      <input
+                        type="number"
+                        placeholder="4"
+                        value={tilesPerBox || ''}
+                        onChange={(e) => handleTileDimChange(tileWidth, tileHeight, parseInt(e.target.value, 10) || 0)}
+                      />
+                    </div>
+                  </div>
+                  {tileWidth > 0 && tileHeight > 0 && tilesPerBox > 0 && (
+                    <div style={{ fontSize: '0.82rem', color: '#15803d', fontWeight: 600 }}>
+                      ✓ Each box covers {((tileWidth * tileHeight * tilesPerBox) / 1000000).toFixed(2)} sqm ({tilesPerBox} tiles @ {tileWidth}×{tileHeight} mm)
+                    </div>
+                  )}
+                </div>
+              )}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
                 {attributeFields.map((field) => (
                   <div key={field.id} className="catalog-field">

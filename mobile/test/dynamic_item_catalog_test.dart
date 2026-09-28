@@ -32,6 +32,18 @@ final mockTemplates = [
     allowedUnits: ['unit'],
     attributeSchema: '[{"id":"capacity_kva","label":"Capacity","type":"number","required":true,"unit":"kVA"},{"id":"fuel_type","label":"Fuel Type","type":"select","options":["Diesel","Petrol"]}]',
   ),
+  const ConstructionItemTemplate(
+    id: 'tiles-id',
+    name: 'Floor Tiles',
+    categoryId: 'c-finishes',
+    categoryName: 'Finishes & Paints',
+    itemClass: 'MATERIAL',
+    quantityMode: 'PACKAGE',
+    baseUnit: 'sqm',
+    packageType: 'box',
+    allowedUnits: ['sqm'],
+    attributeSchema: '[{"id":"dimensionsMm","label":"Dimensions","type":"string","required":true},{"id":"finish","label":"Finish","type":"select","options":["Gloss","Matt","Polished"]}]',
+  ),
 ];
 
 final mockCategories = [
@@ -277,5 +289,65 @@ void main() {
     expect(draft.constructionItemTemplateId, isNull);
     expect(draft.quantity, 2.0);
     expect(draft.quantityMode, 'PIECE');
+  });
+
+  testWidgets('Tiles listing calculates coverage from dimensions and pieces per box', (tester) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetPhysicalSize());
+
+    final gateway = _MockMaterialsGateway();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MaterialListingFormScreen(gateway: gateway),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Open template picker
+    await tester.tap(find.byKey(const Key('choose-construction-item-button')));
+    await tester.pumpAndSettle();
+
+    // Select Floor Tiles
+    await tester.tap(find.byKey(const Key('template-tile-tiles-id')));
+    await tester.pumpAndSettle();
+
+    // Verify Category dropdown is NOT shown for catalog items
+    expect(find.byKey(const Key('material-category')), findsNothing);
+
+    // Verify Tile Dimensions & Packaging rendered
+    expect(find.text('Tile Dimensions & Packaging'), findsOneWidget);
+    expect(find.byKey(const Key('tile-width-mm')), findsOneWidget);
+    expect(find.byKey(const Key('tile-height-mm')), findsOneWidget);
+    expect(find.byKey(const Key('tile-pieces-per-box')), findsOneWidget);
+
+    // Default 600mm x 600mm x 4 pieces = 1.44 sqm per box
+    expect(find.textContaining('1.44 m²'), findsWidgets);
+
+    // Fill 10 boxes at 12000 LKR per box
+    await tester.enterText(find.byKey(const Key('material-package-count')), '10');
+    await tester.enterText(find.byKey(const Key('material-unit-price')), '12000');
+    await tester.enterText(find.byKey(const Key('material-description')), 'High gloss porcelain floor tiles.');
+
+    // Save
+    await tester.tap(find.byKey(const Key('save-material')));
+    await tester.pumpAndSettle();
+
+    expect(gateway.savedDraft, isNotNull);
+    final draft = gateway.savedDraft!;
+    expect(draft.title, 'Floor Tiles');
+    expect(draft.categoryId, 'c-finishes');
+    expect(draft.quantity, 14.4);
+    expect(draft.packageCount, 10);
+    expect(draft.packageSize, 1.44);
+    expect(draft.packageType, 'box');
+    expect(draft.quantityMode, 'PACKAGE');
+    expect(draft.isCustomPendingReview, isFalse);
+    final specs = jsonDecode(draft.specificationsJson!);
+    expect(specs['widthMm'], 600.0);
+    expect(specs['heightMm'], 600.0);
+    expect(specs['piecesPerBox'], 4);
+    expect(specs['coveragePerBoxSqm'], 1.44);
   });
 }

@@ -4,8 +4,7 @@ namespace SurplusLink.Api.Materials;
 
 public class CreateMaterialListingRequest
 {
-    [Required]
-    public Guid CategoryId { get; init; }
+    public Guid? CategoryId { get; init; }
 
     [Required, MaxLength(200)]
     public string Title { get; init; } = string.Empty;

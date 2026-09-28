@@ -300,4 +300,168 @@ public sealed class ConstructionItemTemplateTests
         Assert.Equal(2m, listing.Quantity);
         Assert.Equal(QuantityMode.PIECE, listing.QuantityMode);
     }
+
+    [Fact]
+    public void Custom_piece_item_does_not_require_package_fields()
+    {
+        var request = new CreateMaterialListingRequest
+        {
+            CategoryId = ConstructionItemTemplateCatalogSeed.DoorsWindowsFixturesId,
+            Title = "Solid Teak Door",
+            Description = "Custom made solid door",
+            Quantity = 2m,
+            QuantityMode = "PIECE",
+            Unit = "piece",
+            UnitPrice = 25000m,
+            Condition = "NEW",
+            AvailableUntil = DateTime.UtcNow.AddDays(14)
+        };
+
+        var validateMethod = typeof(MaterialInventoryService)
+            .GetMethod("ValidateListingRequest",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static,
+                [typeof(CreateMaterialListingRequest), typeof(ConstructionItemTemplate)])
+            ?? throw new InvalidOperationException("ValidateListingRequest not found");
+
+        validateMethod.Invoke(null, [request, null]);
+
+        var listing = new Listing();
+        var applyMethod = typeof(MaterialInventoryService)
+            .GetMethod("ApplyListingRequest",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static,
+                [typeof(Listing), typeof(CreateMaterialListingRequest), typeof(ConstructionItemTemplate)])
+            ?? throw new InvalidOperationException("ApplyListingRequest not found");
+
+        applyMethod.Invoke(null, [listing, request, null]);
+
+        Assert.Equal(QuantityMode.PIECE, listing.QuantityMode);
+        Assert.Equal(PackageType.PIECE, listing.PackageType);
+        Assert.Equal(1m, listing.PackageSize);
+        Assert.Equal(2, listing.PackageCount);
+        Assert.Equal(2m, listing.Quantity);
+    }
+
+    [Fact]
+    public void Custom_package_requires_package_fields()
+    {
+        var request = new CreateMaterialListingRequest
+        {
+            CategoryId = ConstructionItemTemplateCatalogSeed.FinishesId,
+            Title = "Custom Specialty Plaster",
+            Description = "Packaged plaster",
+            Quantity = 10m,
+            QuantityMode = "PACKAGE",
+            Unit = "bag",
+            UnitPrice = 1200m,
+            Condition = "NEW",
+            AvailableUntil = DateTime.UtcNow.AddDays(14)
+        };
+
+        var validateMethod = typeof(MaterialInventoryService)
+            .GetMethod("ValidateListingRequest",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static,
+                [typeof(CreateMaterialListingRequest), typeof(ConstructionItemTemplate)])
+            ?? throw new InvalidOperationException("ValidateListingRequest not found");
+
+        var ex = Assert.Throws<System.Reflection.TargetInvocationException>(() =>
+            validateMethod.Invoke(null, [request, null]));
+        Assert.IsType<MaterialOperationException>(ex.InnerException);
+        Assert.Contains("Packaged listings require", ex.InnerException?.Message);
+    }
+
+    [Fact]
+    public void Template_required_attributes_are_enforced_and_optional_may_be_omitted()
+    {
+        var paintTemplate = ConstructionItemTemplateCatalogSeed.GetTemplates()
+            .First(t => t.Name == "Paint");
+
+        var validateMethod = typeof(MaterialInventoryService)
+            .GetMethod("ValidateTemplateAttributes",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static,
+                [typeof(ConstructionItemTemplate), typeof(string)])
+            ?? throw new InvalidOperationException("ValidateTemplateAttributes not found");
+
+        // Missing required fields (colour, paintType)
+        var ex = Assert.Throws<System.Reflection.TargetInvocationException>(() =>
+            validateMethod.Invoke(null, [paintTemplate, "{}"]));
+        Assert.IsType<MaterialOperationException>(ex.InnerException);
+        Assert.Contains("is required", ex.InnerException?.Message);
+
+        // Required fields present, optional fields (brand, finish) omitted -> succeeds!
+        var validSpecs = "{\"paintType\":\"Emulsion\",\"colour\":\"White\"}";
+        validateMethod.Invoke(null, [paintTemplate, validSpecs]);
+    }
+
+    [Fact]
+    public async Task CreateListingAsync_derives_category_from_template_when_omitted()
+    {
+        using var db = CreateInMemoryDbContext();
+        var service = new MaterialInventoryService(db);
+        var paintTemplate = db.ConstructionItemTemplates.First(t => t.Name == "Paint");
+        var seller = new User
+        {
+            Id = Guid.NewGuid(),
+            Email = "seller@example.com",
+            FullName = "Test Seller",
+            PasswordHash = "hash",
+            PhoneNumber = "+1234567890",
+            BusinessName = "REG-123"
+        };
+        seller.RoleAssignments.Add(new UserRoleAssignment { UserId = seller.Id, Role = UserRole.SELLER });
+        db.Users.Add(seller);
+        await db.SaveChangesAsync();
+
+        var request = new CreateMaterialListingRequest
+        {
+            Title = "Dulux Gloss Paint",
+            Description = "Surplus cans",
+            Quantity = 8m,
+            PackageSize = 4m,
+            PackageCount = 2,
+            UnitPrice = 5000m,
+            Condition = "NEW",
+            Unit = "L",
+            AvailableUntil = DateTime.UtcNow.AddDays(7),
+            ConstructionItemTemplateId = paintTemplate.Id,
+            SpecificationsJson = "{\"paintType\":\"Gloss / Enamel\",\"colour\":\"Red\"}"
+        };
+
+        var response = await service.CreateListingAsync(seller.Id, request, default);
+        Assert.Equal(paintTemplate.CategoryId, response.CategoryId);
+    }
+
+    [Fact]
+    public async Task CreateListingAsync_rejects_custom_item_without_category()
+    {
+        using var db = CreateInMemoryDbContext();
+        var service = new MaterialInventoryService(db);
+        var seller = new User
+        {
+            Id = Guid.NewGuid(),
+            Email = "seller2@example.com",
+            FullName = "Test Seller 2",
+            PasswordHash = "hash",
+            PhoneNumber = "+1234567891",
+            BusinessName = "REG-124"
+        };
+        seller.RoleAssignments.Add(new UserRoleAssignment { UserId = seller.Id, Role = UserRole.SELLER });
+        db.Users.Add(seller);
+        await db.SaveChangesAsync();
+
+        var request = new CreateMaterialListingRequest
+        {
+            Title = "Custom Tool",
+            Description = "Custom",
+            Quantity = 1m,
+            QuantityMode = "PIECE",
+            UnitPrice = 5000m,
+            Condition = "NEW",
+            Unit = "piece",
+            AvailableUntil = DateTime.UtcNow.AddDays(7)
+        };
+
+        var ex = await Assert.ThrowsAsync<MaterialOperationException>(() =>
+            service.CreateListingAsync(seller.Id, request, default));
+        Assert.Contains("Category is required for custom items", ex.Message);
+    }
 }

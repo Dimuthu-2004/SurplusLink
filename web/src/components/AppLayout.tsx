@@ -54,7 +54,7 @@ export function AppLayout() {
                 <p className="nav-section-label">Management</p>
                 {navItem('/app/manager/materials', 'Material listings', 'materials')}
                 {navItem('/app/manager/categories', 'Material categories', 'categories')}
-                {navItem('/app/manager/catalog', 'Construction item catalog', 'catalog')}
+                {navItem('/app/manager/catalog', 'Item Catalog', 'catalog')}
                 {navItem('/app/manager/requirements', 'Buyer Requirements', 'requirements')}
                 {navItem('/app/manager/listing-approvals', 'Seller Listing Approvals', 'approvals')}
                 {navItem('/app/manager/requirement-approvals', 'Buyer Requirement Approvals', 'approvals')}
