@@ -26,7 +26,7 @@ final class MaterialListing {
     required this.description,
     required this.quantity,
     required this.reservedQuantity,
-    required this.quantityMode,
+    this.quantityMode = 'LEGACY',
     required this.unit,
     required this.condition,
     required this.unitPrice,

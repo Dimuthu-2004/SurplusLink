@@ -355,6 +355,20 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(message)));
 
+  String _packageTotalSummary() {
+    final size = double.tryParse(_packageSizeController.text.trim());
+    final count = int.tryParse(_packageCountController.text.trim());
+    if (size == null || count == null) return 'Total material quantity: —';
+    return 'Total material quantity: ${size * count} ${_unit ?? ''}'.trim();
+  }
+
+  String? _wholePackageCount(String? value) {
+    final count = int.tryParse(value?.trim() ?? '');
+    return count != null && count > 0
+        ? null
+        : 'Enter a whole package count';
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
@@ -427,7 +441,7 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
                     key: const Key('material-quantity-mode'),
-                    value: _quantityMode,
+                    initialValue: _quantityMode,
                     decoration: const InputDecoration(labelText: 'Sellable quantity mode'),
                     items: const [
                       DropdownMenuItem(value: 'PACKAGE', child: Text('Package / container')),
@@ -439,7 +453,7 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                   const SizedBox(height: 12),
                   if (_quantityMode == 'PACKAGE' || _quantityMode == 'PIECE') ...[
                     DropdownButtonFormField<String>(
-                      value: _packageType,
+                      initialValue: _packageType,
                       decoration: const InputDecoration(labelText: 'Package type'),
                       items: const ['CAN','BAG','BOX','CARTRIDGE','ROLL','SHEET','ROD','PIPE','PACK','PIECE','OTHER']
                           .map((x) => DropdownMenuItem(value: x, child: Text(x.toLowerCase()))).toList(),
@@ -449,9 +463,12 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                     Row(children: [
                       Expanded(child: TextFormField(key: const Key('material-package-size'), controller: _packageSizeController, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: InputDecoration(labelText: 'Package size (${_unit ?? 'base unit'})'), validator: (v) => _positiveNumber(v, 'Package size'))),
                       const SizedBox(width: 8),
-                      Expanded(child: TextFormField(key: const Key('material-package-count'), controller: _packageCountController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Number of packages'), validator: (v) => int.tryParse(v ?? '') is int n && n > 0 ? null : 'Enter a whole package count')),
+                      Expanded(child: TextFormField(key: const Key('material-package-count'), controller: _packageCountController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Number of packages'), validator: _wholePackageCount)),
                     ]),
-                    Padding(padding: const EdgeInsets.only(top: 8), child: Text('Total material quantity: ${_packageSizeController.text.isEmpty || _packageCountController.text.isEmpty ? '—' : '${double.parse(_packageSizeController.text) * int.parse(_packageCountController.text)} ${_unit ?? ''}'}')),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(_packageTotalSummary()),
+                    ),
                     const SizedBox(height: 12),
                   ],
                   Row(

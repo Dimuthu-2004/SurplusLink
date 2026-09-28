@@ -461,7 +461,7 @@ class _RecommendedMatchesScreenState extends State<RecommendedMatchesScreen> {
     try {
       final allocations = _selectedQuantities.entries
           .map((e) {
-            final match = _matches.firstWhere((item) => item.id == e.key);
+            final match = _selectedMatches[e.key]!;
             return MatchAllocation(matchId: e.key, quantity: e.value,
                 packageCount: match.packageCountFor(e.value));
           })
