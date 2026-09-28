@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using SurplusLink.Api.Models;
 
 namespace SurplusLink.Api.Data;
@@ -54,7 +55,7 @@ public static class ConstructionItemTemplateCatalogSeed
         new() { Id = MiscSurplusId, Name = "Miscellaneous Construction Surplus", AllowedUnits = ["piece", "unit", "kg", "m", "sqm", "m3", "bag", "box", "can"], CreatedAtUtc = SeedTimestamp, UpdatedAtUtc = SeedTimestamp }
     ];
 
-    public static ConstructionItemTemplate[] GetTemplates() =>
+    public static ConstructionItemTemplate[] GetTemplates() => AddSriLankanFormMetadata(
     [
         // 1. Paint (Finishes)
         new()
@@ -965,5 +966,79 @@ public static class ConstructionItemTemplateCatalogSeed
             CreatedAtUtc = SeedTimestamp,
             UpdatedAtUtc = SeedTimestamp
         }
-    ];
+    ]);
+
+    // The schema is the single source of truth for mobile/web forms and a future
+    // requirement assistant.  UI code must not carry a second list of local presets.
+    private static ConstructionItemTemplate[] AddSriLankanFormMetadata(ConstructionItemTemplate[] templates)
+    {
+        foreach (var template in templates)
+        {
+            if (JsonNode.Parse(template.AttributeSchema) is not JsonArray fields) continue;
+            foreach (var node in fields.OfType<JsonObject>())
+            {
+                var id = node["id"]?.GetValue<string>() ?? string.Empty;
+                var label = node["label"]?.GetValue<string>() ?? id;
+                // Legacy seeds were written as engineering data sheets. Inventory can
+                // be identified safely by item, condition, quantity, price and location;
+                // unknown technical details remain null instead of receiving fake defaults.
+                // Paint type and colour are the small exception: together they are
+                // the ordinary identifying detail needed to price a paint listing.
+                var requiredForSafeIdentification = template.Name == "Paint" && id is "paintType" or "colour";
+                node["required"] = requiredForSafeIdentification;
+                node["priority"] = requiredForSafeIdentification ? "REQUIRED" : IsRecommended(id) ? "RECOMMENDED" : "OPTIONAL";
+                node["sellerField"] = true;
+                node["buyerPreference"] = IsBuyerPreference(template.Name, id);
+                node["allowOther"] = node["type"]?.GetValue<string>() == "select";
+                node["labelI18n"] = Localized(label);
+                node["helper"] = Helper(template.Name, id);
+                if (node["type"]?.GetValue<string>() == "select" && node["options"] is JsonArray options &&
+                    !options.Any(value => string.Equals(value?.GetValue<string>(), "Other", StringComparison.OrdinalIgnoreCase)))
+                {
+                    options.Add("Other");
+                }
+            }
+            template.AttributeSchema = fields.ToJsonString();
+        }
+        return templates;
+    }
+
+    private static bool IsRecommended(string id) => id is "brickType" or "cementType" or "paintType" or "material" or "diameterMm" or "capacityKva" or "fuelType" or "drillType";
+
+    private static bool IsBuyerPreference(string item, string id) => (item, id) switch
+    {
+        ("Bricks", "brickType") or ("Bricks", "dimensionsMm") or
+        ("Paint", "paintType") or ("Paint", "finish") or
+        ("Tiles", "material") or ("Tiles", "dimensionsMm") or ("Tiles", "finish") or
+        ("Generator", "capacityKva") or ("Generator", "fuelType") or
+        ("Drill", "drillType") => true,
+        _ => false
+    };
+
+    private static string Helper(string item, string id) => (item, id) switch
+    {
+        ("Bricks", "dimensionsMm") => "Choose the closest size. Select Other for a different size.",
+        ("Bricks", "compressiveStrength") => "Additional specification (optional).",
+        ("Generator", "capacityKva") => "Usually written on the generator label.",
+        ("Reinforcement Steel", "diameterMm") => "Choose the diameter printed on the bar tag.",
+        ("Tiles", "piecesPerBox") => "Number of individual tiles inside one box.",
+        _ => string.Empty
+    };
+
+    private static JsonObject Localized(string english)
+    {
+        var translations = english switch
+        {
+            "Brick Type" => ("ගඩොල් වර්ගය", "செங்கல் வகை"),
+            "Dimensions (mm)" => ("ප්‍රමාණය (මි.මී.)", "அளவு (மிமீ)"),
+            "Cement Type" => ("සිමෙන්ති වර්ගය", "சிமெந்து வகை"),
+            "Paint Type" => ("තීන්ත වර්ගය", "பெயிண்ட் வகை"),
+            "Finish" => ("නිමාව", "பூச்சு"),
+            "Capacity (kVA)" => ("ධාරිතාව (kVA)", "திறன் (kVA)"),
+            "Fuel Type" => ("ඉන්ධන වර්ගය", "எரிபொருள் வகை"),
+            "Diameter (mm)" => ("විෂ්කම්භය (මි.මී.)", "விட்டம் (மிமீ)"),
+            _ => (english, english)
+        };
+        return new JsonObject { ["en"] = english, ["si"] = translations.Item1, ["ta"] = translations.Item2 };
+    }
 }

@@ -242,17 +242,24 @@ public static class MarketplaceModelConfiguration
             entity.HasKey(request => request.Id).HasName("PK_MaterialRequests");
             entity.Property(request => request.Title).HasMaxLength(200).IsRequired();
             entity.Property(request => request.Notes).HasMaxLength(2000).IsRequired();
+            entity.Property(request => request.BuyerPreferencesJson).HasColumnType("text");
             entity.Property(request => request.RequiredQuantity).HasColumnName("Quantity").HasPrecision(18, 3);
             entity.Property(request => request.MaximumBudget).HasColumnName("Budget").HasPrecision(18, 2);
             entity.Property(request => request.Status).HasConversion<string>().HasMaxLength(24).IsRequired();
             entity.HasIndex(request => request.Status).HasDatabaseName("IX_MaterialRequests_Status");
             entity.HasIndex(request => request.CategoryId).HasDatabaseName("IX_MaterialRequests_CategoryId");
+            entity.HasIndex(request => request.ConstructionItemTemplateId).HasDatabaseName("IX_MaterialRequests_ConstructionItemTemplateId");
             entity.HasIndex(request => request.Deadline).HasDatabaseName("IX_MaterialRequests_DeadlineUtc");
             entity.HasOne(request => request.Category)
                 .WithMany()
                 .HasForeignKey(request => request.CategoryId)
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("FK_MaterialRequests_Categories_CategoryId");
+            entity.HasOne(request => request.ConstructionItemTemplate)
+                .WithMany()
+                .HasForeignKey(request => request.ConstructionItemTemplateId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("FK_MaterialRequests_ConstructionItemTemplates_ConstructionItemTemplateId");
             entity.HasOne(request => request.Buyer)
                 .WithMany()
                 .HasForeignKey(request => request.BuyerId)

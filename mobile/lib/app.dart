@@ -17,6 +17,8 @@ import 'package:mobile/requirements/requirement_gateway.dart';
 import 'package:mobile/requirements/requirement_location.dart';
 import 'package:mobile/location/location_lookup.dart';
 import 'package:mobile/theme/surplus_link_theme.dart';
+import 'package:mobile/l10n/app_localizations.dart';
+import 'package:mobile/l10n/locale_controller.dart';
 
 class SurplusLinkApp extends StatefulWidget {
   const SurplusLinkApp({
@@ -30,6 +32,7 @@ class SurplusLinkApp extends StatefulWidget {
     this.locationLookup,
     this.addressSearch,
     this.initialLocation = AppRoutes.splash,
+    this.localeController,
     super.key,
   });
 
@@ -43,6 +46,7 @@ class SurplusLinkApp extends StatefulWidget {
   final AddressLookup? locationLookup;
   final AddressSearch? addressSearch;
   final String initialLocation;
+  final LocaleController? localeController;
 
   @override
   State<SurplusLinkApp> createState() => _SurplusLinkAppState();
@@ -50,11 +54,14 @@ class SurplusLinkApp extends StatefulWidget {
 
 class _SurplusLinkAppState extends State<SurplusLinkApp> {
   late final GoRouter _router;
+  late final LocaleController _localeController;
   late int _modeRevision;
 
   @override
   void initState() {
     super.initState();
+    _localeController = widget.localeController ?? LocaleController();
+    if (widget.localeController == null) unawaited(_localeController.load());
     _router = createAppRouter(
       authController: widget.authController,
       materialGateway: widget.materialGateway,
@@ -88,20 +95,28 @@ class _SurplusLinkAppState extends State<SurplusLinkApp> {
   }
 
   @override
-  Widget build(BuildContext context) => MaterialApp.router(
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: _localeController,
+    builder: (context, _) => MaterialApp.router(
     title: 'SurplusLink',
+    locale: _localeController.locale,
+    supportedLocales: AppLocalizations.supportedLocales,
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
     debugShowCheckedModeBanner: false,
     theme: SurplusLinkTheme.light,
     routerConfig: _router,
     builder: (context, child) => MarketplaceModeScope(
       controller: widget.authController.marketplace,
-      child: ListenableBuilder(
-        listenable: widget.authController,
-        builder: (context, _) => StartupTransition(
-          initializing: widget.authController.status == AuthStatus.initializing,
-          child: child!,
+      child: Stack(children: [
+        ListenableBuilder(
+          listenable: widget.authController,
+          builder: (context, _) => StartupTransition(
+            initializing: widget.authController.status == AuthStatus.initializing,
+            child: child!,
+          ),
         ),
-      ),
+        Positioned(top: 2, left: 2, child: SafeArea(child: LanguageSelector(controller: _localeController))),
+      ]),
     ),
-  );
+  ));
 }

@@ -5,6 +5,7 @@ import type {
 } from '../api/constructionItemTemplatesApi';
 import type { MaterialCategory } from '../features/materials/managerMaterialsApi';
 import { ConstructionItemPicker } from './ConstructionItemPicker';
+import { localized, useLanguage } from '../i18n/LanguageContext';
 
 export interface ListingSubmitData {
   title: string;
@@ -40,6 +41,7 @@ export function TemplateDrivenMaterialForm({
   initialData,
   onCancel,
 }: TemplateDrivenMaterialFormProps) {
+  const { language } = useLanguage();
   // Template selection
   const [selectedTemplate, setSelectedTemplate] = useState<ConstructionItemTemplate | null>(() => {
     if (initialData?.constructionItemTemplateId) {
@@ -416,10 +418,12 @@ export function TemplateDrivenMaterialForm({
                 </div>
               )}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
-                {attributeFields.map((field) => (
+                {attributeFields.filter((field) => field.sellerField !== false).map((field) => {
+                  const label = localized(field.labelI18n, language, field.label);
+                  return (
                   <div key={field.id} className="catalog-field">
                     <label htmlFor={`spec-field-${field.id}`}>
-                      {field.label} {field.required && <span style={{ color: '#dc2626' }}>*</span>}
+                      {label} {field.priority === 'RECOMMENDED' && <small>(recommended)</small>} {field.required && <span style={{ color: '#dc2626' }}>*</span>}
                       {field.unit && <span style={{ color: '#64748b' }}> ({field.unit})</span>}
                     </label>
 
@@ -431,7 +435,7 @@ export function TemplateDrivenMaterialForm({
                         onChange={(e) => setSpecs({ ...specs, [field.id]: e.target.value })}
                         data-testid={`spec-field-${field.id}`}
                       >
-                        <option value="">Select {field.label}</option>
+                        <option value="">Select {label}</option>
                         {field.options.map((opt) => (
                           <option key={opt} value={opt}>
                             {opt}
@@ -444,7 +448,7 @@ export function TemplateDrivenMaterialForm({
                         type="number"
                         step="any"
                         required={field.required}
-                        placeholder={field.placeholder || `Enter ${field.label}`}
+                        placeholder={field.placeholder || `Enter ${label}`}
                         value={specs[field.id] ?? ''}
                         onChange={(e) => setSpecs({ ...specs, [field.id]: parseFloat(e.target.value) || '' })}
                         data-testid={`spec-field-${field.id}`}
@@ -454,14 +458,16 @@ export function TemplateDrivenMaterialForm({
                         id={`spec-field-${field.id}`}
                         type="text"
                         required={field.required}
-                        placeholder={field.placeholder || `e.g. ${field.label}`}
+                        placeholder={field.placeholder || `e.g. ${label}`}
                         value={specs[field.id] ?? ''}
                         onChange={(e) => setSpecs({ ...specs, [field.id]: e.target.value })}
                         data-testid={`spec-field-${field.id}`}
                       />
                     )}
+                    {field.helper && <small>{field.helper}</small>}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}

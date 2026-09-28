@@ -14,6 +14,7 @@ import 'package:mobile/materials/material_inventory_repository.dart';
 import 'package:mobile/location/location_lookup.dart';
 import 'package:mobile/requirements/requirement_repository.dart';
 import 'package:mobile/offers/offer_repository.dart';
+import 'package:mobile/l10n/locale_controller.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -32,6 +33,8 @@ void main() {
     AuthRepository(apiClient: apiClient, tokenStorage: tokenStorage),
     marketplace: marketplace,
   );
+  final localeController = LocaleController();
+  localeController.load();
 
   runApp(
     SurplusLinkApp(
@@ -49,6 +52,7 @@ void main() {
       handoffGateway: MobileHandoffRepository(apiClient),
       locationLookup: ApiLocationLookup(apiClient).lookup,
       addressSearch: ApiLocationLookup(apiClient).search,
+      localeController: localeController,
     ),
   );
 }

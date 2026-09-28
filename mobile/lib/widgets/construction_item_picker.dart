@@ -6,18 +6,21 @@ class ConstructionItemPickerSheet extends StatefulWidget {
     required this.templates,
     required this.onSelectTemplate,
     required this.onSelectCustom,
+    this.allowCustom = true,
     super.key,
   });
 
   final List<ConstructionItemTemplate> templates;
   final ValueChanged<ConstructionItemTemplate> onSelectTemplate;
   final VoidCallback onSelectCustom;
+  final bool allowCustom;
 
   static Future<void> show({
     required BuildContext context,
     required List<ConstructionItemTemplate> templates,
     required ValueChanged<ConstructionItemTemplate> onSelectTemplate,
     required VoidCallback onSelectCustom,
+    bool allowCustom = true,
   }) {
     return showModalBottomSheet<void>(
       context: context,
@@ -31,6 +34,7 @@ class ConstructionItemPickerSheet extends StatefulWidget {
           templates: templates,
           onSelectTemplate: onSelectTemplate,
           onSelectCustom: onSelectCustom,
+          allowCustom: allowCustom,
         ),
       ),
     );
@@ -145,6 +149,7 @@ class _ConstructionItemPickerSheetState
                     },
                   ),
           ),
+          if (widget.allowCustom) ...[
           const Divider(),
           Card(
             color: Colors.orange.shade50,
@@ -189,6 +194,7 @@ class _ConstructionItemPickerSheetState
               ),
             ),
           ),
+          ],
         ],
       ),
     );

@@ -21,10 +21,16 @@ export interface ConstructionItemTemplate {
 export interface AttributeFieldDefinition {
   id: string;
   label: string;
+  labelI18n?: Record<'en' | 'si' | 'ta', string>;
   type: 'string' | 'number' | 'select';
   required?: boolean;
+  priority?: 'REQUIRED' | 'RECOMMENDED' | 'OPTIONAL';
+  sellerField?: boolean;
+  buyerPreference?: boolean;
+  allowOther?: boolean;
   options?: string[];
   placeholder?: string;
+  helper?: string;
   unit?: string;
 }
 

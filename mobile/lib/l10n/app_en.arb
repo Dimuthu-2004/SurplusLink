@@ -1,0 +1,15 @@
+{
+  "@@locale": "en",
+  "appTitle": "SurplusLink",
+  "language": "Language",
+  "english": "English",
+  "sinhala": "Sinhala",
+  "tamil": "Tamil",
+  "createRequirement": "Create Requirement",
+  "whatDoYouNeed": "What do you need?",
+  "searchConstructionItems": "Search construction items...",
+  "category": "Category",
+  "preferencesOptional": "Preferences (optional)",
+  "saveDraft": "Save draft",
+  "validationSummary": "Please correct the highlighted fields."
+}

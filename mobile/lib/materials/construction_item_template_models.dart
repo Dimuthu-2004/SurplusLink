@@ -9,6 +9,11 @@ final class TemplateAttributeField {
     this.options = const [],
     this.placeholder,
     this.unit,
+    this.helper,
+    this.priority = 'OPTIONAL',
+    this.buyerPreference = false,
+    this.allowOther = false,
+    this.labelI18n = const {},
   });
 
   factory TemplateAttributeField.fromJson(Map<String, dynamic> json) {
@@ -22,6 +27,12 @@ final class TemplateAttributeField {
           .toList(),
       placeholder: json['placeholder'] as String?,
       unit: json['unit'] as String?,
+      helper: json['helper'] as String?,
+      priority: json['priority'] as String? ?? ((json['required'] as bool? ?? false) ? 'REQUIRED' : 'OPTIONAL'),
+      buyerPreference: json['buyerPreference'] as bool? ?? false,
+      allowOther: json['allowOther'] as bool? ?? false,
+      labelI18n: (json['labelI18n'] as Map<String, dynamic>? ?? const {})
+          .map((key, value) => MapEntry(key, value.toString())),
     );
   }
 
@@ -32,6 +43,13 @@ final class TemplateAttributeField {
   final List<String> options;
   final String? placeholder;
   final String? unit;
+  final String? helper;
+  final String priority;
+  final bool buyerPreference, allowOther;
+  final Map<String, String> labelI18n;
+
+  bool get isRequired => priority == 'REQUIRED' || required;
+  String labelFor(String languageCode) => labelI18n[languageCode] ?? labelI18n['en'] ?? label;
 }
 
 final class ConstructionItemTemplate {

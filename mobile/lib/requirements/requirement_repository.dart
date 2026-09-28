@@ -1,11 +1,12 @@
 import 'package:mobile/core/api_client.dart';
 import 'package:mobile/core/api_exception.dart';
 import 'package:mobile/categories/category_repository.dart';
+import 'package:mobile/materials/construction_item_template_models.dart';
 
 import 'requirement_gateway.dart';
 import 'requirement_models.dart';
 
-class RequirementRepository implements RequirementGateway {
+class RequirementRepository implements RequirementGateway, RequirementTemplateCatalogGateway {
   RequirementRepository(this._api, {this.onSessionExpired});
   final ApiClient _api;
   final Future<void> Function()? onSessionExpired;
@@ -25,6 +26,11 @@ class RequirementRepository implements RequirementGateway {
   @override
   Future<List<String>> activeUnits(String categoryId) =>
       _guard(() => CategoryRepository(_api).units(categoryId));
+  @override
+  Future<List<ConstructionItemTemplate>> itemTemplates() => _guard(() async {
+    final rows = await _api.getListJson('/api/construction-item-templates', authenticated: true);
+    return rows.map(ConstructionItemTemplate.fromJson).toList();
+  });
   @override
   Future<RequirementPage<BuyerRequirement>> my(RequirementQuery query) =>
       _guard(() async {

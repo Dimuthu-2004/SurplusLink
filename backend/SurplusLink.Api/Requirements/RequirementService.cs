@@ -18,9 +18,14 @@ public sealed class RequirementService(
 {
     public async Task<RequirementResponse> CreateAsync(Guid buyerId, SaveRequirementRequest input, CancellationToken ct)
     {
-        var category = await ValidateAsync(input, ct);
-        var request = new BuyerRequest { Id = Guid.NewGuid(), BuyerId = buyerId, Title = category.Name + " requirement" };
-        Apply(request, input);
+        var (category, template) = await ValidateAsync(input, ct);
+        var request = new BuyerRequest
+        {
+            Id = Guid.NewGuid(),
+            BuyerId = buyerId,
+            Title = (template?.Name ?? category.Name) + " requirement"
+        };
+        Apply(request, input, template?.CategoryId);
         db.BuyerRequests.Add(request);
         Audit(request, "CREATED");
         await db.SaveChangesAsync(ct);
@@ -29,7 +34,9 @@ public sealed class RequirementService(
 
     public async Task<RequirementResponse> GetAsync(Guid id, Guid actorId, bool manager, CancellationToken ct)
     {
-        var request = await db.BuyerRequests.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct)
+        var request = await db.BuyerRequests.AsNoTracking()
+            .Include(x => x.ConstructionItemTemplate)
+            .SingleOrDefaultAsync(x => x.Id == id, ct)
             ?? throw new RequirementException(404, "Requirement was not found.");
         if (!manager) Own(request, actorId);
         var workflow = await db.AgentWorkflows.AsNoTracking().Where(x => x.MaterialRequestId == id)
@@ -40,7 +47,7 @@ public sealed class RequirementService(
 
     public async Task<RequirementPage> ListAsync(Guid? buyerId, RequirementQuery input, CancellationToken ct)
     {
-        var query = db.BuyerRequests.AsNoTracking();
+        IQueryable<BuyerRequest> query = db.BuyerRequests.AsNoTracking().Include(x => x.ConstructionItemTemplate);
         if (buyerId.HasValue) query = query.Where(x => x.BuyerId == buyerId.Value);
         query = RequirementQueryBuilder.Filter(query, input);
         var total = await query.CountAsync(ct);
@@ -97,8 +104,8 @@ public sealed class RequirementService(
         var request = await LockOwnedAsync(id, buyerId, ct);
         if (request.Status is not (BuyerRequestStatus.DRAFT or BuyerRequestStatus.OPEN or BuyerRequestStatus.MATCH_FOUND))
             throw new RequirementException(409, "Only a non-approved draft, open, or match-found requirement can be edited.");
-        await ValidateAsync(input, ct);
-        Apply(request, input);
+        var (_, template) = await ValidateAsync(input, ct);
+        Apply(request, input, template?.CategoryId);
         if (request.Status != BuyerRequestStatus.DRAFT)
         {
             await InvalidateCandidatesAsync(request, ct);
@@ -474,17 +481,27 @@ public sealed class RequirementService(
         return request;
     }
 
-    private async Task<Category> ValidateAsync(SaveRequirementRequest input, CancellationToken ct)
+    private async Task<(Category Category, ConstructionItemTemplate? Template)> ValidateAsync(SaveRequirementRequest input, CancellationToken ct)
     {
         var errors = new List<ValidationResult>();
         if (!Validator.TryValidateObject(input, new ValidationContext(input), errors, true))
             throw new RequirementException(400, string.Join(" ", errors.Select(x => x.ErrorMessage)));
         FutureDeadline(input.Deadline!.Value.UtcDateTime);
-        var category = await db.Categories.SingleOrDefaultAsync(x => x.Id == input.CategoryId, ct)
+        var template = input.ConstructionItemTemplateId.HasValue
+            ? await db.ConstructionItemTemplates.SingleOrDefaultAsync(
+                x => x.Id == input.ConstructionItemTemplateId.Value && x.IsActive, ct)
+            : null;
+        if (input.ConstructionItemTemplateId.HasValue && template is null)
+            throw new RequirementException(400, "Select an active construction item.");
+
+        var effectiveCategoryId = template?.CategoryId ?? input.CategoryId;
+        var category = await db.Categories.SingleOrDefaultAsync(
+            x => x.Id == effectiveCategoryId, ct)
             ?? throw new RequirementException(400, "Category does not exist.");
-        if (!MaterialUnits.Distinct(category.AllowedUnits).Contains(MaterialUnits.Normalize(input.Unit)))
-            throw new RequirementException(400, "Select an allowed unit for this category.");
-        return category;
+        var allowedUnits = template?.AllowedUnits ?? category.AllowedUnits;
+        if (!MaterialUnits.Distinct(allowedUnits).Contains(MaterialUnits.Normalize(input.Unit)))
+            throw new RequirementException(400, "Select a valid unit for the chosen item.");
+        return (category, template);
     }
 
     private static void FutureDeadline(DateTime deadline)
@@ -505,10 +522,14 @@ public sealed class RequirementService(
             throw new RequirementException(409, $"This operation requires status {state}; current status is {request.Status}.");
     }
 
-    private static void Apply(BuyerRequest request, SaveRequirementRequest input)
+    private static void Apply(BuyerRequest request, SaveRequirementRequest input, Guid? templateCategoryId = null)
     {
-        request.CategoryId = input.CategoryId;
+        request.ConstructionItemTemplateId = input.ConstructionItemTemplateId;
+        request.CategoryId = templateCategoryId ?? input.CategoryId;
         request.Notes = input.Notes?.Trim() ?? string.Empty;
+        request.BuyerPreferencesJson = string.IsNullOrWhiteSpace(input.BuyerPreferencesJson)
+            ? null
+            : input.BuyerPreferencesJson.Trim();
         request.RequiredQuantity = input.RequiredQuantity;
         request.Unit = MaterialUnits.Normalize(input.Unit);
         request.MaximumBudget = input.MaximumBudget;

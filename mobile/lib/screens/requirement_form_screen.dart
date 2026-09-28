@@ -8,6 +8,10 @@ import 'package:mobile/requirements/requirement_location.dart';
 import 'package:mobile/requirements/requirement_models.dart';
 import 'package:mobile/requirements/requirement_widgets.dart';
 import 'package:mobile/widgets/location_picker.dart';
+import 'package:mobile/widgets/construction_item_picker.dart';
+import 'package:mobile/materials/construction_item_template_models.dart';
+import 'dart:convert';
+import 'package:mobile/l10n/app_localizations.dart';
 
 class RequirementFormScreen extends StatefulWidget {
   const RequirementFormScreen({
@@ -36,6 +40,9 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
   final _budget = TextEditingController();
   final _notes = TextEditingController();
   List<RequirementCategory> _categories = [];
+  List<ConstructionItemTemplate> _templates = [];
+  ConstructionItemTemplate? _selectedTemplate;
+  final Map<String, dynamic> _preferences = {};
   String? _category, _unit, _error, _locationError, _unitLoadError;
   double? _capturedLatitude, _capturedLongitude, _accuracy;
   DateTime _deadline = DateTime.now().add(const Duration(days: 7));
@@ -73,16 +80,31 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
       _error = null;
     });
     try {
-      final categories = await widget.gateway.categories();
+      final categoriesFuture = widget.gateway.categories();
+      final templatesFuture = widget.gateway is RequirementTemplateCatalogGateway
+          ? (widget.gateway as RequirementTemplateCatalogGateway).itemTemplates()
+          : Future.value(const <ConstructionItemTemplate>[]);
+      final categories = await categoriesFuture;
+      final templates = await templatesFuture;
       final row = _editing
           ? await widget.gateway.get(widget.requirementId!)
           : null;
       if (!mounted) return;
       setState(() {
         _categories = categories;
+        _templates = templates.where((item) => item.isActive).toList();
         if (row != null) {
           _editable = row.canEdit;
           _category = row.categoryId;
+          if (row.constructionItemTemplateId != null) {
+            _selectedTemplate = templates.where((item) => item.id == row.constructionItemTemplateId).firstOrNull;
+          }
+          if (row.buyerPreferencesJson != null) {
+            try {
+              final value = jsonDecode(row.buyerPreferencesJson!);
+              if (value is Map<String, dynamic>) _preferences.addAll(value);
+            } catch (_) {}
+          }
           _quantity.text = row.requiredQuantity.toString();
           _unit = row.unit;
           _budget.text = row.maximumBudget.toString();
@@ -105,9 +127,22 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
     } finally {
       if (mounted) setState(() => _loading = false);
     }
-    if (_category != null && _editable) {
+    if (_selectedTemplate != null && _editable) {
+      _useTemplate(_selectedTemplate!);
+    } else if (_category != null && _editable) {
       await _loadUnits(_category!, preferredUnit: _unit);
     }
+  }
+
+  void _useTemplate(ConstructionItemTemplate template) {
+    final units = template.allowedUnits.isEmpty ? [template.baseUnit] : template.allowedUnits;
+    setState(() {
+      _selectedTemplate = template;
+      _category = template.categoryId;
+      _units = units;
+      _unit = units.firstWhere((value) => value.toLowerCase() == template.baseUnit.toLowerCase(), orElse: () => units.first);
+      _unitLoadError = null;
+    });
   }
 
   Future<void> _onCategoryChanged(String? categoryId) async {
@@ -259,6 +294,10 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
       setState(() => _error = 'Deadline must be in the future.');
       return;
     }
+    if (_category == null || (_templates.isNotEmpty && _selectedTemplate == null)) {
+      setState(() => _error = 'Choose the construction item you need.');
+      return;
+    }
     if (_capturedLatitude == null || _capturedLongitude == null) {
       setState(() => _locationError = 'Choose a delivery location on the map before saving.');
       return;
@@ -277,6 +316,8 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
         latitude: _capturedLatitude!,
         longitude: _capturedLongitude!,
         notes: _notes.text,
+        constructionItemTemplateId: _selectedTemplate?.id,
+        buyerPreferencesJson: _preferences.isEmpty ? null : jsonEncode(_preferences),
       );
       final row = _editing
           ? await widget.gateway.update(widget.requirementId!, draft)
@@ -295,9 +336,11 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
+  Widget build(BuildContext context) {
+    final text = AppLocalizations.of(context);
+    return Scaffold(
     appBar: AppBar(
-      title: Text(_editing ? 'Edit Requirement' : 'Create Requirement'),
+      title: Text(_editing ? 'Edit Requirement' : text?.createRequirement ?? 'Create Requirement'),
       leading: const RequirementBackButton(),
     ),
     body: _loading
@@ -334,12 +377,38 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
                       'Save your requirement as a draft, then review and submit it.',
                     ),
                     const SizedBox(height: 16),
-                    CategoryDropdown(
-                      key: const Key('requirement-category'),
-                      categories: _categories,
-                      value: _category,
-                      onChanged: _saving ? null : _onCategoryChanged,
-                    ),
+                    if (_templates.isNotEmpty) ...[
+                      Text(text?.whatDoYouNeed ?? 'What do you need?', style: Theme.of(context).textTheme.titleMedium),
+                      const SizedBox(height: 6),
+                      OutlinedButton.icon(
+                        key: const Key('requirement-item-picker'),
+                        icon: const Icon(Icons.search),
+                        label: Text(_selectedTemplate?.name ?? text?.searchConstructionItems ?? 'Search construction items...'),
+                        onPressed: _saving ? null : () => ConstructionItemPickerSheet.show(
+                          context: context,
+                          templates: _templates,
+                          onSelectTemplate: _useTemplate,
+                          // Buyers must request a catalog item; custom seller stock stays seller-only.
+                          onSelectCustom: () {},
+                          allowCustom: false,
+                        ),
+                      ),
+                      if (_selectedTemplate != null) ...[
+                        const SizedBox(height: 8),
+                        InputDecorator(
+                          decoration: InputDecoration(labelText: text?.category ?? 'Category'),
+                          child: Text(_selectedTemplate!.categoryName),
+                        ),
+                        const SizedBox(height: 8),
+                        Text('${_selectedTemplate!.packageType == null ? 'Sold per' : 'Sold in'} ${_selectedTemplate!.packageType ?? _selectedTemplate!.baseUnit}', style: Theme.of(context).textTheme.bodySmall),
+                      ],
+                    ] else
+                      CategoryDropdown(
+                        key: const Key('requirement-category'),
+                        categories: _categories,
+                        value: _category,
+                        onChanged: _saving ? null : _onCategoryChanged,
+                      ),
                     const SizedBox(height: 16),
                     _field(
                       _quantity,
@@ -349,6 +418,36 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
                       numeric: true,
                     ),
                     _unitField(),
+                    if (_selectedTemplate != null && _selectedTemplate!.parsedAttributes.where((field) => field.buyerPreference).isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(text?.preferencesOptional ?? 'Preferences (optional)', style: Theme.of(context).textTheme.titleMedium),
+                      const Text('Leave blank when any option is suitable.'),
+                      const SizedBox(height: 8),
+                      for (final field in _selectedTemplate!.parsedAttributes.where((field) => field.buyerPreference))
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: field.type == 'select'
+                              ? DropdownButtonFormField<String>(
+                                  initialValue: _preferences[field.id] as String?,
+                                  isExpanded: true,
+                                  decoration: InputDecoration(labelText: field.labelFor(Localizations.localeOf(context).languageCode), helperText: field.helper),
+                                  hint: const Text('Any / No preference'),
+                                  items: field.options.map((option) => DropdownMenuItem(value: option, child: Text(option))).toList(),
+                                  onChanged: _saving ? null : (value) => setState(() { if (value == null) { _preferences.remove(field.id); } else { _preferences[field.id] = value; } }),
+                                )
+                              : TextFormField(
+                                  initialValue: _preferences[field.id]?.toString(),
+                                  decoration: InputDecoration(labelText: field.labelFor(Localizations.localeOf(context).languageCode), helperText: field.helper ?? field.placeholder),
+                                  onChanged: (value) => setState(() {
+                                    if (value.trim().isEmpty) {
+                                      _preferences.remove(field.id);
+                                    } else {
+                                      _preferences[field.id] = value;
+                                    }
+                                  }),
+                                ),
+                        ),
+                    ],
                     _field(
                       _budget,
                       'Maximum budget (LKR)',
@@ -418,7 +517,7 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
                             ? 'Saving…'
                             : _editing
                             ? 'Save changes'
-                            : 'Save draft',
+                            : text?.saveDraft ?? 'Save draft',
                       ),
                     ),
                     const SizedBox(height: 24),
@@ -428,6 +527,7 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
             ),
           ),
   );
+  }
 
   Widget _unitField() => Padding(
     padding: const EdgeInsets.only(bottom: 16),
@@ -451,6 +551,11 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
               ],
             ),
           )
+        : _units.length == 1 && _selectedTemplate != null
+        ? InputDecorator(
+            decoration: const InputDecoration(labelText: 'Unit'),
+            child: Text(_unit ?? _units.single),
+          )
         : DropdownButtonFormField<String>(
             key: const Key('requirement-unit'),
             initialValue: _units.contains(_unit) ? _unit : null,
@@ -458,7 +563,7 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
             decoration: const InputDecoration(labelText: 'Unit'),
             hint: Text(
               _category == null
-                  ? 'Choose a category first'
+                  ? 'Choose an item first'
                   : _units.isEmpty
                   ? 'No available units for this category'
                   : 'Choose a unit',

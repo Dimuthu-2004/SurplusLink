@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { ConstructionItemTemplate } from '../api/constructionItemTemplatesApi';
+import { useLanguage } from '../i18n/LanguageContext';
 
 interface ConstructionItemPickerProps {
   templates: ConstructionItemTemplate[];
@@ -26,6 +27,7 @@ export function ConstructionItemPicker({
   onSelectCustom,
   isCustomSelected = false,
 }: ConstructionItemPickerProps) {
+  const { t } = useLanguage();
   const [search, setSearch] = useState('');
   const [itemClass, setItemClass] = useState('ALL');
   const query = search.trim().toLowerCase();
@@ -37,12 +39,12 @@ export function ConstructionItemPicker({
 
   return (
     <section aria-label="Construction item selection" style={{ display: 'grid', gap: '1rem' }}>
-      <h2>What are you listing?</h2>
+      <h2>{t('listing')}</h2>
       <label className="catalog-field">
-        Search construction items
+        {t('searchItems')}
         <input
           type="search"
-          placeholder="Search items: Paint, Generator, Cement, Pipes..."
+          placeholder={t('searchItems')}
           value={search}
           onChange={event => setSearch(event.target.value)}
         />

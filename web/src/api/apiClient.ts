@@ -94,6 +94,17 @@ export function normalizeApiError(error: unknown): ApiError {
 }
 
 function parseValidationErrors(value: unknown): Record<string, string[]> {
+  if (Array.isArray(value)) {
+    return Object.fromEntries(value.flatMap((item) => {
+      if (!item || typeof item !== 'object') return [];
+      const record = item as Record<string, unknown>;
+      const field = stringValue(record.field) ?? stringValue(record.property);
+      if (!field) return [];
+      const code = stringValue(record.code);
+      const message = stringValue(record.message) ?? friendlyValidationMessage(code, field);
+      return [[field, [message]]];
+    }));
+  }
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return {};
   }
@@ -104,6 +115,15 @@ function parseValidationErrors(value: unknown): Record<string, string[]> {
         : [],
     ),
   );
+}
+
+function friendlyValidationMessage(code: string | undefined, field: string): string {
+  const messages: Record<string, string> = {
+    PRICE_REQUIRED: 'Enter the price for this item.',
+    LOCATION_REQUIRED: 'Enter the pickup or delivery location.',
+    QUANTITY_REQUIRED: 'Enter the quantity currently available or needed.',
+  };
+  return code ? (messages[code] ?? `Check ${field}.`) : `Check ${field}.`;
 }
 
 function stringValue(value: unknown): string | undefined {
