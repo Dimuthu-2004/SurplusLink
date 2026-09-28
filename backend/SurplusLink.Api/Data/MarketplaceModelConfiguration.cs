@@ -12,6 +12,7 @@ public static class MarketplaceModelConfiguration
 
         ConfigureUser(modelBuilder);
         ConfigureCategory(modelBuilder);
+        ConfigureConstructionItemTemplate(modelBuilder);
         ConfigureListing(modelBuilder);
         ConfigureListingPhoto(modelBuilder);
         ConfigureBuyerRequest(modelBuilder);
@@ -98,14 +99,41 @@ public static class MarketplaceModelConfiguration
             entity.Property(category => category.Name).HasColumnType("citext").HasMaxLength(120).IsRequired();
             entity.HasIndex(category => category.Name).IsUnique().HasDatabaseName("UX_Categories_Name");
 
-            var seedTimestamp = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-            entity.HasData(
-                SeedCategory("00000000-0000-0000-0000-000000000101", "Cement", seedTimestamp),
-                SeedCategory("00000000-0000-0000-0000-000000000102", "Steel", seedTimestamp),
-                SeedCategory("00000000-0000-0000-0000-000000000103", "Timber", seedTimestamp),
-                SeedCategory("00000000-0000-0000-0000-000000000104", "Bricks", seedTimestamp),
-                SeedCategory("00000000-0000-0000-0000-000000000105", "Aggregates", seedTimestamp),
-                SeedCategory("00000000-0000-0000-0000-000000000106", "Tiles", seedTimestamp));
+            entity.HasData(ConstructionItemTemplateCatalogSeed.GetCategories());
+        });
+    }
+
+    private static void ConfigureConstructionItemTemplate(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<ConstructionItemTemplate>(entity =>
+        {
+            entity.ToTable("ConstructionItemTemplates");
+            entity.HasKey(item => item.Id).HasName("PK_ConstructionItemTemplates");
+            entity.Property(item => item.Name).HasMaxLength(160).IsRequired();
+            entity.Property(item => item.ItemClass).HasMaxLength(40).IsRequired();
+            entity.Property(item => item.QuantityMode).HasMaxLength(40).IsRequired();
+            entity.Property(item => item.BaseUnit).HasMaxLength(32).IsRequired();
+            entity.Property(item => item.PackageType).HasMaxLength(32);
+            entity.Property(item => item.AllowedUnits).HasColumnType("text[]").HasDefaultValueSql("ARRAY[]::text[]").IsRequired();
+            entity.Property(item => item.AllowedPackageSizes).HasColumnType("numeric[]").HasDefaultValueSql("ARRAY[]::numeric[]").IsRequired();
+            entity.Property(item => item.AttributeSchema).HasColumnType("text").IsRequired();
+            entity.Property(item => item.PriceBasis).HasMaxLength(40).HasDefaultValue("PER_UNIT").IsRequired();
+            entity.Property(item => item.IsActive).HasDefaultValue(true).IsRequired();
+            entity.Property(item => item.CreatedAtUtc).HasColumnType("timestamp with time zone");
+            entity.Property(item => item.UpdatedAtUtc).HasColumnType("timestamp with time zone");
+
+            entity.HasOne(item => item.Category)
+                .WithMany()
+                .HasForeignKey(item => item.CategoryId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("FK_ConstructionItemTemplates_Categories_CategoryId");
+
+            entity.HasIndex(item => item.Name).HasDatabaseName("IX_ConstructionItemTemplates_Name");
+            entity.HasIndex(item => item.CategoryId).HasDatabaseName("IX_ConstructionItemTemplates_CategoryId");
+            entity.HasIndex(item => item.ItemClass).HasDatabaseName("IX_ConstructionItemTemplates_ItemClass");
+            entity.HasIndex(item => item.IsActive).HasDatabaseName("IX_ConstructionItemTemplates_IsActive");
+
+            entity.HasData(ConstructionItemTemplateCatalogSeed.GetTemplates());
         });
     }
 
@@ -145,11 +173,14 @@ public static class MarketplaceModelConfiguration
             entity.Property(listing => listing.AvailableUntil).HasColumnType("timestamp with time zone");
             entity.Property(listing => listing.Status).HasConversion<string>().HasMaxLength(24).IsRequired();
             entity.Property(listing => listing.Version).IsRowVersion();
+            entity.Property(listing => listing.SpecificationsJson).HasColumnType("text");
+            entity.Property(listing => listing.IsCustomPendingReview).HasDefaultValue(false);
             entity.HasIndex(listing => listing.Status).HasDatabaseName("IX_Listings_Status");
             entity.HasIndex(listing => new { listing.Status, listing.AvailableUntil })
                 .HasDatabaseName("IX_Listings_Status_AvailableUntil");
             entity.HasIndex(listing => listing.CategoryId).HasDatabaseName("IX_Listings_CategoryId");
             entity.HasIndex(listing => listing.SellerId).HasDatabaseName("IX_Listings_SellerId");
+            entity.HasIndex(listing => listing.ConstructionItemTemplateId).HasDatabaseName("IX_Listings_ConstructionItemTemplateId");
             entity.HasIndex(listing => new { listing.Latitude, listing.Longitude })
                 .HasDatabaseName("IX_Listings_Latitude_Longitude");
             entity.HasOne(listing => listing.Category)
@@ -162,6 +193,11 @@ public static class MarketplaceModelConfiguration
                 .HasForeignKey(listing => listing.SellerId)
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("FK_Listings_Users_SellerId");
+            entity.HasOne(listing => listing.ConstructionItemTemplate)
+                .WithMany()
+                .HasForeignKey(listing => listing.ConstructionItemTemplateId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("FK_Listings_ConstructionItemTemplates_ConstructionItemTemplateId");
         });
     }
 

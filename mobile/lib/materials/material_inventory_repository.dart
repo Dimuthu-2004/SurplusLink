@@ -3,6 +3,7 @@ import 'package:mobile/categories/category_repository.dart';
 import 'package:mobile/categories/material_category.dart';
 import 'package:mobile/materials/material_inventory_gateway.dart';
 import 'package:mobile/materials/material_models.dart';
+import 'package:mobile/materials/construction_item_template_models.dart';
 
 final class MaterialInventoryRepository implements MaterialInventoryGateway {
   MaterialInventoryRepository(this._apiClient);
@@ -21,6 +22,29 @@ final class MaterialInventoryRepository implements MaterialInventoryGateway {
   @override
   Future<List<String>> categoryUnits(String categoryId) =>
       CategoryRepository(_apiClient).units(categoryId);
+
+  @override
+  Future<List<ConstructionItemTemplate>> itemTemplates({
+    String? search,
+    String? categoryId,
+    String? itemClass,
+  }) async {
+    final queryParams = <String, String>{};
+    if (search != null && search.trim().isNotEmpty) queryParams['search'] = search.trim();
+    if (categoryId != null && categoryId.trim().isNotEmpty) queryParams['categoryId'] = categoryId.trim();
+    if (itemClass != null && itemClass.trim().isNotEmpty) queryParams['itemClass'] = itemClass.trim();
+
+    final path = Uri(
+      path: '/api/construction-item-templates',
+      queryParameters: queryParams.isEmpty ? null : queryParams,
+    ).toString();
+
+    final json = await _apiClient.getListJson(path, authenticated: true);
+    return json
+        .whereType<Map<String, dynamic>>()
+        .map(ConstructionItemTemplate.fromJson)
+        .toList();
+  }
 
   @override
   Future<MaterialListingPage> search(MaterialListingQuery query) async {

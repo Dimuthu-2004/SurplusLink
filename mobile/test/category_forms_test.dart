@@ -17,6 +17,7 @@ import 'package:mobile/core/api_client.dart';
 import 'package:mobile/core/api_exception.dart';
 import 'package:mobile/materials/material_inventory_gateway.dart';
 import 'package:mobile/materials/material_inventory_repository.dart';
+import 'package:mobile/materials/construction_item_template_models.dart';
 import 'package:mobile/requirements/requirement_location.dart';
 import 'package:mobile/materials/material_models.dart';
 import 'package:mobile/requirements/requirement_repository.dart';
@@ -488,11 +489,19 @@ Future<void> pumpForm(
 class FakeCategoryMaterials implements MaterialInventoryGateway {
   List<MaterialCategory> items = categoryOptions;
   List<String> units = ['kg'];
+  List<ConstructionItemTemplate> templates = [];
   @override
   Future<List<String>> categoryUnits(String categoryId) async {
     if (unitError != null) throw unitError!;
     return units;
   }
+
+  @override
+  Future<List<ConstructionItemTemplate>> itemTemplates({
+    String? search,
+    String? categoryId,
+    String? itemClass,
+  }) async => templates;
 
   Object? unitError;
   Completer<List<MaterialCategory>>? pending;

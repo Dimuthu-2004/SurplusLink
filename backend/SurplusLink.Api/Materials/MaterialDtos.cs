@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 
 namespace SurplusLink.Api.Materials;
 
@@ -44,6 +44,10 @@ public class CreateMaterialListingRequest
 
     [MaxLength(10)]
     public IReadOnlyList<ListingPhotoRequest> Photos { get; init; } = Array.Empty<ListingPhotoRequest>();
+
+    public Guid? ConstructionItemTemplateId { get; init; }
+    public string? SpecificationsJson { get; init; }
+    public bool IsCustomPendingReview { get; init; }
 }
 
 public sealed class UpdateMaterialListingRequest : CreateMaterialListingRequest;
@@ -91,7 +95,11 @@ public sealed record MaterialListingResponse(
     DateTime CreatedAtUtc,
     DateTime UpdatedAtUtc,
     IReadOnlyList<ListingPhotoResponse> Photos,
-    SellerContactResponse? Seller = null);
+    SellerContactResponse? Seller = null,
+    Guid? ConstructionItemTemplateId = null,
+    string? ConstructionItemTemplateName = null,
+    string? SpecificationsJson = null,
+    bool IsCustomPendingReview = false);
 
 public sealed class MaterialCategoryRequest
 {

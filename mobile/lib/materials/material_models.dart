@@ -43,6 +43,9 @@ final class MaterialListing {
     this.packageCount,
     this.reservedPackageCount = 0,
     this.seller,
+    this.constructionItemTemplateId,
+    this.specificationsJson,
+    this.isCustomPendingReview = false,
   });
 
   factory MaterialListing.fromJson(Map<String, dynamic> json) =>
@@ -80,6 +83,9 @@ final class MaterialListing {
         packageSize: _nullableNumber(json['packageSize']),
         packageCount: _nullableNumber(json['packageCount'])?.toInt(),
         reservedPackageCount: (_nullableNumber(json['reservedPackageCount']) ?? 0).toInt(),
+        constructionItemTemplateId: json['constructionItemTemplateId'] as String?,
+        specificationsJson: json['specificationsJson'] as String?,
+        isCustomPendingReview: json['isCustomPendingReview'] as bool? ?? false,
       );
 
   final String id;
@@ -96,6 +102,9 @@ final class MaterialListing {
   final double? packageSize;
   final int? packageCount;
   final int reservedPackageCount;
+  final String? constructionItemTemplateId;
+  final String? specificationsJson;
+  final bool isCustomPendingReview;
   final String unit;
   final String condition;
   final double unitPrice;
@@ -234,6 +243,9 @@ final class MaterialListingDraft {
     required this.photoUrls,
     this.latitude,
     this.longitude,
+    this.constructionItemTemplateId,
+    this.specificationsJson,
+    this.isCustomPendingReview = false,
   });
 
   final String categoryId;
@@ -243,6 +255,9 @@ final class MaterialListingDraft {
   final String? quantityMode, baseUnit, packageType;
   final double? packageSize;
   final int? packageCount;
+  final String? constructionItemTemplateId;
+  final String? specificationsJson;
+  final bool isCustomPendingReview;
   final String unit;
   final String condition;
   final double unitPrice;
@@ -261,6 +276,9 @@ final class MaterialListingDraft {
     if (packageType != null) 'packageType': packageType,
     if (packageSize != null) 'packageSize': packageSize,
     if (packageCount != null) 'packageCount': packageCount,
+    if (constructionItemTemplateId != null) 'constructionItemTemplateId': constructionItemTemplateId,
+    if (specificationsJson != null) 'specificationsJson': specificationsJson,
+    'isCustomPendingReview': isCustomPendingReview,
     'unit': unit.trim(),
     'condition': condition,
     'unitPrice': unitPrice,

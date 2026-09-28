@@ -1,4 +1,4 @@
-﻿namespace SurplusLink.Api.Models;
+namespace SurplusLink.Api.Models;
 
 public sealed class Listing : AuditableEntity
 {
@@ -40,6 +40,14 @@ public sealed class Listing : AuditableEntity
     public ListingStatus Status { get; set; }
 
     public uint Version { get; set; }
+
+    public Guid? ConstructionItemTemplateId { get; set; }
+
+    public ConstructionItemTemplate? ConstructionItemTemplate { get; set; }
+
+    public string? SpecificationsJson { get; set; }
+
+    public bool IsCustomPendingReview { get; set; }
 
     public User Seller { get; set; } = null!;
 

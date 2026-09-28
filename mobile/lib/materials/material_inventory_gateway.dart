@@ -1,9 +1,15 @@
 import 'package:mobile/materials/material_models.dart';
 import 'package:mobile/categories/material_category.dart';
+import 'package:mobile/materials/construction_item_template_models.dart';
 
 abstract interface class MaterialInventoryGateway {
   Future<List<MaterialCategory>> categories();
   Future<List<String>> categoryUnits(String categoryId);
+  Future<List<ConstructionItemTemplate>> itemTemplates({
+    String? search,
+    String? categoryId,
+    String? itemClass,
+  });
   Future<String> uploadPhoto(List<int> bytes);
   String photoUrl(String path);
   Future<MaterialListingPage> search(MaterialListingQuery query);

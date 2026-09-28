@@ -156,7 +156,9 @@ describe('authentication navigation', () => {
     await visitor.type(screen.getByLabelText('Verification code'), '123456');
     expect(screen.getByRole('button', { name: /Verify email/ })).toBeEnabled();
     await visitor.click(screen.getByRole('button', { name: /Verify email/ }));
-    expect(await screen.findByRole('heading', { name: 'Welcome back' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Email verified successfully' })).toBeInTheDocument();
+    // The success message stays visible for 1.2 seconds before returning to sign-in.
+    expect(await screen.findByRole('heading', { name: 'Welcome back' }, { timeout: 2500 })).toBeInTheDocument();
     expect(storage.read()).toBeNull();
   });
 

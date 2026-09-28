@@ -1,5 +1,6 @@
 import 'package:mobile/widgets/dashboard_back_button.dart';
 
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:mobile/categories/category_dropdown.dart';
@@ -15,6 +16,8 @@ import 'package:mobile/widgets/location_card.dart';
 import 'package:mobile/core/api_exception.dart';
 import 'package:mobile/materials/material_inventory_gateway.dart';
 import 'package:mobile/materials/material_models.dart';
+import 'package:mobile/materials/construction_item_template_models.dart';
+import 'package:mobile/widgets/construction_item_picker.dart';
 import 'package:mobile/widgets/location_picker.dart';
 
 class MaterialListingFormScreen extends StatefulWidget {
@@ -47,6 +50,11 @@ class MaterialListingFormScreen extends StatefulWidget {
 class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
   final _formKey = GlobalKey<FormState>();
   List<MaterialCategory> _categories = [];
+  List<ConstructionItemTemplate> _templates = [];
+  ConstructionItemTemplate? _selectedTemplate;
+  bool _isCustom = false;
+  String _customSaleType = 'PIECE';
+  final Map<String, dynamic> _specs = {};
   String? _category;
   bool _loadFailed = false;
   final _titleController = TextEditingController();
@@ -55,7 +63,7 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
   final _packageSizeController = TextEditingController();
   final _packageCountController = TextEditingController();
   String _quantityMode = 'CONTINUOUS';
-  String _packageType = 'CAN';
+  String _packageType = 'can';
   String? _unit;
   final _priceController = TextEditingController();
   final _addressController = TextEditingController();
@@ -98,9 +106,16 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
       _error = null;
     });
     try {
-      final categories = await widget.gateway.categories();
+      final categoriesFuture = widget.gateway.categories();
+      final templatesFuture = widget.gateway.itemTemplates();
+      final results = await Future.wait([categoriesFuture, templatesFuture]);
       if (!mounted) return;
-      setState(() => _categories = categories);
+      final loadedCategories = results[0] as List<MaterialCategory>;
+      final loadedTemplates = results[1] as List<ConstructionItemTemplate>;
+      setState(() {
+        _categories = loadedCategories;
+        _templates = loadedTemplates;
+      });
       if (!widget.isEditing) return;
       final listing = await widget.gateway.getById(widget.listingId!);
       if (!mounted) return;
@@ -111,7 +126,26 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
         });
         return;
       }
+      ConstructionItemTemplate? foundTemplate;
+      if (listing.constructionItemTemplateId != null) {
+        try {
+          foundTemplate = loadedTemplates.firstWhere((t) => t.id == listing.constructionItemTemplateId);
+        } catch (_) {}
+      }
+      Map<String, dynamic> loadedSpecs = {};
+      if (listing.specificationsJson != null && listing.specificationsJson!.isNotEmpty) {
+        try {
+          final decoded = jsonDecode(listing.specificationsJson!);
+          if (decoded is Map<String, dynamic>) {
+            loadedSpecs = decoded;
+          }
+        } catch (_) {}
+      }
       setState(() {
+        _selectedTemplate = foundTemplate;
+        _isCustom = listing.isCustomPendingReview || foundTemplate == null;
+        _specs.clear();
+        _specs.addAll(loadedSpecs);
         _category = listing.categoryId;
         _titleController.text = listing.title;
         _descriptionController.text = listing.description;
@@ -120,7 +154,8 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
             : listing.quantity.toString();
         _unit = listing.unit;
         _quantityMode = listing.quantityMode == 'LEGACY' ? 'CONTINUOUS' : listing.quantityMode;
-        _packageType = listing.packageType ?? 'CAN';
+        _customSaleType = _quantityMode == 'CONTINUOUS' ? 'CONTINUOUS' : (_quantityMode == 'PACKAGE' ? 'PACKAGE' : 'PIECE');
+        _packageType = listing.packageType ?? 'can';
         _packageSizeController.text = listing.packageSize?.toString() ?? '';
         _packageCountController.text = listing.packageCount?.toString() ?? '';
         _priceController.text = listing.unitPrice.toString();
@@ -290,11 +325,57 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
     }
   }
 
+  void _onSelectTemplate(ConstructionItemTemplate template) {
+    setState(() {
+      _selectedTemplate = template;
+      _isCustom = false;
+      _category = template.categoryId;
+      _titleController.text = template.name;
+      _unit = template.baseUnit;
+      _specs.clear();
+      if (template.isPackage) {
+        _quantityMode = 'PACKAGE';
+        _packageType = template.packageType ?? 'can';
+        if (template.allowedPackageSizes.isNotEmpty) {
+          _packageSizeController.text = template.allowedPackageSizes.first.toString();
+        } else {
+          _packageSizeController.text = '1';
+        }
+        _packageCountController.text = '1';
+        _quantityController.text = _packageSizeController.text;
+      } else if (template.isPiece) {
+        _quantityMode = 'PIECE';
+        _packageSizeController.text = '1';
+        _packageCountController.text = '1';
+        _quantityController.text = '1';
+      } else {
+        _quantityMode = 'CONTINUOUS';
+        _packageSizeController.clear();
+        _packageCountController.clear();
+        _quantityController.text = '1';
+      }
+    });
+  }
+
+  void _onSelectCustom() {
+    setState(() {
+      _selectedTemplate = null;
+      _isCustom = true;
+      _specs.clear();
+      _category ??= _categories.isNotEmpty ? _categories.first.id : null;
+      _quantityMode = _customSaleType;
+    });
+  }
+
   Future<void> _save() async {
     if (_isSaving ||
         _mediaBusy ||
         _locating ||
         !_formKey.currentState!.validate()) {
+      return;
+    }
+    if (_category == null || _category!.isEmpty) {
+      _showMessage('Please select a material category.');
       return;
     }
     if (!_availableUntil.isAfter(DateTime.now())) {
@@ -309,21 +390,60 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
       for (final photo in _selectedPhotos) {
         photo.uploadedUrl ??= await widget.gateway.uploadPhoto(photo.bytes);
       }
+
+      final isPkg = _selectedTemplate?.isPackage == true || (_isCustom && _customSaleType == 'PACKAGE') || _quantityMode == 'PACKAGE';
+      final isPc = _selectedTemplate?.isPiece == true || (_isCustom && _customSaleType == 'PIECE') || _quantityMode == 'PIECE';
+
+      final double computedQuantity;
+      final String effectiveQuantityMode;
+      final double? computedPackageSize;
+      final int? computedPackageCount;
+      final String? computedPackageType;
+      final double computedUnitPrice;
+
+      if (isPkg) {
+        effectiveQuantityMode = 'PACKAGE';
+        final size = double.tryParse(_packageSizeController.text.trim()) ?? 1.0;
+        final count = int.tryParse(_packageCountController.text.trim()) ?? 1;
+        computedPackageSize = size;
+        computedPackageCount = count;
+        computedQuantity = size * count;
+        computedPackageType = _selectedTemplate?.packageType ?? _packageType;
+        final enteredPrice = double.tryParse(_priceController.text.trim()) ?? 0.0;
+        computedUnitPrice = size > 0 ? enteredPrice / size : enteredPrice;
+      } else if (isPc) {
+        effectiveQuantityMode = 'PIECE';
+        final count = int.tryParse(_quantityController.text.trim()) ?? (int.tryParse(_packageCountController.text.trim()) ?? 1);
+        computedPackageSize = 1;
+        computedPackageCount = count;
+        computedQuantity = count.toDouble();
+        computedPackageType = null;
+        computedUnitPrice = double.tryParse(_priceController.text.trim()) ?? 0.0;
+      } else {
+        effectiveQuantityMode = 'CONTINUOUS';
+        computedQuantity = double.tryParse(_quantityController.text.trim()) ?? 1.0;
+        computedPackageSize = null;
+        computedPackageCount = null;
+        computedPackageType = null;
+        computedUnitPrice = double.tryParse(_priceController.text.trim()) ?? 0.0;
+      }
+
       final draft = MaterialListingDraft(
         categoryId: _category!,
         title: _titleController.text,
         description: _descriptionController.text,
-        quantity: _quantityMode == 'PACKAGE' || _quantityMode == 'PIECE'
-            ? double.parse(_packageSizeController.text.trim()) * int.parse(_packageCountController.text.trim())
-            : double.parse(_quantityController.text.trim()),
-        unit: _unit!,
-        quantityMode: _quantityMode,
-        baseUnit: _unit,
-        packageType: _quantityMode == 'CONTINUOUS' ? null : _packageType,
-        packageSize: _quantityMode == 'CONTINUOUS' ? null : double.parse(_packageSizeController.text.trim()),
-        packageCount: _quantityMode == 'CONTINUOUS' ? null : int.parse(_packageCountController.text.trim()),
+        quantity: computedQuantity,
+        unit: _unit ?? _selectedTemplate?.baseUnit ?? 'unit',
+        quantityMode: effectiveQuantityMode,
+        baseUnit: _unit ?? _selectedTemplate?.baseUnit,
+        packageType: computedPackageType,
+        packageSize: computedPackageSize,
+        packageCount: computedPackageCount,
+        constructionItemTemplateId: _selectedTemplate?.id,
+        specificationsJson: _specs.isNotEmpty ? jsonEncode(_specs) : null,
+        isCustomPendingReview: _isCustom,
         condition: _condition,
-        unitPrice: double.parse(_priceController.text.trim()),
+        unitPrice: computedUnitPrice,
         latitude: _latitude,
         longitude: _longitude,
         availableUntil: _availableUntil,
@@ -358,8 +478,10 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
   String _packageTotalSummary() {
     final size = double.tryParse(_packageSizeController.text.trim());
     final count = int.tryParse(_packageCountController.text.trim());
-    if (size == null || count == null) return 'Total material quantity: —';
-    return 'Total material quantity: ${size * count} ${_unit ?? ''}'.trim();
+    if (size == null || count == null) return 'Total sellable stock: —';
+    final unitLabel = _unit ?? _selectedTemplate?.baseUnit ?? '';
+    final pkgLabel = _selectedTemplate?.packageType ?? 'package';
+    return 'Total sellable stock: ${size * count} $unitLabel ($count ${pkgLabel}s × $size $unitLabel)'.trim();
   }
 
   String? _wholePackageCount(String? value) {
@@ -408,18 +530,100 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                     _InlineError(message: _error!),
                     const SizedBox(height: 12),
                   ],
-                  CategoryDropdown(
-                    key: const Key('material-category'),
-                    categories: _categories,
-                    value: _category,
-                    onChanged: _isSaving
-                        ? null
-                        : (value) => setState(() {
-                            _category = value;
-                            _unit = null;
-                          }),
+                  // 1. "What are you listing?" Picker Card
+                  Card(
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: BorderSide(
+                        color: _selectedTemplate != null
+                            ? Colors.green.shade200
+                            : (_isCustom ? Colors.orange.shade200 : Colors.grey.shade300),
+                      ),
+                    ),
+                    color: _selectedTemplate != null
+                        ? Colors.green.shade50
+                        : (_isCustom ? Colors.orange.shade50 : Colors.grey.shade50),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                _selectedTemplate != null
+                                    ? 'Item: ${_selectedTemplate!.name}'
+                                    : (_isCustom ? 'Custom Construction Item' : 'What are you listing?'),
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                              ),
+                              TextButton.icon(
+                                key: const Key('choose-construction-item-button'),
+                                icon: const Icon(Icons.search, size: 16),
+                                label: Text(_selectedTemplate != null || _isCustom ? 'Change' : 'Choose Item'),
+                                onPressed: _isSaving ? null : () => ConstructionItemPickerSheet.show(
+                                  context: context,
+                                  templates: _templates,
+                                  onSelectTemplate: _onSelectTemplate,
+                                  onSelectCustom: _onSelectCustom,
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (_selectedTemplate != null)
+                            Text(
+                              '${_selectedTemplate!.categoryName} • ${_selectedTemplate!.isPackage ? "Sold in ${_selectedTemplate!.packageType ?? 'packages'} (${_selectedTemplate!.baseUnit})" : (_selectedTemplate!.isPiece ? "Sold per piece/unit" : "Sold in bulk (${_selectedTemplate!.baseUnit})")}',
+                              style: TextStyle(fontSize: 12, color: Colors.grey.shade800),
+                            ),
+                          if (_isCustom)
+                            Text(
+                              'Flagged for manager review upon submission.',
+                              style: TextStyle(fontSize: 12, color: Colors.orange.shade900),
+                            ),
+                        ],
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 12),
+
+                  // If custom item or no template chosen, show CategoryDropdown
+                  if (_isCustom || _selectedTemplate == null) ...[
+                    CategoryDropdown(
+                      key: const Key('material-category'),
+                      categories: _categories,
+                      value: _category,
+                      onChanged: _isSaving
+                          ? null
+                          : (value) => setState(() {
+                              _category = value;
+                              _unit = null;
+                            }),
+                    ),
+                    const SizedBox(height: 12),
+                    // If custom, allow selecting friendly sale type
+                    if (_isCustom) ...[
+                      const Text('How is this item sold?', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                      const SizedBox(height: 6),
+                      SegmentedButton<String>(
+                        key: const Key('custom-sale-type-toggle'),
+                        segments: const [
+                          ButtonSegment(value: 'PIECE', label: Text('Pieces / Units')),
+                          ButtonSegment(value: 'PACKAGE', label: Text('Packages / Bags')),
+                          ButtonSegment(value: 'CONTINUOUS', label: Text('Bulk Quantity')),
+                        ],
+                        selected: {_customSaleType},
+                        onSelectionChanged: (val) {
+                          setState(() {
+                            _customSaleType = val.first;
+                            _quantityMode = val.first;
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                  ],
+
                   TextFormField(
                     key: const Key('material-title'),
                     controller: _titleController,
@@ -428,80 +632,216 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                     validator: (value) => _requiredLength(value, 'Title', 200),
                   ),
                   const SizedBox(height: 12),
+
                   TextFormField(
                     key: const Key('material-description'),
                     controller: _descriptionController,
                     minLines: 3,
                     maxLines: 6,
                     maxLength: 2000,
-                    decoration: const InputDecoration(labelText: 'Description'),
+                    decoration: const InputDecoration(labelText: 'Description / Notes'),
                     validator: (value) =>
                         _requiredLength(value, 'Description', 2000),
                   ),
                   const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    key: const Key('material-quantity-mode'),
-                    initialValue: _quantityMode,
-                    decoration: const InputDecoration(labelText: 'Sellable quantity mode'),
-                    items: const [
-                      DropdownMenuItem(value: 'PACKAGE', child: Text('Package / container')),
-                      DropdownMenuItem(value: 'PIECE', child: Text('Individual piece')),
-                      DropdownMenuItem(value: 'CONTINUOUS', child: Text('Continuous / bulk')),
-                    ],
-                    onChanged: _isSaving ? null : (value) => setState(() => _quantityMode = value!),
-                  ),
-                  const SizedBox(height: 12),
-                  if (_quantityMode == 'PACKAGE' || _quantityMode == 'PIECE') ...[
-                    DropdownButtonFormField<String>(
-                      initialValue: _packageType,
-                      decoration: const InputDecoration(labelText: 'Package type'),
-                      items: const ['CAN','BAG','BOX','CARTRIDGE','ROLL','SHEET','ROD','PIPE','PACK','PIECE','OTHER']
-                          .map((x) => DropdownMenuItem(value: x, child: Text(x.toLowerCase()))).toList(),
-                      onChanged: _isSaving ? null : (value) => setState(() => _packageType = value!),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(children: [
-                      Expanded(child: TextFormField(key: const Key('material-package-size'), controller: _packageSizeController, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: InputDecoration(labelText: 'Package size (${_unit ?? 'base unit'})'), validator: (v) => _positiveNumber(v, 'Package size'))),
-                      const SizedBox(width: 8),
-                      Expanded(child: TextFormField(key: const Key('material-package-count'), controller: _packageCountController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Number of packages'), validator: _wholePackageCount)),
-                    ]),
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: Text(_packageTotalSummary()),
+
+                  // 2. Dynamic Specifications (e.g. Paint: Colour, Finish; Generator: Capacity, Fuel, Phase, Running Hours)
+                  if (_selectedTemplate != null && _selectedTemplate!.parsedAttributes.isNotEmpty) ...[
+                    Card(
+                      elevation: 0,
+                      color: Colors.blueGrey.shade50,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${_selectedTemplate!.name} Specifications',
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                            ),
+                            const SizedBox(height: 8),
+                            for (final field in _selectedTemplate!.parsedAttributes) ...[
+                              if (field.type == 'select' && field.options.isNotEmpty)
+                                DropdownButtonFormField<String>(
+                                  key: Key('spec-field-${field.id}'),
+                                  initialValue: _specs[field.id] as String?,
+                                  decoration: InputDecoration(
+                                    labelText: '${field.label}${field.required ? " *" : ""}',
+                                  ),
+                                  items: field.options.map((opt) => DropdownMenuItem(value: opt, child: Text(opt))).toList(),
+                                  onChanged: _isSaving ? null : (v) => setState(() => _specs[field.id] = v),
+                                )
+                              else if (field.type == 'number')
+                                TextFormField(
+                                  key: Key('spec-field-${field.id}'),
+                                  initialValue: _specs[field.id]?.toString(),
+                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                  decoration: InputDecoration(
+                                    labelText: '${field.label}${field.required ? " *" : ""}${field.unit != null ? " (${field.unit})" : ""}',
+                                  ),
+                                  onChanged: (v) => _specs[field.id] = double.tryParse(v) ?? v,
+                                )
+                              else
+                                TextFormField(
+                                  key: Key('spec-field-${field.id}'),
+                                  initialValue: _specs[field.id]?.toString(),
+                                  decoration: InputDecoration(
+                                    labelText: '${field.label}${field.required ? " *" : ""}',
+                                  ),
+                                  onChanged: (v) => _specs[field.id] = v,
+                                ),
+                              const SizedBox(height: 8),
+                            ],
+                          ],
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 12),
                   ],
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextFormField(
-                          key: const Key('material-quantity'),
-                          controller: _quantityController,
-                          keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true,
-                          ),
-                          decoration: InputDecoration(
-                            labelText: _quantityMode == 'CONTINUOUS' ? 'Quantity' : 'Base-equivalent quantity (calculated)',
-                          ),
-                          readOnly: _quantityMode != 'CONTINUOUS',
-                          validator: (value) => _quantityMode == 'CONTINUOUS'
-                              ? _positiveNumber(value, 'Quantity') : null,
-                        ),
+
+                  // 3. Quantity & Pricing (Clean, zero technical jargon)
+                  Card(
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      side: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Quantity & Pricing', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                          const SizedBox(height: 10),
+
+                          if (_selectedTemplate?.isPackage == true || (_isCustom && _customSaleType == 'PACKAGE') || _quantityMode == 'PACKAGE') ...[
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: TextFormField(
+                                    key: const Key('material-package-size'),
+                                    controller: _packageSizeController,
+                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                    decoration: InputDecoration(
+                                      labelText: 'Container size (${_unit ?? _selectedTemplate?.baseUnit ?? "unit"})',
+                                    ),
+                                    onChanged: (_) {
+                                      final size = double.tryParse(_packageSizeController.text.trim()) ?? 0;
+                                      final count = int.tryParse(_packageCountController.text.trim()) ?? 0;
+                                      setState(() => _quantityController.text = (size * count).toString());
+                                    },
+                                    validator: (v) => _positiveNumber(v, 'Container size'),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: TextFormField(
+                                    key: const Key('material-package-count'),
+                                    controller: _packageCountController,
+                                    keyboardType: TextInputType.number,
+                                    decoration: InputDecoration(
+                                      labelText: 'Number of ${_selectedTemplate?.packageType != null ? "${_selectedTemplate!.packageType}s" : "containers"}',
+                                    ),
+                                    onChanged: (_) {
+                                      final size = double.tryParse(_packageSizeController.text.trim()) ?? 0;
+                                      final count = int.tryParse(_packageCountController.text.trim()) ?? 0;
+                                      setState(() => _quantityController.text = (size * count).toString());
+                                    },
+                                    validator: _wholePackageCount,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            TextFormField(
+                              key: const Key('material-unit-price'),
+                              controller: _priceController,
+                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                              decoration: InputDecoration(
+                                labelText: 'Price per ${_selectedTemplate?.packageType ?? "container"} (LKR)',
+                              ),
+                              validator: (v) => _positiveNumber(v, 'Price'),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              _packageTotalSummary(),
+                              style: TextStyle(fontWeight: FontWeight.w600, color: Colors.blueGrey.shade800),
+                            ),
+                          ] else if (_selectedTemplate?.isPiece == true || (_isCustom && _customSaleType == 'PIECE') || _quantityMode == 'PIECE') ...[
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: TextFormField(
+                                    key: const Key('material-quantity'),
+                                    controller: _quantityController,
+                                    keyboardType: TextInputType.number,
+                                    decoration: const InputDecoration(labelText: 'Number of units / items'),
+                                    validator: (v) => _positiveNumber(v, 'Number of units'),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: TextFormField(
+                                    key: const Key('material-unit-price'),
+                                    controller: _priceController,
+                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                    decoration: const InputDecoration(labelText: 'Price per item / unit (LKR)'),
+                                    validator: (v) => _positiveNumber(v, 'Price per unit'),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Total sellable stock: ${_quantityController.text.isEmpty ? "—" : _quantityController.text} units',
+                              style: TextStyle(fontWeight: FontWeight.w600, color: Colors.blueGrey.shade800),
+                            ),
+                          ] else ...[
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: TextFormField(
+                                    key: const Key('material-quantity'),
+                                    controller: _quantityController,
+                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                    decoration: const InputDecoration(labelText: 'Total quantity'),
+                                    validator: (v) => _positiveNumber(v, 'Quantity'),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: SellerUnitField(
+                                    key: const Key('material-unit'),
+                                    categoryId: _category,
+                                    initialUnit: _unit,
+                                    load: widget.gateway.categoryUnits,
+                                    enabled: !_isSaving,
+                                    onChanged: (value) => setState(() => _unit = value),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            TextFormField(
+                              key: const Key('material-unit-price'),
+                              controller: _priceController,
+                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                              decoration: InputDecoration(labelText: 'Price per ${_unit ?? "unit"} (LKR)'),
+                              validator: (v) => _positiveNumber(v, 'Unit price'),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Total sellable stock: ${_quantityController.text.isEmpty ? "—" : _quantityController.text} ${_unit ?? ""}',
+                              style: TextStyle(fontWeight: FontWeight.w600, color: Colors.blueGrey.shade800),
+                            ),
+                          ],
+                        ],
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: SellerUnitField(
-                          key: const Key('material-unit'),
-                          categoryId: _category,
-                          initialUnit: _unit,
-                          load: widget.gateway.categoryUnits,
-                          enabled: !_isSaving,
-                          onChanged: (value) => setState(() => _unit = value),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                   const SizedBox(height: 12),
+
                   DropdownButtonFormField<String>(
                     key: const Key('material-condition'),
                     initialValue: _condition,
@@ -519,16 +859,6 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                     onChanged: (value) {
                       if (value != null) setState(() => _condition = value);
                     },
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    key: const Key('material-unit-price'),
-                    controller: _priceController,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    decoration: InputDecoration(labelText: _quantityMode == 'PACKAGE' || _quantityMode == 'PIECE' ? 'Price per package (LKR)' : 'Unit price (LKR)'),
-                    validator: (value) => _positiveNumber(value, 'Unit price'),
                   ),
                   const SizedBox(height: 12),
                   ListTile(
