@@ -9,6 +9,7 @@ public sealed class Reservation : AuditableEntity
     public Guid MaterialRequestId { get; set; }
 
     public decimal Quantity { get; set; }
+    public int? PackageCount { get; set; }
 
     public ReservationStatus Status { get; set; }
 

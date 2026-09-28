@@ -36,6 +36,13 @@ class MaterialListingRecord:
     status: str
     is_verified: bool
     available_until: datetime
+    quantity_mode: str = "LEGACY"
+    package_type: str | None = None
+    package_size: Decimal | None = None
+    package_count_available: int | None = None
+    base_equivalent_available_quantity: Decimal | None = None
+    maximum_contribution: Decimal | None = None
+    full_coverage: bool | None = None
 
 
 class ActiveMaterialsReadBoundary(Protocol):

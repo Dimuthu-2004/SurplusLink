@@ -357,6 +357,10 @@ public sealed class MaterialInventoryService(
     public Task<IReadOnlyList<string>> GetUnitCatalogAsync(CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<string>>(MaterialUnits.Catalog);
 
+    public Task<IReadOnlyList<UnitDefinitionResponse>> GetUnitDefinitionsAsync(CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<UnitDefinitionResponse>>(MaterialUnits.Definitions.Select(x =>
+            new UnitDefinitionResponse(x.Code, x.DisplayName, x.MeasurementType, x.QuantityMode.ToString(), x.AllowedStep, x.DecimalPrecision)).ToArray());
+
     public async Task<IReadOnlyList<string>> GetCategoryUnitsAsync(Guid categoryId, CancellationToken cancellationToken)
     {
         var units = await dbContext.Categories.AsNoTracking().Where(category => category.Id == categoryId)
@@ -483,6 +487,13 @@ public sealed class MaterialInventoryService(
         {
             throw new MaterialOperationException(MaterialOperationError.Validation, "Photos must have unique SortOrder values and contain at most ten items.");
         }
+        if (request.QuantityMode is "PACKAGE" or "PIECE")
+        {
+            if (request.PackageCount is null || request.PackageSize is null || string.IsNullOrWhiteSpace(request.BaseUnit) || string.IsNullOrWhiteSpace(request.PackageType))
+                throw new MaterialOperationException(MaterialOperationError.Validation, "Packaged and piece listings require package type, base unit, package size and a whole package count.");
+            if (request.Quantity != request.PackageCount.Value * request.PackageSize.Value)
+                throw new MaterialOperationException(MaterialOperationError.Validation, "Quantity must equal package count multiplied by package size; package stock cannot be fractional.");
+        }
     }
 
     private static void ApplyListingRequest(Listing listing, CreateMaterialListingRequest request)
@@ -491,6 +502,12 @@ public sealed class MaterialInventoryService(
         listing.Description = request.Description.Trim();
         listing.Quantity = request.Quantity;
         listing.Unit = MaterialUnits.Normalize(request.Unit);
+        listing.QuantityMode = request.QuantityMode is null ? QuantityMode.LEGACY : Enum.Parse<QuantityMode>(request.QuantityMode, true);
+        listing.BaseUnit = request.BaseUnit is null ? null : MaterialUnits.Normalize(request.BaseUnit);
+        listing.PackageType = request.PackageType is null ? null : Enum.Parse<PackageType>(request.PackageType, true);
+        listing.PackageSize = request.PackageSize;
+        listing.PackageCount = request.PackageCount;
+        listing.ReservedPackageCount = 0;
         listing.Condition = Enum.Parse<MaterialCondition>(request.Condition, ignoreCase: false);
         listing.UnitPrice = request.UnitPrice;
         listing.Latitude = request.Latitude;
@@ -573,6 +590,12 @@ public sealed class MaterialInventoryService(
         listing.Description,
         listing.Quantity,
         listing.ReservedQuantity,
+        listing.QuantityMode.ToString(),
+        listing.BaseUnit,
+        listing.PackageType?.ToString(),
+        listing.PackageSize,
+        listing.PackageCount,
+        listing.ReservedPackageCount,
         listing.Unit,
         listing.Condition.ToString(),
         listing.UnitPrice,

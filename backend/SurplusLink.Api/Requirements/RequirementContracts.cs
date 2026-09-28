@@ -60,6 +60,11 @@ public sealed class MatchAllocationRequest
 
     [Range(typeof(decimal), "0.001", "999999999999999.999")]
     public decimal Quantity { get; init; }
+
+    // Required for PACKAGE/PIECE listings; Quantity is the derived base
+    // equivalent retained for compatibility with legacy contracts.
+    [Range(1, int.MaxValue)]
+    public int? PackageCount { get; init; }
 }
 
 public sealed class SelectMatchesRequest : IValidatableObject

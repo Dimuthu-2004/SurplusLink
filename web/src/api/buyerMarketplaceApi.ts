@@ -22,6 +22,12 @@ export interface MaterialListingItem {
   description: string;
   quantity: number;
   reservedQuantity: number;
+  quantityMode?: 'LEGACY' | 'PACKAGE' | 'PIECE' | 'CONTINUOUS';
+  baseUnit?: string | null;
+  packageType?: string | null;
+  packageSize?: number | null;
+  packageCount?: number | null;
+  reservedPackageCount?: number;
   unit: string;
   condition: string;
   unitPrice: number;

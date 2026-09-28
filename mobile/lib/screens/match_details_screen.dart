@@ -448,6 +448,7 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
         widget.requirementId,
         match.id,
         quantity: _selectedQuantity,
+        packageCount: match.packageCountFor(_selectedQuantity ?? 0),
       );
       await _load();
       if (mounted) {
@@ -463,7 +464,7 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
     }
   }
 
-  double _stepFor(String? unit) => quantities.isDiscreteUnit(unit ?? '') ? 1 : 0.1;
+  double _stepFor(String? unit) => _match?.selectionStep ?? (quantities.isDiscreteUnit(unit ?? '') ? 1 : 0.1);
   double _maximumSelectable(RecommendedMatch match) =>
       (match.availableQuantity ?? 0).clamp(0.0, match.quantity ?? double.infinity).toDouble();
   void _setSelectedQuantity(double value) {

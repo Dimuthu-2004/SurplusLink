@@ -460,7 +460,11 @@ class _RecommendedMatchesScreenState extends State<RecommendedMatchesScreen> {
 
     try {
       final allocations = _selectedQuantities.entries
-          .map((e) => MatchAllocation(matchId: e.key, quantity: e.value))
+          .map((e) {
+            final match = _matches.firstWhere((item) => item.id == e.key);
+            return MatchAllocation(matchId: e.key, quantity: e.value,
+                packageCount: match.packageCountFor(e.value));
+          })
           .toList();
       await widget.gateway.selectMatches(widget.requirementId, allocations);
       if (mounted) {

@@ -38,6 +38,7 @@ class FakeMultiMatchGateway implements MatchGateway {
     String requirementId,
     String matchId, {
     double? quantity,
+    int? packageCount,
   }) async {
     selectedSingleMatches.add(matchId);
     selectedSingleQuantities[matchId] = quantity;

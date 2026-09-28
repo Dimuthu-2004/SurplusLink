@@ -196,6 +196,13 @@ public sealed class RequirementService(
             ?? throw new RequirementException(404, "Requirement was not found.");
 
         var availableStock = match.Listing.Quantity - match.Listing.ReservedQuantity;
+        if (match.Listing.QuantityMode is QuantityMode.PACKAGE or QuantityMode.PIECE)
+        {
+            var size = match.Listing.PackageSize ?? 0;
+            var availablePackages = (match.Listing.PackageCount ?? 0) - match.Listing.ReservedPackageCount;
+            var packages = Math.Min(availablePackages, (int)Math.Ceiling(request.RequiredQuantity / size));
+            return await SelectMatchesAsync(id, buyerId, [new MatchAllocationRequest { MatchId = matchId, PackageCount = packages, Quantity = packages * size }], ct);
+        }
         var selectedQty = quantity ?? Math.Min(request.RequiredQuantity, Math.Max(0, availableStock));
         return await SelectMatchesAsync(id, buyerId, [new MatchAllocationRequest { MatchId = matchId, Quantity = selectedQty }], ct);
     }
@@ -215,12 +222,6 @@ public sealed class RequirementService(
         if (await db.Reservations.AnyAsync(x => x.MaterialRequestId == id && x.Status != ReservationStatus.RELEASED && x.Status != ReservationStatus.CANCELLED, ct))
             throw new RequirementException(409, "A reservation already protects this requirement.");
 
-        var totalSelected = allocations.Sum(x => x.Quantity);
-        if (totalSelected <= 0)
-            throw new RequirementException(400, "Total selected quantity must be greater than zero.");
-        if (totalSelected > request.RequiredQuantity)
-            throw new RequirementException(400, $"Total selected quantity ({totalSelected}) cannot exceed requested quantity ({request.RequiredQuantity}).");
-
         var matchIds = allocations.Select(x => x.MatchId).Distinct().ToList();
         var matches = await db.Matches
             .Include(x => x.Listing).ThenInclude(x => x.Seller)
@@ -239,6 +240,8 @@ public sealed class RequirementService(
 
         decimal totalMaterialCost = 0;
         decimal totalTransportCost = 0;
+        decimal totalSelected = 0;
+        var normalizedAllocations = new List<(MatchAllocationRequest Input, MaterialMatch Match, decimal BaseQuantity, int? PackageCount)>();
 
         foreach (var allocation in allocations)
         {
@@ -246,14 +249,30 @@ public sealed class RequirementService(
                 throw new RequirementException(400, "Selected quantity must be greater than zero.");
             if (decimal.Round(allocation.Quantity, 3) != allocation.Quantity)
                 throw new RequirementException(400, "Selected quantity supports at most three decimal places.");
-            if (MaterialUnits.IsDiscrete(request.Unit) && decimal.Truncate(allocation.Quantity) != allocation.Quantity)
-                throw new RequirementException(400, $"Selected quantity for '{request.Unit}' must be a whole number.");
-
             var match = matches.Single(x => x.Id == allocation.MatchId);
+            var packageMode = match.Listing.QuantityMode is QuantityMode.PACKAGE or QuantityMode.PIECE;
+            var packageCount = allocation.PackageCount;
+            var selectedBase = allocation.Quantity;
+            if (packageMode)
+            {
+                if (packageCount is null || packageCount <= 0 || match.Listing.PackageSize is null)
+                    throw new RequirementException(400, "Package selections require a whole package count.");
+                selectedBase = packageCount.Value * (match.Listing.PackageSize ?? 0);
+                if (allocation.Quantity != selectedBase)
+                    throw new RequirementException(400, "Package quantity must equal package count multiplied by package size.");
+                var availablePackages = (match.Listing.PackageCount ?? 0) - match.Listing.ReservedPackageCount;
+                if (packageCount > availablePackages)
+                    throw new RequirementException(409, $"Selected package count ({packageCount}) exceeds available packages ({availablePackages}) for listing '{match.Listing.Title}'.");
+            }
+            else if (MaterialUnits.IsDiscrete(request.Unit) && decimal.Truncate(allocation.Quantity) != allocation.Quantity)
+                throw new RequirementException(400, $"Selected quantity for '{request.Unit}' must be a whole number.");
             var availableStock = match.Listing.Quantity - match.Listing.ReservedQuantity;
 
-            if (allocation.Quantity > availableStock)
+            if (selectedBase > availableStock)
                 throw new RequirementException(409, $"Selected quantity ({allocation.Quantity}) exceeds available stock ({availableStock}) for listing '{match.Listing.Title}'.");
+
+            totalSelected += selectedBase;
+            normalizedAllocations.Add((allocation, match, selectedBase, packageCount));
 
             if (match.Status != MatchStatus.ROUTED || match.Distance is null || match.DurationMinutes is null || match.EstimatedTransportCost is null)
                 throw new RequirementException(409, $"Match for listing '{match.Listing.Title}' does not have complete route and transport data.");
@@ -276,7 +295,7 @@ public sealed class RequirementService(
             if (match.DurationMinutes > (decimal)(request.Deadline - DateTime.UtcNow).TotalMinutes)
                 throw new RequirementException(409, $"Delivery deadline exceeded for listing '{match.Listing.Title}'.");
 
-            var matCost = allocation.Quantity * match.Listing.UnitPrice;
+            var matCost = packageMode ? packageCount!.Value * match.Listing.UnitPrice : selectedBase * match.Listing.UnitPrice;
             var transCost = match.EstimatedTransportCost.Value;
             totalMaterialCost += matCost;
             totalTransportCost += transCost;
@@ -287,7 +306,8 @@ public sealed class RequirementService(
                 MaterialMatchId = match.Id,
                 BuyerId = request.BuyerId,
                 SellerId = match.Listing.SellerId,
-                Quantity = allocation.Quantity,
+                Quantity = selectedBase,
+                PackageCount = packageCount,
                 UnitValue = match.Listing.UnitPrice,
                 TotalValue = matCost,
                 Status = OfferStatus.PENDING
@@ -301,6 +321,7 @@ public sealed class RequirementService(
                 BuyerId = offer.BuyerId,
                 SellerId = offer.SellerId,
                 Quantity = offer.Quantity,
+                PackageCount = packageCount,
                 TotalValue = offer.TotalValue,
                 ReservedQuantity = 0,
                 Status = TransactionStatus.PENDING_APPROVAL
@@ -312,13 +333,23 @@ public sealed class RequirementService(
                 matchId = match.Id,
                 listingId = match.ListingId,
                 sellerId = match.Listing.SellerId,
-                quantity = allocation.Quantity,
+                quantity = selectedBase,
+                packageCount,
                 unitPrice = match.Listing.UnitPrice,
                 materialCost = matCost,
                 transportCost = transCost,
                 totalCost = matCost + transCost
             });
         }
+
+        if (totalSelected <= 0)
+            throw new RequirementException(400, "Total selected quantity must be greater than zero.");
+        var packageOverage = totalSelected > request.RequiredQuantity;
+        if (packageOverage && (normalizedAllocations.Any(x => x.PackageCount is null) ||
+            normalizedAllocations.Any(x => totalSelected - x.BaseQuantity >= request.RequiredQuantity)))
+            throw new RequirementException(400, "Selected packages include unnecessary quantity beyond the requirement.");
+        if (packageOverage && totalSelected - request.RequiredQuantity >= normalizedAllocations.Where(x => x.PackageCount is not null).Max(x => x.BaseQuantity))
+            throw new RequirementException(400, "Package overage is not unavoidable.");
 
         if (totalMaterialCost + totalTransportCost > request.MaximumBudget)
             throw new RequirementException(409, "Total cost exceeds the requirement maximum budget.");

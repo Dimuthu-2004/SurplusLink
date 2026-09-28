@@ -16,6 +16,14 @@ public class CreateMaterialListingRequest
     [Range(typeof(decimal), "0.001", "999999999999999.999")]
     public decimal Quantity { get; init; }
 
+    [RegularExpression("^(PACKAGE|PIECE|CONTINUOUS)$")]
+    public string? QuantityMode { get; init; }
+    [MaxLength(32)] public string? BaseUnit { get; init; }
+    [RegularExpression("^(CAN|BAG|BOX|CARTRIDGE|ROLL|SHEET|ROD|PIPE|PACK|PIECE|OTHER)$")]
+    public string? PackageType { get; init; }
+    [Range(typeof(decimal), "0.001", "999999999999999.999")] public decimal? PackageSize { get; init; }
+    [Range(1, int.MaxValue)] public int? PackageCount { get; init; }
+
     [Required, MaxLength(32)]
     public string Unit { get; init; } = string.Empty;
 
@@ -67,6 +75,12 @@ public sealed record MaterialListingResponse(
     string Description,
     decimal Quantity,
     decimal ReservedQuantity,
+    string QuantityMode,
+    string? BaseUnit,
+    string? PackageType,
+    decimal? PackageSize,
+    int? PackageCount,
+    int ReservedPackageCount,
     string Unit,
     string Condition,
     decimal UnitPrice,
@@ -89,6 +103,7 @@ public sealed class MaterialCategoryRequest
 }
 
 public sealed record MaterialCategoryResponse(Guid Id, string Name, DateTime CreatedAtUtc, DateTime UpdatedAtUtc, IReadOnlyList<string>? AllowedUnits = null);
+public sealed record UnitDefinitionResponse(string Code, string DisplayName, string MeasurementType, string QuantityMode, decimal AllowedStep, int DecimalPrecision);
 
 public sealed class MaterialListingQuery
 {

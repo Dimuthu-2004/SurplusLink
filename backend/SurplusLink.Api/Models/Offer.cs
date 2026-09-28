@@ -24,6 +24,7 @@ public sealed class Offer : AuditableEntity
     public Guid BuyerId { get; set; }
     public Guid SellerId { get; set; }
     public decimal Quantity { get; set; }
+    public int? PackageCount { get; set; }
     public decimal UnitValue { get; set; }
     public decimal TotalValue { get; set; }
     public OfferStatus Status { get; set; }
@@ -42,6 +43,7 @@ public sealed class Transaction : AuditableEntity
     public Guid BuyerId { get; set; }
     public Guid SellerId { get; set; }
     public decimal Quantity { get; set; }
+    public int? PackageCount { get; set; }
     public decimal TotalValue { get; set; }
     public decimal ReservedQuantity { get; set; }
     public TransactionStatus Status { get; set; }

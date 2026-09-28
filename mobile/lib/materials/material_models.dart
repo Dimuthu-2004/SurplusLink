@@ -26,6 +26,7 @@ final class MaterialListing {
     required this.description,
     required this.quantity,
     required this.reservedQuantity,
+    required this.quantityMode,
     required this.unit,
     required this.condition,
     required this.unitPrice,
@@ -36,6 +37,11 @@ final class MaterialListing {
     required this.createdAtUtc,
     required this.updatedAtUtc,
     required this.photos,
+    this.baseUnit,
+    this.packageType,
+    this.packageSize,
+    this.packageCount,
+    this.reservedPackageCount = 0,
     this.seller,
   });
 
@@ -52,6 +58,7 @@ final class MaterialListing {
         description: _requiredString(json, 'description'),
         quantity: _number(json, 'quantity'),
         reservedQuantity: _number(json, 'reservedQuantity'),
+        quantityMode: (json['quantityMode'] as String?) ?? 'LEGACY',
         unit: _requiredString(json, 'unit'),
         condition: _requiredString(json, 'condition'),
         unitPrice: _number(json, 'unitPrice'),
@@ -68,6 +75,11 @@ final class MaterialListing {
             .whereType<Map<String, dynamic>>()
             .map(MaterialPhoto.fromJson)
             .toList(),
+        baseUnit: json['baseUnit'] as String?,
+        packageType: json['packageType'] as String?,
+        packageSize: _nullableNumber(json['packageSize']),
+        packageCount: _nullableNumber(json['packageCount'])?.toInt(),
+        reservedPackageCount: (_nullableNumber(json['reservedPackageCount']) ?? 0).toInt(),
       );
 
   final String id;
@@ -79,6 +91,11 @@ final class MaterialListing {
   final String description;
   final double quantity;
   final double reservedQuantity;
+  final String quantityMode;
+  final String? baseUnit, packageType;
+  final double? packageSize;
+  final int? packageCount;
+  final int reservedPackageCount;
   final String unit;
   final String condition;
   final double unitPrice;
@@ -91,6 +108,8 @@ final class MaterialListing {
   final List<MaterialPhoto> photos;
 
   double get remainingQuantity => quantity - reservedQuantity;
+  bool get isPackaged => quantityMode == 'PACKAGE' || quantityMode == 'PIECE';
+  int? get availablePackageCount => packageCount == null ? null : packageCount! - reservedPackageCount;
   bool get canEdit => status == 'DRAFT' || status == 'REJECTED';
   bool get canPublish => canEdit;
 }
@@ -203,6 +222,11 @@ final class MaterialListingDraft {
     required this.title,
     required this.description,
     required this.quantity,
+    this.quantityMode,
+    this.baseUnit,
+    this.packageType,
+    this.packageSize,
+    this.packageCount,
     required this.unit,
     required this.condition,
     required this.unitPrice,
@@ -216,6 +240,9 @@ final class MaterialListingDraft {
   final String title;
   final String description;
   final double quantity;
+  final String? quantityMode, baseUnit, packageType;
+  final double? packageSize;
+  final int? packageCount;
   final String unit;
   final String condition;
   final double unitPrice;
@@ -229,6 +256,11 @@ final class MaterialListingDraft {
     'title': title.trim(),
     'description': description.trim(),
     'quantity': quantity,
+    if (quantityMode != null) 'quantityMode': quantityMode,
+    if (baseUnit != null) 'baseUnit': baseUnit,
+    if (packageType != null) 'packageType': packageType,
+    if (packageSize != null) 'packageSize': packageSize,
+    if (packageCount != null) 'packageCount': packageCount,
     'unit': unit.trim(),
     'condition': condition,
     'unitPrice': unitPrice,

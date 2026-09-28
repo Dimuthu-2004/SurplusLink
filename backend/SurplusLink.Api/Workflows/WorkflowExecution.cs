@@ -27,7 +27,10 @@ public sealed class WorkflowExecutionOptions
 public sealed record WorkflowListingSnapshot(Guid MatchId, Guid ListingId, Guid SellerId, Guid CategoryId,
     decimal AvailableQuantity, string Unit, decimal UnitPrice, string Condition, string Status,
     DateTime AvailableUntil, decimal? Latitude, decimal? Longitude, decimal? DistanceKm,
-    decimal? DurationMinutes, decimal? TransportCost, string? RoutingError);
+    decimal? DurationMinutes, decimal? TransportCost, string? RoutingError,
+    string? QuantityMode = null, string? PackageType = null, decimal? PackageSize = null,
+    int? PackageCountAvailable = null, decimal? BaseEquivalentAvailableQuantity = null,
+    decimal? MaximumContribution = null, bool? FullCoverage = null);
 public sealed record WorkflowRunRequest(Guid WorkflowId, object BuyerRequest, IReadOnlyList<WorkflowListingSnapshot> Listings,
     string? Objective = null);
 public sealed record WorkflowValidation(bool Valid, bool RequiresApproval, Guid? RecommendedMatchId,
@@ -191,7 +194,12 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
                 listing.CategoryId, listing.Quantity - listing.ReservedQuantity, listing.Unit, listing.UnitPrice,
                 listing.Condition.ToString(), listing.Status.ToString(), listing.AvailableUntil, listing.Latitude,
                 listing.Longitude, routed ? estimate!.Route.DistanceKm : null, routed ? estimate!.Route.DurationMinutes : null,
-                routed ? estimate!.EstimatedTransportCost : null, routed ? null : "ROUTE_UNAVAILABLE"));
+                routed ? estimate!.EstimatedTransportCost : null, routed ? null : "ROUTE_UNAVAILABLE",
+                listing.QuantityMode.ToString(), listing.PackageType?.ToString(), listing.PackageSize,
+                listing.PackageCount is null ? null : listing.PackageCount - listing.ReservedPackageCount,
+                listing.Quantity - listing.ReservedQuantity,
+                Math.Min(listing.Quantity - listing.ReservedQuantity, request.RequiredQuantity),
+                listing.Quantity - listing.ReservedQuantity >= request.RequiredQuantity));
         }
         return new(workflow.Id, new { id = request.Id, buyerId = request.BuyerId, categoryId = request.CategoryId,
             requiredQuantity = request.RequiredQuantity, unit = request.Unit, maximumBudget = request.MaximumBudget,
@@ -210,11 +218,11 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
                 x.AvailableQuantity > 0 && request.Deadline > now &&
                 x.RoutingError is null && x.DistanceKm is >= 0 && x.DurationMinutes is >= 0 && x.TransportCost is >= 0 &&
                 x.DurationMinutes <= (decimal)(request.Deadline - now).TotalMinutes &&
-                x.UnitPrice * request.RequiredQuantity + x.TransportCost <= request.MaximumBudget)
-            .Select(x => new { Row = x, Score = MatchScoring.Score(x.Condition, x.UnitPrice * request.RequiredQuantity,
+                MaterialCost(request.RequiredQuantity, x.UnitPrice, x.QuantityMode, x.PackageSize) + x.TransportCost <= request.MaximumBudget)
+            .Select(x => new { Row = x, Score = MatchScoring.Score(x.Condition, MaterialCost(request.RequiredQuantity, x.UnitPrice, x.QuantityMode, x.PackageSize),
                 request.MaximumBudget, x.DistanceKm, x.TransportCost) })
             .OrderByDescending(x => x.Score).ThenByDescending(x => MatchScoring.ConditionRank(x.Row.Condition))
-            .ThenBy(x => x.Row.UnitPrice * request.RequiredQuantity + x.Row.TransportCost)
+            .ThenBy(x => MaterialCost(request.RequiredQuantity, x.Row.UnitPrice, x.Row.QuantityMode, x.Row.PackageSize) + x.Row.TransportCost)
             .ThenBy(x => x.Row.DistanceKm).ThenBy(x => x.Row.ListingId.ToString(), StringComparer.Ordinal).FirstOrDefault();
         if (winner is null || winner.Row.MatchId != recommendation.MatchId || winner.Score != recommendation.Score)
             throw new JsonException("Recommendation must follow deterministic ranking of valid routed candidates.");
@@ -226,7 +234,12 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
         listing.SellerId != request.BuyerId && listing.CategoryId == request.CategoryId &&
         string.Equals(listing.Unit, request.Unit, StringComparison.OrdinalIgnoreCase) &&
         listing.Quantity - listing.ReservedQuantity > 0 && transportCost >= 0 &&
-        listing.UnitPrice * request.RequiredQuantity + transportCost <= request.MaximumBudget;
+        MaterialCost(request.RequiredQuantity, listing.UnitPrice, listing.QuantityMode.ToString(), listing.PackageSize) + transportCost <= request.MaximumBudget;
+
+    internal static decimal MaterialCost(decimal requiredQuantity, decimal unitPrice, string? quantityMode, decimal? packageSize) =>
+        quantityMode is "PACKAGE" or "PIECE" && packageSize is > 0
+            ? decimal.Ceiling(requiredQuantity / packageSize.Value) * unitPrice
+            : requiredQuantity * unitPrice;
 
     internal static void ValidateResult(WorkflowRunRequest input, WorkflowRunResult result)
     {

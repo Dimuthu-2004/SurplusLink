@@ -150,6 +150,9 @@ public sealed partial class MatchService
             x.MaterialRequest.RecommendationReason ?? (x.Id == x.MaterialRequest.RecommendedMatchId
                 ? "Highest deterministic final score among valid routed candidates; ties use condition, total estimated cost, distance, then listing ID."
                 : null),
-            available < required);
+            available < required,
+            x.Listing.QuantityMode.ToString(), x.Listing.PackageType?.ToString(), x.Listing.PackageSize,
+            x.Listing.PackageCount is null ? null : x.Listing.PackageCount - x.Listing.ReservedPackageCount,
+            available, Math.Min(available, required), available >= required);
     }
 }

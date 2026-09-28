@@ -20,6 +20,10 @@ public sealed class MaterialCategoriesController(IMaterialInventoryService servi
     public async Task<ActionResult<IReadOnlyList<string>>> GetUnitCatalog(CancellationToken cancellationToken) =>
         Ok(await service.GetUnitCatalogAsync(cancellationToken));
 
+    [HttpGet("unit-catalog/definitions")]
+    public async Task<ActionResult<IReadOnlyList<UnitDefinitionResponse>>> GetUnitDefinitions(CancellationToken cancellationToken) =>
+        Ok(await service.GetUnitDefinitionsAsync(cancellationToken));
+
     [HttpGet("{categoryId:guid}/units")]
     [Authorize(Roles = "SELLER,BUYER,MANAGER")]
     [ProducesResponseType<IReadOnlyList<string>>(StatusCodes.Status200OK)]

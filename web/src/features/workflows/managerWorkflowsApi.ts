@@ -17,6 +17,7 @@ export interface ApprovalAllocation {
   listingId: string; listingTitle: string; allocatedQuantity: number; availableQuantity: number;
   unit: string; unitPrice: number; materialValue: number; score: number | null;
   distance: number | null; transportCost: number | null; status: string;
+  packageCount?: number | null; packageType?: string | null; packageSize?: number | null; baseUnit?: string | null;
 }
 export interface ApprovalGroup extends ApprovalGroupSummary { allocations: ApprovalAllocation[] }
 export interface ToolCall {

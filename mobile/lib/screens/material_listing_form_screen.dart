@@ -52,6 +52,10 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _quantityController = TextEditingController();
+  final _packageSizeController = TextEditingController();
+  final _packageCountController = TextEditingController();
+  String _quantityMode = 'CONTINUOUS';
+  String _packageType = 'CAN';
   String? _unit;
   final _priceController = TextEditingController();
   final _addressController = TextEditingController();
@@ -80,6 +84,8 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
     _titleController.dispose();
     _descriptionController.dispose();
     _quantityController.dispose();
+    _packageSizeController.dispose();
+    _packageCountController.dispose();
     _priceController.dispose();
     _addressController.dispose();
     super.dispose();
@@ -113,6 +119,10 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
             ? listing.quantity.toStringAsFixed(0)
             : listing.quantity.toString();
         _unit = listing.unit;
+        _quantityMode = listing.quantityMode == 'LEGACY' ? 'CONTINUOUS' : listing.quantityMode;
+        _packageType = listing.packageType ?? 'CAN';
+        _packageSizeController.text = listing.packageSize?.toString() ?? '';
+        _packageCountController.text = listing.packageCount?.toString() ?? '';
         _priceController.text = listing.unitPrice.toString();
         _condition = listing.condition;
         _availableUntil = listing.availableUntil;
@@ -303,8 +313,15 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
         categoryId: _category!,
         title: _titleController.text,
         description: _descriptionController.text,
-        quantity: double.parse(_quantityController.text.trim()),
+        quantity: _quantityMode == 'PACKAGE' || _quantityMode == 'PIECE'
+            ? double.parse(_packageSizeController.text.trim()) * int.parse(_packageCountController.text.trim())
+            : double.parse(_quantityController.text.trim()),
         unit: _unit!,
+        quantityMode: _quantityMode,
+        baseUnit: _unit,
+        packageType: _quantityMode == 'CONTINUOUS' ? null : _packageType,
+        packageSize: _quantityMode == 'CONTINUOUS' ? null : double.parse(_packageSizeController.text.trim()),
+        packageCount: _quantityMode == 'CONTINUOUS' ? null : int.parse(_packageCountController.text.trim()),
         condition: _condition,
         unitPrice: double.parse(_priceController.text.trim()),
         latitude: _latitude,
@@ -408,6 +425,35 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                         _requiredLength(value, 'Description', 2000),
                   ),
                   const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    key: const Key('material-quantity-mode'),
+                    value: _quantityMode,
+                    decoration: const InputDecoration(labelText: 'Sellable quantity mode'),
+                    items: const [
+                      DropdownMenuItem(value: 'PACKAGE', child: Text('Package / container')),
+                      DropdownMenuItem(value: 'PIECE', child: Text('Individual piece')),
+                      DropdownMenuItem(value: 'CONTINUOUS', child: Text('Continuous / bulk')),
+                    ],
+                    onChanged: _isSaving ? null : (value) => setState(() => _quantityMode = value!),
+                  ),
+                  const SizedBox(height: 12),
+                  if (_quantityMode == 'PACKAGE' || _quantityMode == 'PIECE') ...[
+                    DropdownButtonFormField<String>(
+                      value: _packageType,
+                      decoration: const InputDecoration(labelText: 'Package type'),
+                      items: const ['CAN','BAG','BOX','CARTRIDGE','ROLL','SHEET','ROD','PIPE','PACK','PIECE','OTHER']
+                          .map((x) => DropdownMenuItem(value: x, child: Text(x.toLowerCase()))).toList(),
+                      onChanged: _isSaving ? null : (value) => setState(() => _packageType = value!),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(children: [
+                      Expanded(child: TextFormField(key: const Key('material-package-size'), controller: _packageSizeController, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: InputDecoration(labelText: 'Package size (${_unit ?? 'base unit'})'), validator: (v) => _positiveNumber(v, 'Package size'))),
+                      const SizedBox(width: 8),
+                      Expanded(child: TextFormField(key: const Key('material-package-count'), controller: _packageCountController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Number of packages'), validator: (v) => int.tryParse(v ?? '') is int n && n > 0 ? null : 'Enter a whole package count')),
+                    ]),
+                    Padding(padding: const EdgeInsets.only(top: 8), child: Text('Total material quantity: ${_packageSizeController.text.isEmpty || _packageCountController.text.isEmpty ? '—' : '${double.parse(_packageSizeController.text) * int.parse(_packageCountController.text)} ${_unit ?? ''}'}')),
+                    const SizedBox(height: 12),
+                  ],
                   Row(
                     children: [
                       Expanded(
@@ -417,11 +463,12 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                           keyboardType: const TextInputType.numberWithOptions(
                             decimal: true,
                           ),
-                          decoration: const InputDecoration(
-                            labelText: 'Quantity',
+                          decoration: InputDecoration(
+                            labelText: _quantityMode == 'CONTINUOUS' ? 'Quantity' : 'Base-equivalent quantity (calculated)',
                           ),
-                          validator: (value) =>
-                              _positiveNumber(value, 'Quantity'),
+                          readOnly: _quantityMode != 'CONTINUOUS',
+                          validator: (value) => _quantityMode == 'CONTINUOUS'
+                              ? _positiveNumber(value, 'Quantity') : null,
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -463,7 +510,7 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                     keyboardType: const TextInputType.numberWithOptions(
                       decimal: true,
                     ),
-                    decoration: const InputDecoration(labelText: 'Unit price (LKR)'),
+                    decoration: InputDecoration(labelText: _quantityMode == 'PACKAGE' || _quantityMode == 'PIECE' ? 'Price per package (LKR)' : 'Unit price (LKR)'),
                     validator: (value) => _positiveNumber(value, 'Unit price'),
                   ),
                   const SizedBox(height: 12),

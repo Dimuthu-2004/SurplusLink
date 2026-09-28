@@ -120,6 +120,8 @@ public static class MarketplaceModelConfiguration
                 table.HasCheckConstraint(
                     "CK_Listings_ReservedQuantity_Range",
                     "\"ReservedQuantity\" >= 0 AND \"ReservedQuantity\" <= \"Quantity\"");
+                table.HasCheckConstraint("CK_Listings_Package_Stock",
+                    "(\"QuantityMode\" NOT IN ('PACKAGE','PIECE')) OR (\"PackageCount\" IS NOT NULL AND \"PackageSize\" IS NOT NULL AND \"PackageCount\" > 0 AND \"PackageSize\" > 0 AND \"ReservedPackageCount\" >= 0 AND \"ReservedPackageCount\" <= \"PackageCount\")");
                 table.HasCheckConstraint(
                     "CK_Listings_Coordinates_Valid",
                     "(\"Latitude\" IS NULL AND \"Longitude\" IS NULL) OR (\"Latitude\" BETWEEN -90 AND 90 AND \"Longitude\" BETWEEN -180 AND 180)");
@@ -129,6 +131,12 @@ public static class MarketplaceModelConfiguration
             entity.Property(listing => listing.Description).HasMaxLength(2_000).IsRequired();
             entity.Property(listing => listing.Quantity).HasPrecision(18, 3);
             entity.Property(listing => listing.ReservedQuantity).HasPrecision(18, 3);
+            entity.Property(listing => listing.QuantityMode).HasConversion<string>().HasMaxLength(16).HasDefaultValue(QuantityMode.LEGACY);
+            entity.Property(listing => listing.BaseUnit).HasMaxLength(32);
+            entity.Property(listing => listing.PackageType).HasConversion<string>().HasMaxLength(16);
+            entity.Property(listing => listing.PackageSize).HasPrecision(18, 3);
+            entity.Property(listing => listing.PackageCount);
+            entity.Property(listing => listing.ReservedPackageCount).HasDefaultValue(0);
             entity.Property(listing => listing.Unit).HasMaxLength(32).IsRequired();
             entity.Property(listing => listing.Condition).HasConversion<string>().HasMaxLength(24).IsRequired();
             entity.Property(listing => listing.UnitPrice).HasPrecision(18, 2);
@@ -284,6 +292,7 @@ public static class MarketplaceModelConfiguration
                 table.HasCheckConstraint("CK_Reservations_Quantity_Positive", "\"Quantity\" > 0"));
             entity.HasKey(reservation => reservation.Id).HasName("PK_Reservations");
             entity.Property(reservation => reservation.Quantity).HasPrecision(18, 3);
+            entity.Property(reservation => reservation.PackageCount);
             entity.Property(reservation => reservation.Status).HasConversion<string>().HasMaxLength(24).IsRequired();
             entity.HasIndex(reservation => reservation.ListingId).HasDatabaseName("IX_Reservations_ListingId");
             entity.HasIndex(reservation => reservation.MaterialRequestId)
@@ -402,6 +411,7 @@ public static class MarketplaceModelConfiguration
             entity.HasKey(offer => offer.Id);
             entity.Property(offer => offer.Status).HasConversion<string>().HasMaxLength(32).IsRequired();
             entity.Property(offer => offer.Quantity).HasPrecision(18, 3);
+            entity.Property(offer => offer.PackageCount);
             entity.Property(offer => offer.UnitValue).HasPrecision(18, 2);
             entity.Property(offer => offer.TotalValue).HasPrecision(18, 2);
             entity.HasIndex(offer => new { offer.Status, offer.CreatedAtUtc }).HasDatabaseName("IX_Offers_Status_CreatedAtUtc");
@@ -424,6 +434,7 @@ public static class MarketplaceModelConfiguration
             entity.HasKey(transaction => transaction.Id);
             entity.Property(transaction => transaction.Status).HasConversion<string>().HasMaxLength(32).IsRequired();
             entity.Property(transaction => transaction.Quantity).HasPrecision(18, 3);
+            entity.Property(transaction => transaction.PackageCount);
             entity.Property(transaction => transaction.TotalValue).HasPrecision(18, 2);
             entity.Property(transaction => transaction.ReservedQuantity).HasPrecision(18, 3);
             entity.Property(transaction => transaction.Version).IsRowVersion();

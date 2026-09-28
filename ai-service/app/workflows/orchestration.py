@@ -53,6 +53,13 @@ class ListingSnapshot(Contract):
     durationMinutes: Measurement | None = None
     transportCost: Measurement | None = None
     routingError: str | None = Field(default=None, max_length=80)
+    quantityMode: str | None = None
+    packageType: str | None = None
+    packageSize: Measurement | None = None
+    packageCountAvailable: int | None = None
+    baseEquivalentAvailableQuantity: Measurement | None = None
+    maximumContribution: Measurement | None = None
+    fullCoverage: bool | None = None
 
 
 class WorkflowRequest(Contract):
@@ -143,7 +150,10 @@ class SnapshotTools:
         return MaterialListingRecord(seller_id=x.sellerId, listing_id=str(x.listingId),
             category_id=str(x.categoryId), category=None, available_quantity=x.availableQuantity,
             unit=x.unit, unit_price=x.unitPrice, condition=x.condition, status=x.status,
-            is_verified=x.status == "ACTIVE", available_until=x.availableUntil)
+            is_verified=x.status == "ACTIVE", available_until=x.availableUntil,
+            quantity_mode=x.quantityMode or "LEGACY", package_type=x.packageType, package_size=x.packageSize,
+            package_count_available=x.packageCountAvailable, base_equivalent_available_quantity=x.baseEquivalentAvailableQuantity,
+            maximum_contribution=x.maximumContribution, full_coverage=x.fullCoverage)
 
     def search_active_materials(self, criteria):
         return self._call("search_active_materials", {}, lambda: (

@@ -126,7 +126,7 @@ function ApprovalGroupDetails({ group }: { group: ApprovalGroup }) {
           {allocation.sellerBusinessName && <p className="muted">{allocation.sellerName}</p>}
           <dl className="detail-grid">
             <div><dt>Material</dt><dd><Link to={'/app/manager/materials/' + allocation.listingId}>{allocation.listingTitle}</Link></dd></div>
-            <div><dt>Allocated quantity</dt><dd>{requirementNumber(allocation.allocatedQuantity)} {allocation.unit}</dd></div>
+            <div><dt>Allocated quantity</dt><dd>{allocation.packageCount != null ? `${allocation.packageCount} ${allocation.packageType?.toLowerCase() ?? 'package'}${allocation.packageCount === 1 ? '' : 's'} × ${requirementNumber(allocation.packageSize ?? 0)} ${allocation.baseUnit ?? allocation.unit} = ` : ''}{requirementNumber(allocation.allocatedQuantity)} {allocation.unit}</dd></div>
             <div><dt>Available quantity</dt><dd>{requirementNumber(allocation.availableQuantity)} {allocation.unit}</dd></div>
             <div><dt>Unit price</dt><dd>{formatLkr(allocation.unitPrice)} / {allocation.unit}</dd></div>
             <div><dt>Allocation value</dt><dd>{formatLkr(allocation.materialValue)}</dd></div>
