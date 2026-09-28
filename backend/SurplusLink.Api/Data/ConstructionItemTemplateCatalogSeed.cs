@@ -32,7 +32,7 @@ public static class ConstructionItemTemplateCatalogSeed
 
     public static Category[] GetCategories() =>
     [
-        new() { Id = LegacyCementId, Name = "Cement", AllowedUnits = ["kg", "bag", "ton", "piece"], CreatedAtUtc = SeedTimestamp, UpdatedAtUtc = SeedTimestamp },
+        new() { Id = LegacyCementId, Name = "Cement", AllowedUnits = ["kg", "bag", "ton", "piece", "unit"], CreatedAtUtc = SeedTimestamp, UpdatedAtUtc = SeedTimestamp },
         new() { Id = LegacySteelId, Name = "Steel", AllowedUnits = ["piece", "rod", "kg", "ton", "m"], CreatedAtUtc = SeedTimestamp, UpdatedAtUtc = SeedTimestamp },
         new() { Id = LegacyTimberId, Name = "Timber", AllowedUnits = ["piece", "board", "sqm", "m"], CreatedAtUtc = SeedTimestamp, UpdatedAtUtc = SeedTimestamp },
         new() { Id = LegacyBricksId, Name = "Bricks", AllowedUnits = ["piece", "block", "sqm"], CreatedAtUtc = SeedTimestamp, UpdatedAtUtc = SeedTimestamp },
@@ -198,7 +198,7 @@ public static class ConstructionItemTemplateCatalogSeed
             {
                 new { id = "brickType", label = "Brick Type", type = "select", required = true, options = new[] { "Red Clay Wire-Cut", "Traditional Burnt Clay", "Fly Ash", "Engineering Brick", "Refractory / Fire Brick" } },
                 new { id = "dimensionsMm", label = "Dimensions (mm)", type = "string", required = false, placeholder = "e.g. 215 x 102.5 x 65" },
-                new { id = "compressiveStrength", label = "Compressive Strength (N/mmÂ²)", type = "string", required = false }
+                new { id = "compressiveStrength", label = "Compressive Strength (N/mm\u00B2)", type = "string", required = false }
             }),
             PriceBasis = "PER_PIECE",
             IsActive = true,
@@ -509,7 +509,7 @@ public static class ConstructionItemTemplateCatalogSeed
             AllowedPackageSizes = [50m, 100m],
             AttributeSchema = JsonSerializer.Serialize(new object[]
             {
-                new { id = "conductorSizeMm2", label = "Conductor Size", type = "select", required = true, options = new[] { "1.0 mmÂ²", "1.5 mmÂ²", "2.5 mmÂ²", "4.0 mmÂ²", "6.0 mmÂ²", "10.0 mmÂ²", "16.0 mmÂ²" } },
+                new { id = "conductorSizeMm2", label = "Conductor Size", type = "select", required = true, options = new[] { "1.0 mm\u00B2", "1.5 mm\u00B2", "2.5 mm\u00B2", "4.0 mm\u00B2", "6.0 mm\u00B2", "10.0 mm\u00B2", "16.0 mm\u00B2" } },
                 new { id = "coreCount", label = "Cores", type = "select", required = true, options = new[] { "Single Core (1C)", "Twin & Earth (2C+E)", "3 Core", "4 Core Armoured" } },
                 new { id = "insulationType", label = "Insulation", type = "select", required = false, options = new[] { "PVC", "XLPE", "LSZH (Low Smoke Zero Halogen)" } },
                 new { id = "voltageRating", label = "Voltage Rating", type = "select", required = false, options = new[] { "300/500V", "450/750V", "600/1000V" } }

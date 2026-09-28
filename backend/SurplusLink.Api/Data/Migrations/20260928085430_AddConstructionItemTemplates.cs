@@ -67,7 +67,7 @@ namespace SurplusLink.Api.Data.Migrations
                 keyColumn: "Id",
                 keyValue: new Guid("00000000-0000-0000-0000-000000000101"),
                 column: "AllowedUnits",
-                value: new[] { "kg", "bag", "ton", "piece" });
+                value: new[] { "kg", "bag", "ton", "piece", "unit" });
 
             migrationBuilder.UpdateData(
                 table: "Categories",
