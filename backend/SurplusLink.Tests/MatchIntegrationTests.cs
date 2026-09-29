@@ -258,6 +258,8 @@ public sealed class MatchIntegrationTests(RequirementsDatabase fixture) : IClass
         var routed = (await route.Content.ReadFromJsonAsync<MatchResponse>())!;
         Assert.Equal(30m, routed.DurationMinutes);
         Assert.Equal("ROUTED", routed.Status);
+        Assert.Equal(fixture.Seller, routed.SellerId);
+        Assert.False(string.IsNullOrWhiteSpace(routed.SellerDisplayName));
         (await buyer.PostAsync(path + "/rank", null)).EnsureSuccessStatusCode();
         Assert.True((await buyer.GetFromJsonAsync<MatchResponse>(detailPath))!.Score > 0);
         routing.Fail = true;
@@ -265,8 +267,10 @@ public sealed class MatchIntegrationTests(RequirementsDatabase fixture) : IClass
         var failedMatch = (await failed.Content.ReadFromJsonAsync<MatchResponse>())!;
         Assert.Equal("ROUTE_FAILED", failedMatch.Status);
         Assert.False(failedMatch.Valid);
-        Assert.Equal("ROUTE_UNAVAILABLE", failedMatch.RejectionReason);
+        Assert.Equal("ROUTING_PROVIDER_ERROR", failedMatch.RejectionReason);
         Assert.Null(failedMatch.Distance); Assert.Null(failedMatch.DurationMinutes);
+        using (var verifyRetry = fixture.Context())
+            Assert.Equal(1, await verifyRetry.Matches.CountAsync(x => x.MaterialRequestId == request.Id && x.ListingId == listing.Id));
         (await buyer.PostAsync($"/api/requirements/{request.Id}/start-matching", null)).EnsureSuccessStatusCode();
         Assert.Equal(HttpStatusCode.Conflict, (await buyer.PostAsync(path + "/generate", null)).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await buyer.PostAsync(detailPath + "/route", null)).StatusCode);

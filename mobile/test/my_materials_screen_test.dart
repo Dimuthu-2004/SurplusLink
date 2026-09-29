@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/materials/material_inventory_gateway.dart';
 import 'package:mobile/materials/material_models.dart';
+import 'package:mobile/materials/construction_item_template_models.dart';
 import 'package:mobile/screens/my_materials_screen.dart';
 
 import 'support/fakes.dart';
@@ -222,6 +223,13 @@ void main() {
 final class _FakeMaterialsGateway implements MaterialInventoryGateway {
   @override
   Future<List<String>> categoryUnits(String categoryId) async => ['kg'];
+
+  @override
+  Future<List<ConstructionItemTemplate>> itemTemplates({
+    String? search,
+    String? categoryId,
+    String? itemClass,
+  }) async => const [];
   MaterialListingQuery? lastQuery;
   bool includeListing = false;
   int searchCount = 0;

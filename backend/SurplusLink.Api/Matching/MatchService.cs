@@ -1,12 +1,17 @@
 using System.ComponentModel.DataAnnotations;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using Microsoft.Extensions.Logging;
 using SurplusLink.Api.Data;
 using SurplusLink.Api.Models;
+using SurplusLink.Api.Routing;
 
 namespace SurplusLink.Api.Matching;
 
-public sealed partial class MatchService(SurplusLinkDbContext db)
+public sealed partial class MatchService(
+    SurplusLinkDbContext db,
+    ILogger<MatchService>? logger = null,
+    RoutingOptions? routingOptions = null)
 {
     public async Task<MatchPage> ListAsync(
         Guid requirementId,

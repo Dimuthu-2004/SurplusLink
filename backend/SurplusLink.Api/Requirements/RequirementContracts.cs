@@ -8,6 +8,9 @@ namespace SurplusLink.Api.Requirements;
 public sealed class SaveRequirementRequest : IValidatableObject
 {
     public Guid CategoryId { get; init; }
+    public Guid? ConstructionItemTemplateId { get; init; }
+    [StringLength(4000)]
+    public string? BuyerPreferencesJson { get; init; }
     [StringLength(2000)]
     public string? Notes { get; init; }
     [Range(typeof(decimal), "0.001", "999999999999999.999")]
@@ -43,10 +46,18 @@ public sealed record RequirementResponse(
     public Guid? WorkflowId { get; init; }
     public string? WorkflowStatus { get; init; }
     public string? DecisionNote { get; init; }
+    public Guid? ConstructionItemTemplateId { get; init; }
+    public string? ConstructionItemTemplateName { get; init; }
+    public string? BuyerPreferencesJson { get; init; }
     public static RequirementResponse From(BuyerRequest request) => new(
         request.Id, request.BuyerId, request.CategoryId, request.RequiredQuantity, request.Unit,
         request.MaximumBudget, request.Deadline, request.Latitude, request.Longitude,
-        request.Status, request.CreatedAtUtc, request.UpdatedAtUtc, request.Notes);
+        request.Status, request.CreatedAtUtc, request.UpdatedAtUtc, request.Notes)
+    {
+        ConstructionItemTemplateId = request.ConstructionItemTemplateId,
+        ConstructionItemTemplateName = request.ConstructionItemTemplate?.Name,
+        BuyerPreferencesJson = request.BuyerPreferencesJson
+    };
 }
 
 public sealed record RequirementPage(IReadOnlyList<RequirementResponse> Items, int Total, int Page, int PageSize);
@@ -60,6 +71,11 @@ public sealed class MatchAllocationRequest
 
     [Range(typeof(decimal), "0.001", "999999999999999.999")]
     public decimal Quantity { get; init; }
+
+    // Required for PACKAGE/PIECE listings; Quantity is the derived base
+    // equivalent retained for compatibility with legacy contracts.
+    [Range(1, int.MaxValue)]
+    public int? PackageCount { get; init; }
 }
 
 public sealed class SelectMatchesRequest : IValidatableObject

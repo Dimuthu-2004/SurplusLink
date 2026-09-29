@@ -16,6 +16,7 @@ public interface IMaterialInventoryService
     Task<MaterialAnalyticsSummaryResponse> GetAnalyticsSummaryAsync(MaterialAnalyticsQuery query, CancellationToken cancellationToken);
     Task<IReadOnlyList<MaterialCategoryResponse>> GetCategoriesAsync(CancellationToken cancellationToken);
     Task<IReadOnlyList<string>> GetUnitCatalogAsync(CancellationToken cancellationToken);
+    Task<IReadOnlyList<UnitDefinitionResponse>> GetUnitDefinitionsAsync(CancellationToken cancellationToken);
     Task<IReadOnlyList<string>> GetCategoryUnitsAsync(Guid categoryId, CancellationToken cancellationToken);
     Task<IReadOnlyList<string>> GetActiveUnitsAsync(Guid categoryId, CancellationToken cancellationToken);
     Task<MaterialCategoryResponse> CreateCategoryAsync(MaterialCategoryRequest request, CancellationToken cancellationToken);

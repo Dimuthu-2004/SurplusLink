@@ -1,0 +1,15 @@
+{
+  "@@locale": "ta",
+  "appTitle": "SurplusLink",
+  "language": "மொழி",
+  "english": "English",
+  "sinhala": "සිංහල",
+  "tamil": "தமிழ்",
+  "createRequirement": "தேவையை உருவாக்கவும்",
+  "whatDoYouNeed": "உங்களுக்கு என்ன வேண்டும்?",
+  "searchConstructionItems": "கட்டுமானப் பொருட்களைத் தேடுங்கள்...",
+  "category": "வகை",
+  "preferencesOptional": "விருப்பங்கள் (விருப்பத்தேர்வு)",
+  "saveDraft": "வரைவைச் சேமி",
+  "validationSummary": "குறிக்கப்பட்ட புலங்களைச் சரிசெய்யவும்."
+}

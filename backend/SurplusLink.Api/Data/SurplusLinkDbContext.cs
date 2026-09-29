@@ -9,6 +9,8 @@ public sealed class SurplusLinkDbContext(DbContextOptions<SurplusLinkDbContext> 
 
     public DbSet<Category> Categories => Set<Category>();
 
+    public DbSet<ConstructionItemTemplate> ConstructionItemTemplates => Set<ConstructionItemTemplate>();
+
     public DbSet<Listing> Listings => Set<Listing>();
 
     public DbSet<ListingPhoto> ListingPhotos => Set<ListingPhoto>();

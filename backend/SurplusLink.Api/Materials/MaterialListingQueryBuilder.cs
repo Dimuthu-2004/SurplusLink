@@ -31,6 +31,11 @@ internal static class MaterialListingQueryBuilder
             }
         }
 
+        if (query.TemplateId.HasValue)
+        {
+            listings = listings.Where(listing => listing.ConstructionItemTemplateId == query.TemplateId.Value);
+        }
+
         if (TryParseEnum<ListingStatus>(query.Status, "Status", out var status))
         {
             listings = listings.Where(listing => listing.Status == status);

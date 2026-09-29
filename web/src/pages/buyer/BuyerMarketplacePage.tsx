@@ -1,386 +1,110 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
-import { useAuth } from '../../auth/AuthContext';
-import {
-  fetchMarketplaceListings,
-  fetchMaterialCategories,
-  type MaterialListingItem,
-  type MaterialCategoryItem,
-  type MarketplaceQueryParams,
-} from '../../api/buyerMarketplaceApi';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { fetchItemTemplates, type ConstructionItemTemplate } from '../../api/constructionItemTemplatesApi';
+import { fetchMarketplaceListings, fetchMaterialCategories, type MaterialCategoryItem, type MaterialListingItem, type MarketplaceQueryParams } from '../../api/buyerMarketplaceApi';
+import { catalogLabel, useLanguage } from '../../i18n/LanguageContext';
 import { BuyerListingCard } from './BuyerListingCard';
+import { MobileHandoffModal } from './MobileHandoffModal';
 import './buyerMarketplace.css';
 
+type CategoryPreview = { count: number; image?: string };
+
 export function BuyerMarketplacePage() {
-  const { user, logout } = useAuth();
-  const [searchParams, setSearchParams] = useSearchParams();
-
-  // Categories state
+  const { language, t } = useLanguage();
+  const [params, setParams] = useSearchParams();
   const [categories, setCategories] = useState<MaterialCategoryItem[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState<string>(
-    searchParams.get('category') || '',
-  );
-
-  // Search state
-  const [searchTerm, setSearchTerm] = useState<string>(searchParams.get('search') || '');
-  const [debouncedSearch, setDebouncedSearch] = useState<string>(
-    searchParams.get('search') || '',
-  );
-
-  // Filter state
-  const [condition, setCondition] = useState<string>(searchParams.get('condition') || '');
-  const [sortBy, setSortBy] = useState<MarketplaceQueryParams['sortBy']>(
-    (searchParams.get('sortBy') as MarketplaceQueryParams['sortBy']) || 'createdAt',
-  );
-  const [sortDir, setSortDir] = useState<MarketplaceQueryParams['sortDir']>(
-    (searchParams.get('sortDir') as MarketplaceQueryParams['sortDir']) || 'desc',
-  );
-  const [page, setPage] = useState<number>(parseInt(searchParams.get('page') || '1', 10) || 1);
-
-  // Results state
+  const [templates, setTemplates] = useState<ConstructionItemTemplate[]>([]);
+  const [previews, setPreviews] = useState<Record<string, CategoryPreview>>({});
+  const [categoryId, setCategoryId] = useState(params.get('category') || '');
+  const [templateId, setTemplateId] = useState(params.get('template') || '');
+  const [search, setSearch] = useState(params.get('search') || '');
+  const [condition, setCondition] = useState(params.get('condition') || '');
+  const [sortBy, setSortBy] = useState<MarketplaceQueryParams['sortBy']>('createdAt');
+  const [sortDir, setSortDir] = useState<MarketplaceQueryParams['sortDir']>('desc');
+  const [page, setPage] = useState(1);
   const [listings, setListings] = useState<MaterialListingItem[]>([]);
-  const [totalCount, setTotalCount] = useState<number>(0);
-  const [totalPages, setTotalPages] = useState<number>(1);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
-  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [showPrompt, setShowPrompt] = useState(false);
+  const [showQr, setShowQr] = useState(false);
+  const promptShown = useRef(false);
+  const listingView = Boolean(categoryId || templateId || search);
 
-  // Debounce search input
   useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedSearch(searchTerm);
-      setPage(1);
-    }, 300);
-    return () => clearTimeout(handler);
-  }, [searchTerm]);
-
-  // Load categories
-  useEffect(() => {
-    fetchMaterialCategories()
-      .then((data) => setCategories(data))
-      .catch(() => {
-        // Fallback silently if categories fail to load
-      });
+    void Promise.all([fetchMaterialCategories(), fetchItemTemplates()]).then(([loadedCategories, loadedTemplates]) => {
+      setCategories(loadedCategories);
+      setTemplates(loadedTemplates.filter(item => item.isActive));
+      // Counts and card imagery come from the real, buyer-visible active listings.
+      void Promise.all(loadedCategories.map(async category => {
+        const result = await fetchMarketplaceListings({ category: category.id, pageSize: 1 });
+        return [category.id, { count: result.totalCount, image: result.items[0]?.photos?.[0]?.photoUrl }] as const;
+      })).then(entries => setPreviews(Object.fromEntries(entries))).catch(() => undefined);
+    }).catch(() => setError('Unable to load the marketplace.'));
   }, []);
 
-  // Sync state to URL params
-  useEffect(() => {
-    const params = new URLSearchParams();
-    if (selectedCategory) params.set('category', selectedCategory);
-    if (debouncedSearch) params.set('search', debouncedSearch);
-    if (condition) params.set('condition', condition);
-    if (sortBy && sortBy !== 'createdAt') params.set('sortBy', sortBy);
-    if (sortDir && sortDir !== 'desc') params.set('sortDir', sortDir);
-    if (page > 1) params.set('page', page.toString());
-    setSearchParams(params, { replace: true });
-  }, [selectedCategory, debouncedSearch, condition, sortBy, sortDir, page, setSearchParams]);
-
-  // Fetch listings
-  const loadListings = useCallback(
-    async (isBackground = false) => {
-      if (!isBackground) {
-        setLoading(true);
-      } else {
-        setIsRefreshing(true);
-      }
-      setError(null);
-
-      try {
-        const res = await fetchMarketplaceListings({
-          category: selectedCategory || undefined,
-          search: debouncedSearch || undefined,
-          condition: condition || undefined,
-          sortBy,
-          sortDir,
-          page,
-          pageSize: 12,
-        });
-
-        setListings(res.items);
-        setTotalCount(res.totalCount);
-        setTotalPages(Math.max(1, res.totalPages));
-        setLastUpdated(new Date());
-      } catch (err: unknown) {
-        if (!isBackground) {
-          setError(err instanceof Error ? err.message : 'Failed to load materials.');
-        }
-      } finally {
-        setLoading(false);
-        setIsRefreshing(false);
-      }
-    },
-    [selectedCategory, debouncedSearch, condition, sortBy, sortDir, page],
-  );
+  const selectedCategory = categories.find(category => category.id === categoryId);
+  const selectedTemplate = templates.find(template => template.id === templateId);
+  const categoryTemplates = templates.filter(template => template.categoryId === categoryId);
 
   useEffect(() => {
-    loadListings(false);
-  }, [loadListings]);
+    const next = new URLSearchParams();
+    if (categoryId) next.set('category', categoryId);
+    if (templateId) next.set('template', templateId);
+    if (search) next.set('search', search);
+    if (condition) next.set('condition', condition);
+    if (page > 1) next.set('page', String(page));
+    setParams(next, { replace: true });
+  }, [categoryId, condition, page, search, setParams, templateId]);
 
-  // Background refresh every 25 seconds & on window focus
-  const loadRef = useRef(loadListings);
-  loadRef.current = loadListings;
+  const loadListings = useCallback(async () => {
+    if (!listingView) return;
+    setLoading(true); setError(null);
+    try {
+      const result = await fetchMarketplaceListings({ category: categoryId || undefined, templateId: templateId || undefined, search: search || undefined, condition: condition || undefined, sortBy, sortDir, page, pageSize: 12 });
+      setListings(result.items); setTotalCount(result.totalCount); setTotalPages(Math.max(1, result.totalPages));
+    } catch (reason) { setError(reason instanceof Error ? reason.message : 'Unable to load active listings.'); }
+    finally { setLoading(false); }
+  }, [categoryId, condition, listingView, page, search, sortBy, sortDir, templateId]);
+  useEffect(() => { void loadListings(); }, [loadListings]);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      loadRef.current(true);
-    }, 25000);
-
-    const onFocus = () => {
-      loadRef.current(true);
+    if (!listingView) return;
+    const onScroll = () => {
+      const max = document.documentElement.scrollHeight - window.innerHeight;
+      if (!promptShown.current && max > 400 && window.scrollY / max > .35) { promptShown.current = true; setShowPrompt(true); }
     };
-    window.addEventListener('focus', onFocus);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [listingView, categoryId, templateId]);
 
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('focus', onFocus);
-    };
-  }, []);
+  const chooseCategory = (id: string) => { setCategoryId(id); setTemplateId(''); setPage(1); promptShown.current = false; };
+  const backToCategories = () => { setCategoryId(''); setTemplateId(''); setSearch(''); setCondition(''); setPage(1); setShowPrompt(false); };
+  const handoffCategory = selectedCategory ?? categories.find(category => category.id === selectedTemplate?.categoryId);
 
-  const handleCategorySelect = (categoryName: string) => {
-    setSelectedCategory((prev) => (prev === categoryName ? '' : categoryName));
-    setPage(1);
-  };
+  if (!listingView) return <div className="marketplace-page-content category-discovery">
+    <section className="marketplace-discovery-header"><p className="marketplace-kicker">{t('marketplace')}</p><h1>{t('marketplace')}</h1><p>{t('findMaterials')}</p><label className="marketplace-discovery-search"><span aria-hidden="true">⌕</span><input value={search} onChange={event => setSearch(event.target.value)} placeholder={t('searchMaterials')} aria-label={t('searchMaterials')} /></label></section>
+    <section aria-labelledby="browse-categories"><h2 id="browse-categories">{t('browseCategories')}</h2><div className="marketplace-category-cards">
+      {categories.filter(category => (previews[category.id]?.count ?? 0) > 0).map((category, index) => <button key={category.id} type="button" className="marketplace-category-card" style={{ animationDelay: `${index * 55}ms` }} onClick={() => chooseCategory(category.id)}>
+        <CategoryVisual image={previews[category.id]?.image} name={category.name} />
+        <span className="marketplace-category-card-body"><strong>{catalogLabel(category.name, language)}</strong><small>{previews[category.id]?.count ?? 0} {t('activeListings')}</small><span aria-hidden="true">→</span></span>
+      </button>)}
+    </div></section>
+    {error && <p className="field-error">{error}</p>}
+  </div>;
 
-  const handleClearFilters = () => {
-    setSelectedCategory('');
-    setSearchTerm('');
-    setDebouncedSearch('');
-    setCondition('');
-    setSortBy('createdAt');
-    setSortDir('desc');
-    setPage(1);
-  };
+  return <div className="marketplace-page-content">
+    <header className="marketplace-listing-header"><button type="button" className="back-link" onClick={backToCategories}>← {t('backToCategories')}</button><h1>{selectedTemplate ? catalogLabel(selectedTemplate.name, language) : selectedCategory ? catalogLabel(selectedCategory.name, language) : t('marketplace')}</h1><p>{totalCount} {t('activeListings')}</p><label className="marketplace-discovery-search"><span aria-hidden="true">⌕</span><input value={search} onChange={event => { setSearch(event.target.value); setPage(1); }} placeholder={t('searchMaterials')} aria-label={t('searchMaterials')} /></label></header>
+    {categoryTemplates.length > 0 && <nav className="marketplace-template-filter" aria-label="Catalog item filter"><button className={!templateId ? 'active' : ''} onClick={() => { setTemplateId(''); setPage(1); }}>All</button>{categoryTemplates.map(template => <button key={template.id} className={templateId === template.id ? 'active' : ''} onClick={() => { setTemplateId(template.id); setPage(1); }}>{catalogLabel(template.name, language)}</button>)}</nav>}
+    <div className="marketplace-controls-bar"><span>{t('filters')}</span><select value={condition} onChange={event => { setCondition(event.target.value); setPage(1); }} aria-label={t('allConditions')}><option value="">{t('allConditions')}</option><option value="NEW">New</option><option value="EXCELLENT">Excellent</option><option value="GOOD">Good</option><option value="FAIR">Fair</option></select><select value={`${sortBy}_${sortDir}`} onChange={event => { const [sort, direction] = event.target.value.split('_'); setSortBy(sort as MarketplaceQueryParams['sortBy']); setSortDir(direction as MarketplaceQueryParams['sortDir']); setPage(1); }}><option value="createdAt_desc">{t('sortNewest')}</option><option value="unitPrice_asc">Price: low to high</option><option value="unitPrice_desc">Price: high to low</option></select><button type="button" className="button button-secondary" onClick={() => setShowQr(true)}>{t('findBestMatch')}</button></div>
+    {loading ? <p>{t('loading')}</p> : error ? <p className="field-error">{error}</p> : listings.length ? <div className="marketplace-grid">{listings.map(listing => <BuyerListingCard key={listing.id} listing={listing} />)}</div> : <div className="marketplace-empty-state"><h2>{t('noListings')}</h2></div>}
+    {totalPages > 1 && <nav className="marketplace-pagination"><button disabled={page <= 1} onClick={() => setPage(value => value - 1)}>Previous</button><span>{page} / {totalPages}</span><button disabled={page >= totalPages} onClick={() => setPage(value => value + 1)}>Next</button></nav>}
+    {showPrompt && <div className="marketplace-ai-prompt" role="dialog" aria-modal="true"><div><h2>{t('handoffTitle')}</h2><p>{t('handoffDescription')}</p><button className="button button-secondary" onClick={() => setShowPrompt(false)}>{t('notNow')}</button><button className="button button-primary" onClick={() => { setShowPrompt(false); setShowQr(true); }}>{t('continueQr')}</button></div></div>}
+    {handoffCategory && <MobileHandoffModal isOpen={showQr} onClose={() => setShowQr(false)} categoryId={handoffCategory.id} categoryName={catalogLabel(selectedTemplate?.name ?? handoffCategory.name, language)} />}
+  </div>;
+}
 
-  return (
-    <div className="marketplace-page-content">
-      {/* Hero & Search Banner */}
-      <section className="marketplace-hero-section">
-        <div className="marketplace-hero-banner">
-          <div className="marketplace-hero-content">
-            <h1 className="sr-only">Buyer home</h1>
-            <span className="marketplace-hero-tag">Construction Material Marketplace</span>
-            <h2 className="marketplace-hero-title">Browse Verified Surplus Materials</h2>
-            <p className="marketplace-hero-desc">
-              Discover active surplus stock across Sri Lanka. Find the right materials and continue
-              seamlessly in the SurplusLink Mobile App with AI matching.
-            </p>
-
-            <form
-              className="marketplace-search-form"
-              onSubmit={(e) => e.preventDefault()}
-              role="search"
-            >
-              <svg
-                className="marketplace-search-icon"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <circle cx="11" cy="11" r="8" />
-                <line x1="21" y1="21" x2="16.65" y2="16.65" />
-              </svg>
-              <input
-                type="text"
-                placeholder="Search materials by name or description..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="marketplace-search-input"
-                aria-label="Search materials"
-              />
-              {searchTerm && (
-                <button
-                  type="button"
-                  className="marketplace-search-clear"
-                  onClick={() => setSearchTerm('')}
-                  aria-label="Clear search"
-                >
-                  &times;
-                </button>
-              )}
-            </form>
-          </div>
-        </div>
-      </section>
-
-      {/* Dynamic Category Navigation Bar */}
-      <section className="marketplace-category-bar" aria-label="Categories">
-        <div className="category-chips-scroll">
-          <button
-            type="button"
-            className={`category-chip-btn ${selectedCategory === '' ? 'active' : ''}`}
-            onClick={() => handleCategorySelect('')}
-          >
-            All Materials
-          </button>
-          {categories.map((cat) => (
-            <button
-              key={cat.id}
-              type="button"
-              className={`category-chip-btn ${selectedCategory === cat.name ? 'active' : ''}`}
-              onClick={() => handleCategorySelect(cat.name)}
-            >
-              {cat.name}
-            </button>
-          ))}
-        </div>
-      </section>
-
-      {/* Main Content Area */}
-      <main className="marketplace-main-container">
-        {/* Controls & Filter Bar */}
-        <div className="marketplace-controls-bar">
-          <div className="marketplace-summary-count">
-            Showing <strong>{totalCount}</strong> {totalCount === 1 ? 'material' : 'materials'}
-            {selectedCategory && ` in ${selectedCategory}`}
-            <span className="marketplace-live-badge">
-              <span className="live-pulse-dot" />
-              {isRefreshing ? 'Refreshing...' : 'Updated just now'}
-            </span>
-          </div>
-
-          <div className="marketplace-filters-group">
-            {/* Condition Filter */}
-            <select
-              className="marketplace-select"
-              value={condition}
-              onChange={(e) => {
-                setCondition(e.target.value);
-                setPage(1);
-              }}
-              aria-label="Filter by condition"
-            >
-              <option value="">All Conditions</option>
-              <option value="NEW">New</option>
-              <option value="EXCELLENT">Excellent</option>
-              <option value="GOOD">Good</option>
-              <option value="FAIR">Fair</option>
-              <option value="POOR">Poor</option>
-            </select>
-
-            {/* Sort Filter */}
-            <select
-              className="marketplace-select"
-              value={`${sortBy}_${sortDir}`}
-              onChange={(e) => {
-                const [sb, sd] = e.target.value.split('_');
-                setSortBy(sb as MarketplaceQueryParams['sortBy']);
-                setSortDir(sd as MarketplaceQueryParams['sortDir']);
-                setPage(1);
-              }}
-              aria-label="Sort listings"
-            >
-              <option value="createdAt_desc">Newest Listings</option>
-              <option value="unitPrice_asc">Price: Low to High</option>
-              <option value="unitPrice_desc">Price: High to Low</option>
-              <option value="quantity_desc">Quantity: High to Low</option>
-            </select>
-
-            {(selectedCategory || debouncedSearch || condition) && (
-              <button
-                type="button"
-                className="button button-secondary"
-                style={{ padding: '0.4rem 0.85rem', fontSize: '0.84rem' }}
-                onClick={handleClearFilters}
-              >
-                Clear Filters
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Listings Display */}
-        {loading ? (
-          <div style={{ textAlign: 'center', padding: '5rem 0' }}>
-            <div className="spinner" style={{ margin: '0 auto 1.25rem' }} />
-            <p style={{ color: 'var(--sl-market-text-muted)', fontWeight: 600 }}>
-              Finding available materials...
-            </p>
-          </div>
-        ) : error ? (
-          <div className="marketplace-empty-state">
-            <h2 className="empty-state-title">Unable to Load Listings</h2>
-            <p className="empty-state-text">{error}</p>
-            <button
-              type="button"
-              className="button button-primary"
-              onClick={() => loadListings(false)}
-            >
-              Try Again
-            </button>
-          </div>
-        ) : listings.length === 0 ? (
-          <div className="marketplace-empty-state">
-            <svg
-              className="empty-state-icon"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-            >
-              <circle cx="11" cy="11" r="8" />
-              <line x1="21" y1="21" x2="16.65" y2="16.65" />
-            </svg>
-            <h2 className="empty-state-title">No Materials Found</h2>
-            <p className="empty-state-text">
-              We couldn't find any surplus materials matching your current filters. Try selecting a
-              different category or clearing your search.
-            </p>
-            <button
-              type="button"
-              className="button button-primary"
-              onClick={handleClearFilters}
-            >
-              Reset All Filters
-            </button>
-          </div>
-        ) : (
-          <div className="marketplace-grid" data-testid="marketplace-grid">
-            {listings.map((item) => (
-              <BuyerListingCard key={item.id} listing={item} />
-            ))}
-          </div>
-        )}
-
-        {/* Pagination */}
-        {!loading && totalPages > 1 && (
-          <nav className="marketplace-pagination" aria-label="Pagination">
-            <button
-              type="button"
-              className="pagination-btn"
-              disabled={page <= 1}
-              onClick={() => {
-                setPage((p) => Math.max(1, p - 1));
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-              }}
-              aria-label="Previous page"
-            >
-              &larr; Previous
-            </button>
-
-            <span className="pagination-info">
-              Page {page} of {totalPages}
-            </span>
-
-            <button
-              type="button"
-              className="pagination-btn"
-              disabled={page >= totalPages}
-              onClick={() => {
-                setPage((p) => Math.min(totalPages, p + 1));
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-              }}
-              aria-label="Next page"
-            >
-              Next &rarr;
-            </button>
-          </nav>
-        )}
-      </main>
-    </div>
-  );
+function CategoryVisual({ image, name }: { image?: string; name: string }) {
+  return image ? <img src={image} alt="" className="marketplace-category-image" /> : <div className="marketplace-category-fallback" aria-hidden="true">{name.toLowerCase().includes('tool') ? '🔧' : name.toLowerCase().includes('roof') ? '🏠' : name.toLowerCase().includes('elect') ? '⚡' : '▦'}</div>;
 }

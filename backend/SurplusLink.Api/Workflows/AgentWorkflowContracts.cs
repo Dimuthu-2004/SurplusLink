@@ -52,7 +52,8 @@ public sealed record ApprovalAllocationResponse(
     Guid TransactionId, Guid SellerId, string SellerName, string? SellerBusinessName,
     Guid ListingId, string ListingTitle, decimal AllocatedQuantity, decimal AvailableQuantity,
     string Unit, decimal UnitPrice, decimal MaterialValue, decimal? Score,
-    decimal? Distance, decimal? TransportCost, string Status);
+    decimal? Distance, decimal? TransportCost, string Status,
+    int? PackageCount = null, string? PackageType = null, decimal? PackageSize = null, string? BaseUnit = null);
 
 public sealed record ApprovalGroupResponse(
     string RequirementTitle, string BuyerName, decimal RequestedQuantity,

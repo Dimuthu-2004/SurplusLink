@@ -4,14 +4,17 @@ class MatchAllocation {
   const MatchAllocation({
     required this.matchId,
     required this.quantity,
+    this.packageCount,
   });
 
   final String matchId;
   final double quantity;
+  final int? packageCount;
 
   Map<String, dynamic> toJson() => {
     'matchId': matchId,
     'quantity': quantity,
+    if (packageCount != null) 'packageCount': packageCount,
   };
 }
 
@@ -42,11 +45,16 @@ class RecommendedMatch {
     this.requirementStatus,
     this.sellerName,
     this.sellerBusinessName,
+    this.sellerDisplayName,
     this.condition,
     this.latitude,
     this.longitude,
     this.sellerAddress,
     this.recommendedMatchId,
+    this.quantityMode,
+    this.packageType,
+    this.packageSize,
+    this.packageCountAvailable,
     bool? isPartial,
     // ignore: prefer_initializing_formals
   }) : _isPartial = isPartial;
@@ -56,12 +64,15 @@ class RecommendedMatch {
   final double? distance, estimatedTransportCost;
   final double? durationMinutes, quantity, unitPrice;
   final String? materialTitle, categoryName, sellerId, unit;
+  final String? quantityMode, packageType;
+  final double? packageSize;
+  final int? packageCountAvailable;
   final String? rejectionReason;
   final DateTime createdAt;
   final DateTime? availableUntil, requiredBy;
   final double? availableQuantity, maximumBudget;
   final String? requirementStatus;
-  final String? sellerName, sellerBusinessName, condition, sellerAddress;
+  final String? sellerName, sellerBusinessName, sellerDisplayName, condition, sellerAddress;
   final double? latitude, longitude;
   final String? recommendedMatchId;
   final bool? _isPartial;
@@ -72,6 +83,9 @@ class RecommendedMatch {
   double? get estimatedMaterialCost =>
       (quantity != null && unitPrice != null) ? quantity! * unitPrice! : null;
   bool get isSelectable => valid == true && status == 'ROUTED' && !isRejected;
+  bool get isPackaged => quantityMode == 'PACKAGE' || quantityMode == 'PIECE';
+  double get selectionStep => isPackaged ? (packageSize ?? 1) : (quantities.isDiscreteUnit(unit ?? '') ? 1 : .1);
+  int? packageCountFor(double baseQuantity) => isPackaged && packageSize != null ? (baseQuantity / packageSize!).round() : null;
 
   bool get isPartial =>
       _isPartial ??
@@ -123,12 +137,17 @@ class RecommendedMatch {
         requirementStatus: _optionalString(json, 'requirementStatus'),
         sellerName: _optionalString(json, 'sellerName'),
         sellerBusinessName: _optionalString(json, 'sellerBusinessName'),
+        sellerDisplayName: _optionalString(json, 'sellerDisplayName'),
         condition: _optionalString(json, 'condition'),
         latitude: _number(json, 'latitude', optional: true),
         longitude: _number(json, 'longitude', optional: true),
         sellerAddress: _optionalString(json, 'sellerAddress'),
         recommendedMatchId: _optionalString(json, 'recommendedMatchId'),
         isPartial: _boolean(json, 'isPartial'),
+        quantityMode: _optionalString(json, 'quantityMode'),
+        packageType: _optionalString(json, 'packageType'),
+        packageSize: _number(json, 'packageSize', optional: true),
+        packageCountAvailable: _number(json, 'packageCountAvailable', optional: true)?.toInt(),
       );
 }
 

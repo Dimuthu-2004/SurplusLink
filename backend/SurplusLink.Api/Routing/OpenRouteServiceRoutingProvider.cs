@@ -30,13 +30,18 @@ public sealed class OpenRouteServiceRoutingProvider(HttpClient client, RoutingOp
             using var response = await client.SendAsync(message, deadline.Token);
             if (response.StatusCode == HttpStatusCode.TooManyRequests)
                 return RouteResult.Failure("ROUTING_RATE_LIMITED", RetryAfter(response));
+            if (response.StatusCode == HttpStatusCode.NotFound)
+                return RouteResult.Failure("NO_ROUTE_FOUND");
             if (!response.IsSuccessStatusCode) return RouteResult.Failure("ROUTING_UNAVAILABLE");
             await using var stream = await response.Content.ReadAsStreamAsync(deadline.Token);
             using var json = await JsonDocument.ParseAsync(stream, cancellationToken: deadline.Token);
             if (json.RootElement.ValueKind != JsonValueKind.Object
                 || !json.RootElement.TryGetProperty("routes", out var routes)
-                || routes.ValueKind != JsonValueKind.Array || routes.GetArrayLength() == 0
-                || routes[0].ValueKind != JsonValueKind.Object
+                || routes.ValueKind != JsonValueKind.Array)
+                return RouteResult.Failure("ROUTING_INVALID_RESPONSE");
+            if (routes.GetArrayLength() == 0)
+                return RouteResult.Failure("NO_ROUTE_FOUND");
+            if (routes[0].ValueKind != JsonValueKind.Object
                 || !routes[0].TryGetProperty("summary", out var summary)
                 || summary.ValueKind != JsonValueKind.Object
                 || !Number(summary, "distance", out var distance)

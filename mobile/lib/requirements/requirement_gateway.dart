@@ -1,4 +1,5 @@
 import 'requirement_models.dart';
+import 'package:mobile/materials/construction_item_template_models.dart';
 
 abstract interface class RequirementGateway {
   Future<List<RequirementCategory>> categories();
@@ -15,4 +16,10 @@ abstract interface class RequirementGateway {
     String id, {
     int page = 1,
   });
+}
+
+/// Optional capability so older/offline gateways remain compatible while the
+/// real app uses the catalog as the buyer's primary entry point.
+abstract interface class RequirementTemplateCatalogGateway {
+  Future<List<ConstructionItemTemplate>> itemTemplates();
 }

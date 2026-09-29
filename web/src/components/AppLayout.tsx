@@ -7,6 +7,7 @@ import { roleHomePath, roleLabels } from '../routing/roleRoutes';
 import { BuyerMarketplaceLayout } from '../pages/buyer/BuyerMarketplaceLayout';
 import { LogoutConfirmation } from './LogoutConfirmation';
 import { SurplusLinkLogo } from './SurplusLinkLogo';
+import { LanguageSelector } from '../i18n/LanguageContext';
 
 export function AppLayout() {
   const { user, logout } = useAuth();
@@ -25,7 +26,7 @@ export function AppLayout() {
 
   const manager = user.roles.includes('MANAGER');
 
-  const navItem = (to: string, label: string, icon: 'grid' | 'offers' | 'materials' | 'categories' | 'requirements' | 'approvals') => (
+  const navItem = (to: string, label: string, icon: 'grid' | 'offers' | 'materials' | 'categories' | 'catalog' | 'requirements' | 'approvals') => (
     <NavLink to={to} end={to === roleHomePath(user.roles)}>
       <AppIcon name={icon} />
       <span>{label}</span>
@@ -39,6 +40,7 @@ export function AppLayout() {
           <SurplusLinkLogo className="app-brand-logo" />
         </Link>
         <div className="account-summary">
+          {location.pathname === roleHomePath(user.roles) && <LanguageSelector />}
           <span>{user.email}</span>
           <span className="role-badge">{user.roles.map(role => roleLabels[role]).join(' + ')}</span>
           <LogoutConfirmation onLogout={logout}><><AppIcon name="logout" /> Log out</></LogoutConfirmation>
@@ -54,6 +56,7 @@ export function AppLayout() {
                 <p className="nav-section-label">Management</p>
                 {navItem('/app/manager/materials', 'Material listings', 'materials')}
                 {navItem('/app/manager/categories', 'Material categories', 'categories')}
+                {navItem('/app/manager/catalog', 'Item Catalog', 'catalog')}
                 {navItem('/app/manager/requirements', 'Buyer Requirements', 'requirements')}
                 {navItem('/app/manager/listing-approvals', 'Seller Listing Approvals', 'approvals')}
                 {navItem('/app/manager/requirement-approvals', 'Buyer Requirement Approvals', 'approvals')}
@@ -70,12 +73,13 @@ export function AppLayout() {
   );
 }
 
-function AppIcon({ name }: { name: 'grid' | 'offers' | 'materials' | 'categories' | 'requirements' | 'approvals' | 'logout' | 'back' }) {
+function AppIcon({ name }: { name: 'grid' | 'offers' | 'materials' | 'categories' | 'catalog' | 'requirements' | 'approvals' | 'logout' | 'back' }) {
   const paths: Record<string, ReactNode> = {
     grid: <><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></>,
     offers: <><path d="M4 7h16v12H4z" /><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M4 12h16" /></>,
     materials: <><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9z" /><path d="m4 7.5 8 4.5 8-4.5M12 12v9" /></>,
     categories: <><circle cx="8" cy="8" r="3" /><circle cx="17" cy="8" r="3" /><circle cx="12.5" cy="17" r="3" /></>,
+    catalog: <><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z" /><path d="M6 6h10" /><path d="M6 10h10" /><path d="M6 14h6" /></>,
     requirements: <><path d="M6 3h9l4 4v14H6z" /><path d="M15 3v5h5M9 13h6M9 17h6" /></>,
     approvals: <><circle cx="12" cy="12" r="9" /><path d="m8 12 2.5 2.5L16 9" /></>,
     back: <path d="m12 5-7 7 7 7M5 12h15" />,

@@ -30,8 +30,6 @@ import 'package:mobile/screens/my_offers_screen.dart';
 import 'package:mobile/screens/register_screen.dart';
 import 'package:mobile/screens/email_verification_screen.dart';
 import 'package:mobile/screens/forgot_password_screen.dart';
-import 'package:mobile/notifications/notification_controller.dart';
-import 'package:mobile/screens/notifications_screen.dart';
 import 'package:mobile/screens/splash_screen.dart';
 
 abstract final class AppRoutes {
@@ -44,7 +42,6 @@ abstract final class AppRoutes {
   static const requirements = '/requirements';
   static const materials = '/materials';
   static const addMaterial = '/materials/new';
-  static const notifications = '/notifications';
 }
 
 GoRouter createAppRouter({
@@ -54,7 +51,6 @@ GoRouter createAppRouter({
   MatchGateway? matchGateway,
   OfferGateway? offerGateway,
   MobileHandoffGateway? handoffGateway,
-  NotificationController? notificationController,
   RequirementLocationSource requirementLocation =
       const DeviceRequirementLocation(),
   AddressLookup? locationLookup,
@@ -67,16 +63,13 @@ GoRouter createAppRouter({
     refreshListenable: authController,
     redirect: (context, state) {
       final uri = state.uri;
-      if (uri.scheme == 'surpluslink' &&
-          (uri.host == 'handoff' || uri.path.startsWith('/handoff'))) {
+      if (uri.scheme == 'surpluslink' && (uri.host == 'handoff' || uri.path.startsWith('/handoff'))) {
         final queryCode = uri.queryParameters['code'];
         final code = queryCode != null && queryCode.isNotEmpty
             ? queryCode
             : (uri.host == 'handoff'
-                  ? (uri.pathSegments.isNotEmpty
-                        ? uri.pathSegments.last
-                        : uri.path.replaceAll('/', ''))
-                  : uri.pathSegments.last);
+                ? (uri.pathSegments.isNotEmpty ? uri.pathSegments.last : uri.path.replaceAll('/', ''))
+                : uri.pathSegments.last);
         if (code.isNotEmpty) {
           return '/handoff/$code';
         }
@@ -84,10 +77,7 @@ GoRouter createAppRouter({
 
       final location = state.matchedLocation;
       final isAuthRoute =
-          location == AppRoutes.login ||
-          location == AppRoutes.register ||
-          location == AppRoutes.verifyEmail ||
-          location == AppRoutes.forgotPassword;
+          location == AppRoutes.login || location == AppRoutes.register || location == AppRoutes.verifyEmail || location == AppRoutes.forgotPassword;
 
       if (authController.status == AuthStatus.initializing) {
         if (!isAuthRoute && location != AppRoutes.splash) {
@@ -126,8 +116,9 @@ GoRouter createAppRouter({
     routes: [
       GoRoute(
         path: '/scan-qr',
-        builder: (context, state) =>
-            QrScannerScreen(authController: authController),
+        builder: (context, state) => QrScannerScreen(
+          authController: authController,
+        ),
       ),
       GoRoute(
         path: AppRoutes.verifyEmail,
@@ -138,10 +129,7 @@ GoRouter createAppRouter({
               int.tryParse(state.uri.queryParameters['cooldown'] ?? '') ?? 0,
         ),
       ),
-      GoRoute(
-        path: AppRoutes.forgotPassword,
-        builder: (_, _) => ForgotPasswordScreen(authController: authController),
-      ),
+      GoRoute(path: AppRoutes.forgotPassword, builder: (_, _) => ForgotPasswordScreen(authController: authController)),
       GoRoute(
         path: AppRoutes.splash,
         builder: (context, state) => const SplashScreen(),
@@ -161,12 +149,6 @@ GoRouter createAppRouter({
       GoRoute(
         path: '/profile',
         builder: (_, _) => ProfileScreen(authController: authController),
-      ),
-      GoRoute(
-        path: AppRoutes.notifications,
-        builder: (context, state) => NotificationsScreen(
-          controller: notificationController,
-        ),
       ),
       GoRoute(
         path: AppRoutes.home,
@@ -232,11 +214,9 @@ GoRouter createAppRouter({
         GoRoute(
           path: '/requirements/new',
           builder: (context, state) {
-            final categoryId =
-                state.uri.queryParameters['categoryId'] ??
+            final categoryId = state.uri.queryParameters['categoryId'] ??
                 (state.extra is Map<String, dynamic>
-                    ? (state.extra as Map<String, dynamic>)['categoryId']
-                          as String?
+                    ? (state.extra as Map<String, dynamic>)['categoryId'] as String?
                     : state.extra as String?);
             return RequirementFormScreen(
               gateway: requirementGateway,

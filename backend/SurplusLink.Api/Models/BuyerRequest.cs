@@ -9,6 +9,14 @@ public sealed class BuyerRequest : AuditableEntity
 
     public Guid CategoryId { get; set; }
 
+    // Optional so existing/historical requirements keep their original category-only shape.
+    // New catalog-first requirements retain the item the buyer actually selected.
+    public Guid? ConstructionItemTemplateId { get; set; }
+
+    // Canonical, catalog-defined buyer preference values. This is deliberately separate
+    // from listing specifications: buyers never need to describe seller stock/packages.
+    public string? BuyerPreferencesJson { get; set; }
+
     // Retained for legacy rows. New requests receive a category-based title internally.
     public string Title { get; set; } = string.Empty;
 
@@ -37,4 +45,6 @@ public sealed class BuyerRequest : AuditableEntity
     public User Buyer { get; set; } = null!;
 
     public Category Category { get; set; } = null!;
+
+    public ConstructionItemTemplate? ConstructionItemTemplate { get; set; }
 }

@@ -371,9 +371,9 @@ class MatchListCard extends StatelessWidget {
                                       minWidth: 32,
                                       minHeight: 32,
                                     ),
-                                    onPressed: (selectedQuantity ?? 1) > (quantities.isDiscreteUnit(match.unit ?? '') ? 1 : 0.1)
+                                    onPressed: (selectedQuantity ?? match.selectionStep) > match.selectionStep
                                         ? () => onQuantityChanged!(
-                                            (selectedQuantity ?? 1) - (quantities.isDiscreteUnit(match.unit ?? '') ? 1 : 0.1),
+                                            (selectedQuantity ?? match.selectionStep) - match.selectionStep,
                                           )
                                         : null,
                                   ),
@@ -397,7 +397,7 @@ class MatchListCard extends StatelessWidget {
                                     onPressed: ((selectedQuantity ?? 0) <
                                             (maximumQuantity ?? match.availableQuantity ?? double.infinity))
                                         ? () => onQuantityChanged!(
-                                            ((selectedQuantity ?? 0) + (quantities.isDiscreteUnit(match.unit ?? '') ? 1 : 0.1))
+                                            ((selectedQuantity ?? 0) + match.selectionStep)
                                                 .clamp(0.0, maximumQuantity ?? match.availableQuantity ?? double.infinity)
                                                 .toDouble(),
                                           )

@@ -286,7 +286,10 @@ class FakeMatches implements MatchGateway {
   }
 
   @override
-  Future<void> select(String requirementId, String matchId, {double? quantity}) async {}
+  Future<RecommendedMatch> retryRoute(String matchId) async => match;
+
+  @override
+  Future<void> select(String requirementId, String matchId, {double? quantity, int? packageCount}) async {}
 
   @override
   Future<void> selectMatches(

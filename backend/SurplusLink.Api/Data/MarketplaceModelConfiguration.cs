@@ -12,6 +12,7 @@ public static class MarketplaceModelConfiguration
 
         ConfigureUser(modelBuilder);
         ConfigureCategory(modelBuilder);
+        ConfigureConstructionItemTemplate(modelBuilder);
         ConfigureListing(modelBuilder);
         ConfigureListingPhoto(modelBuilder);
         ConfigureBuyerRequest(modelBuilder);
@@ -98,14 +99,41 @@ public static class MarketplaceModelConfiguration
             entity.Property(category => category.Name).HasColumnType("citext").HasMaxLength(120).IsRequired();
             entity.HasIndex(category => category.Name).IsUnique().HasDatabaseName("UX_Categories_Name");
 
-            var seedTimestamp = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-            entity.HasData(
-                SeedCategory("00000000-0000-0000-0000-000000000101", "Cement", seedTimestamp),
-                SeedCategory("00000000-0000-0000-0000-000000000102", "Steel", seedTimestamp),
-                SeedCategory("00000000-0000-0000-0000-000000000103", "Timber", seedTimestamp),
-                SeedCategory("00000000-0000-0000-0000-000000000104", "Bricks", seedTimestamp),
-                SeedCategory("00000000-0000-0000-0000-000000000105", "Aggregates", seedTimestamp),
-                SeedCategory("00000000-0000-0000-0000-000000000106", "Tiles", seedTimestamp));
+            entity.HasData(ConstructionItemTemplateCatalogSeed.GetCategories());
+        });
+    }
+
+    private static void ConfigureConstructionItemTemplate(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<ConstructionItemTemplate>(entity =>
+        {
+            entity.ToTable("ConstructionItemTemplates");
+            entity.HasKey(item => item.Id).HasName("PK_ConstructionItemTemplates");
+            entity.Property(item => item.Name).HasMaxLength(160).IsRequired();
+            entity.Property(item => item.ItemClass).HasMaxLength(40).IsRequired();
+            entity.Property(item => item.QuantityMode).HasMaxLength(40).IsRequired();
+            entity.Property(item => item.BaseUnit).HasMaxLength(32).IsRequired();
+            entity.Property(item => item.PackageType).HasMaxLength(32);
+            entity.Property(item => item.AllowedUnits).HasColumnType("text[]").HasDefaultValueSql("ARRAY[]::text[]").IsRequired();
+            entity.Property(item => item.AllowedPackageSizes).HasColumnType("numeric[]").HasDefaultValueSql("ARRAY[]::numeric[]").IsRequired();
+            entity.Property(item => item.AttributeSchema).HasColumnType("text").IsRequired();
+            entity.Property(item => item.PriceBasis).HasMaxLength(40).HasDefaultValue("PER_UNIT").IsRequired();
+            entity.Property(item => item.IsActive).HasDefaultValue(true).IsRequired();
+            entity.Property(item => item.CreatedAtUtc).HasColumnType("timestamp with time zone");
+            entity.Property(item => item.UpdatedAtUtc).HasColumnType("timestamp with time zone");
+
+            entity.HasOne(item => item.Category)
+                .WithMany()
+                .HasForeignKey(item => item.CategoryId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("FK_ConstructionItemTemplates_Categories_CategoryId");
+
+            entity.HasIndex(item => item.Name).HasDatabaseName("IX_ConstructionItemTemplates_Name");
+            entity.HasIndex(item => item.CategoryId).HasDatabaseName("IX_ConstructionItemTemplates_CategoryId");
+            entity.HasIndex(item => item.ItemClass).HasDatabaseName("IX_ConstructionItemTemplates_ItemClass");
+            entity.HasIndex(item => item.IsActive).HasDatabaseName("IX_ConstructionItemTemplates_IsActive");
+
+            entity.HasData(ConstructionItemTemplateCatalogSeed.GetTemplates());
         });
     }
 
@@ -120,6 +148,8 @@ public static class MarketplaceModelConfiguration
                 table.HasCheckConstraint(
                     "CK_Listings_ReservedQuantity_Range",
                     "\"ReservedQuantity\" >= 0 AND \"ReservedQuantity\" <= \"Quantity\"");
+                table.HasCheckConstraint("CK_Listings_Package_Stock",
+                    "(\"QuantityMode\" NOT IN ('PACKAGE','PIECE')) OR (\"PackageCount\" IS NOT NULL AND \"PackageSize\" IS NOT NULL AND \"PackageCount\" > 0 AND \"PackageSize\" > 0 AND \"ReservedPackageCount\" >= 0 AND \"ReservedPackageCount\" <= \"PackageCount\")");
                 table.HasCheckConstraint(
                     "CK_Listings_Coordinates_Valid",
                     "(\"Latitude\" IS NULL AND \"Longitude\" IS NULL) OR (\"Latitude\" BETWEEN -90 AND 90 AND \"Longitude\" BETWEEN -180 AND 180)");
@@ -129,6 +159,12 @@ public static class MarketplaceModelConfiguration
             entity.Property(listing => listing.Description).HasMaxLength(2_000).IsRequired();
             entity.Property(listing => listing.Quantity).HasPrecision(18, 3);
             entity.Property(listing => listing.ReservedQuantity).HasPrecision(18, 3);
+            entity.Property(listing => listing.QuantityMode).HasConversion<string>().HasMaxLength(16).HasDefaultValue(QuantityMode.LEGACY);
+            entity.Property(listing => listing.BaseUnit).HasMaxLength(32);
+            entity.Property(listing => listing.PackageType).HasConversion<string>().HasMaxLength(16);
+            entity.Property(listing => listing.PackageSize).HasPrecision(18, 3);
+            entity.Property(listing => listing.PackageCount);
+            entity.Property(listing => listing.ReservedPackageCount).HasDefaultValue(0);
             entity.Property(listing => listing.Unit).HasMaxLength(32).IsRequired();
             entity.Property(listing => listing.Condition).HasConversion<string>().HasMaxLength(24).IsRequired();
             entity.Property(listing => listing.UnitPrice).HasPrecision(18, 2);
@@ -137,11 +173,14 @@ public static class MarketplaceModelConfiguration
             entity.Property(listing => listing.AvailableUntil).HasColumnType("timestamp with time zone");
             entity.Property(listing => listing.Status).HasConversion<string>().HasMaxLength(24).IsRequired();
             entity.Property(listing => listing.Version).IsRowVersion();
+            entity.Property(listing => listing.SpecificationsJson).HasColumnType("text");
+            entity.Property(listing => listing.IsCustomPendingReview).HasDefaultValue(false);
             entity.HasIndex(listing => listing.Status).HasDatabaseName("IX_Listings_Status");
             entity.HasIndex(listing => new { listing.Status, listing.AvailableUntil })
                 .HasDatabaseName("IX_Listings_Status_AvailableUntil");
             entity.HasIndex(listing => listing.CategoryId).HasDatabaseName("IX_Listings_CategoryId");
             entity.HasIndex(listing => listing.SellerId).HasDatabaseName("IX_Listings_SellerId");
+            entity.HasIndex(listing => listing.ConstructionItemTemplateId).HasDatabaseName("IX_Listings_ConstructionItemTemplateId");
             entity.HasIndex(listing => new { listing.Latitude, listing.Longitude })
                 .HasDatabaseName("IX_Listings_Latitude_Longitude");
             entity.HasOne(listing => listing.Category)
@@ -154,6 +193,11 @@ public static class MarketplaceModelConfiguration
                 .HasForeignKey(listing => listing.SellerId)
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("FK_Listings_Users_SellerId");
+            entity.HasOne(listing => listing.ConstructionItemTemplate)
+                .WithMany()
+                .HasForeignKey(listing => listing.ConstructionItemTemplateId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("FK_Listings_ConstructionItemTemplates_ConstructionItemTemplateId");
         });
     }
 
@@ -198,17 +242,24 @@ public static class MarketplaceModelConfiguration
             entity.HasKey(request => request.Id).HasName("PK_MaterialRequests");
             entity.Property(request => request.Title).HasMaxLength(200).IsRequired();
             entity.Property(request => request.Notes).HasMaxLength(2000).IsRequired();
+            entity.Property(request => request.BuyerPreferencesJson).HasColumnType("text");
             entity.Property(request => request.RequiredQuantity).HasColumnName("Quantity").HasPrecision(18, 3);
             entity.Property(request => request.MaximumBudget).HasColumnName("Budget").HasPrecision(18, 2);
             entity.Property(request => request.Status).HasConversion<string>().HasMaxLength(24).IsRequired();
             entity.HasIndex(request => request.Status).HasDatabaseName("IX_MaterialRequests_Status");
             entity.HasIndex(request => request.CategoryId).HasDatabaseName("IX_MaterialRequests_CategoryId");
+            entity.HasIndex(request => request.ConstructionItemTemplateId).HasDatabaseName("IX_MaterialRequests_ConstructionItemTemplateId");
             entity.HasIndex(request => request.Deadline).HasDatabaseName("IX_MaterialRequests_DeadlineUtc");
             entity.HasOne(request => request.Category)
                 .WithMany()
                 .HasForeignKey(request => request.CategoryId)
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("FK_MaterialRequests_Categories_CategoryId");
+            entity.HasOne(request => request.ConstructionItemTemplate)
+                .WithMany()
+                .HasForeignKey(request => request.ConstructionItemTemplateId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("FK_MaterialRequests_ConstructionItemTemplates_ConstructionItemTemplateId");
             entity.HasOne(request => request.Buyer)
                 .WithMany()
                 .HasForeignKey(request => request.BuyerId)
@@ -284,6 +335,7 @@ public static class MarketplaceModelConfiguration
                 table.HasCheckConstraint("CK_Reservations_Quantity_Positive", "\"Quantity\" > 0"));
             entity.HasKey(reservation => reservation.Id).HasName("PK_Reservations");
             entity.Property(reservation => reservation.Quantity).HasPrecision(18, 3);
+            entity.Property(reservation => reservation.PackageCount);
             entity.Property(reservation => reservation.Status).HasConversion<string>().HasMaxLength(24).IsRequired();
             entity.HasIndex(reservation => reservation.ListingId).HasDatabaseName("IX_Reservations_ListingId");
             entity.HasIndex(reservation => reservation.MaterialRequestId)
@@ -402,6 +454,7 @@ public static class MarketplaceModelConfiguration
             entity.HasKey(offer => offer.Id);
             entity.Property(offer => offer.Status).HasConversion<string>().HasMaxLength(32).IsRequired();
             entity.Property(offer => offer.Quantity).HasPrecision(18, 3);
+            entity.Property(offer => offer.PackageCount);
             entity.Property(offer => offer.UnitValue).HasPrecision(18, 2);
             entity.Property(offer => offer.TotalValue).HasPrecision(18, 2);
             entity.HasIndex(offer => new { offer.Status, offer.CreatedAtUtc }).HasDatabaseName("IX_Offers_Status_CreatedAtUtc");
@@ -424,6 +477,7 @@ public static class MarketplaceModelConfiguration
             entity.HasKey(transaction => transaction.Id);
             entity.Property(transaction => transaction.Status).HasConversion<string>().HasMaxLength(32).IsRequired();
             entity.Property(transaction => transaction.Quantity).HasPrecision(18, 3);
+            entity.Property(transaction => transaction.PackageCount);
             entity.Property(transaction => transaction.TotalValue).HasPrecision(18, 2);
             entity.Property(transaction => transaction.ReservedQuantity).HasPrecision(18, 3);
             entity.Property(transaction => transaction.Version).IsRowVersion();

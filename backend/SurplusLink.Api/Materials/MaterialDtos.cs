@@ -1,11 +1,10 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 
 namespace SurplusLink.Api.Materials;
 
 public class CreateMaterialListingRequest
 {
-    [Required]
-    public Guid CategoryId { get; init; }
+    public Guid? CategoryId { get; init; }
 
     [Required, MaxLength(200)]
     public string Title { get; init; } = string.Empty;
@@ -15,6 +14,14 @@ public class CreateMaterialListingRequest
 
     [Range(typeof(decimal), "0.001", "999999999999999.999")]
     public decimal Quantity { get; init; }
+
+    [RegularExpression("^(PACKAGE|PIECE|CONTINUOUS)$")]
+    public string? QuantityMode { get; init; }
+    [MaxLength(32)] public string? BaseUnit { get; init; }
+    [RegularExpression("^(CAN|BAG|BOX|CARTRIDGE|ROLL|SHEET|ROD|PIPE|PACK|PIECE|OTHER)$")]
+    public string? PackageType { get; init; }
+    [Range(typeof(decimal), "0.001", "999999999999999.999")] public decimal? PackageSize { get; init; }
+    [Range(1, int.MaxValue)] public int? PackageCount { get; init; }
 
     [Required, MaxLength(32)]
     public string Unit { get; init; } = string.Empty;
@@ -36,6 +43,10 @@ public class CreateMaterialListingRequest
 
     [MaxLength(10)]
     public IReadOnlyList<ListingPhotoRequest> Photos { get; init; } = Array.Empty<ListingPhotoRequest>();
+
+    public Guid? ConstructionItemTemplateId { get; init; }
+    public string? SpecificationsJson { get; init; }
+    public bool IsCustomPendingReview { get; init; }
 }
 
 public sealed class UpdateMaterialListingRequest : CreateMaterialListingRequest;
@@ -67,6 +78,12 @@ public sealed record MaterialListingResponse(
     string Description,
     decimal Quantity,
     decimal ReservedQuantity,
+    string QuantityMode,
+    string? BaseUnit,
+    string? PackageType,
+    decimal? PackageSize,
+    int? PackageCount,
+    int ReservedPackageCount,
     string Unit,
     string Condition,
     decimal UnitPrice,
@@ -77,7 +94,11 @@ public sealed record MaterialListingResponse(
     DateTime CreatedAtUtc,
     DateTime UpdatedAtUtc,
     IReadOnlyList<ListingPhotoResponse> Photos,
-    SellerContactResponse? Seller = null);
+    SellerContactResponse? Seller = null,
+    Guid? ConstructionItemTemplateId = null,
+    string? ConstructionItemTemplateName = null,
+    string? SpecificationsJson = null,
+    bool IsCustomPendingReview = false);
 
 public sealed class MaterialCategoryRequest
 {
@@ -89,6 +110,7 @@ public sealed class MaterialCategoryRequest
 }
 
 public sealed record MaterialCategoryResponse(Guid Id, string Name, DateTime CreatedAtUtc, DateTime UpdatedAtUtc, IReadOnlyList<string>? AllowedUnits = null);
+public sealed record UnitDefinitionResponse(string Code, string DisplayName, string MeasurementType, string QuantityMode, decimal AllowedStep, int DecimalPrecision);
 
 public sealed class MaterialListingQuery
 {
@@ -99,6 +121,10 @@ public sealed class MaterialListingQuery
 
     [MaxLength(120)]
     public string? Category { get; init; }
+
+    // Read-only marketplace narrowing; it never affects listing eligibility,
+    // matching, approval, reservation, or any transaction workflow.
+    public Guid? TemplateId { get; init; }
 
     [MaxLength(24)]
     public string? Status { get; init; }

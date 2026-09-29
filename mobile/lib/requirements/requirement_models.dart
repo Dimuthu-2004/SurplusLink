@@ -35,12 +35,16 @@ class BuyerRequirement {
     required this.createdAt,
     required this.updatedAt,
     this.workflowId, this.workflowStatus, this.decisionNote,
+    this.constructionItemTemplateId,
+    this.constructionItemTemplateName,
+    this.buyerPreferencesJson,
     this.latitude,
     this.longitude,
     this.notes = '',
   });
   final String id, buyerId, categoryId, unit, status, notes;
-  final String? workflowId, workflowStatus, decisionNote;
+  final String? workflowId, workflowStatus, decisionNote,
+      constructionItemTemplateId, constructionItemTemplateName, buyerPreferencesJson;
   final num requiredQuantity, maximumBudget;
   final double? latitude, longitude;
   final DateTime deadline, createdAt, updatedAt;
@@ -60,6 +64,9 @@ class BuyerRequirement {
           status: json['status'] as String,
           workflowId: json['workflowId'] as String?, workflowStatus: json['workflowStatus'] as String?,
           decisionNote: json['decisionNote'] as String?,
+        constructionItemTemplateId: json['constructionItemTemplateId'] as String?,
+        constructionItemTemplateName: json['constructionItemTemplateName'] as String?,
+        buyerPreferencesJson: json['buyerPreferencesJson'] as String?,
         notes: json['notes'] as String? ?? '',
         latitude: (json['latitude'] as num?)?.toDouble(),
         longitude: (json['longitude'] as num?)?.toDouble(),
@@ -78,11 +85,14 @@ class RequirementDraft {
     required this.latitude,
     required this.longitude,
     this.notes = '',
+    this.constructionItemTemplateId,
+    this.buyerPreferencesJson,
   });
   final String categoryId, unit, notes;
   final num requiredQuantity, maximumBudget;
   final DateTime deadline;
   final double latitude, longitude;
+  final String? constructionItemTemplateId, buyerPreferencesJson;
   Map<String, dynamic> toJson() => {
     'categoryId': categoryId,
     'requiredQuantity': requiredQuantity,
@@ -92,6 +102,8 @@ class RequirementDraft {
     'latitude': double.parse(latitude.toStringAsFixed(6)),
     'longitude': double.parse(longitude.toStringAsFixed(6)),
     'notes': notes.trim(),
+    if (constructionItemTemplateId != null) 'constructionItemTemplateId': constructionItemTemplateId,
+    if (buyerPreferencesJson != null) 'buyerPreferencesJson': buyerPreferencesJson,
   };
 }
 

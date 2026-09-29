@@ -88,7 +88,6 @@ public sealed class RoutingProviderTests
     [Theory]
     [InlineData("not json")]
     [InlineData("null")]
-    [InlineData("{\"routes\":[]}")]
     [InlineData("{\"routes\":[{\"summary\":{\"distance\":-1,\"duration\":60}}]}")]
     [InlineData("{\"routes\":[{\"summary\":{\"distance\":1000}}]}")]
     [InlineData("{\"routes\":[{\"summary\":{\"distance\":\"1000\",\"duration\":60}}]}")]
@@ -136,6 +135,26 @@ public sealed class RoutingProviderTests
         insecure.Endpoint = "http://example.com";
         Assert.Equal("ROUTING_NOT_CONFIGURED", (await new OpenRouteServiceRoutingProvider(client, insecure).GetRouteAsync(Request, default)).ErrorCode);
         Assert.Equal(0, handler.Calls);
+    }
+
+    [Fact]
+    public async Task Empty_routes_reports_no_route_found()
+    {
+        using var client = new HttpClient(new Handler((_, _) => Task.FromResult(Response("{\"routes\":[]}"))));
+        var result = await new OpenRouteServiceRoutingProvider(client, Options()).GetRouteAsync(Request, default);
+        Assert.Equal("NO_ROUTE_FOUND", result.ErrorCode);
+    }
+
+    [Fact]
+    public void Match_routing_failures_preserve_missing_and_invalid_coordinate_causes()
+    {
+        Assert.Equal("MISSING_SELLER_LOCATION", RoutingFailureClassifier.ValidateCoordinates(null, null, 6.9271m, 79.8612m));
+        Assert.Equal("MISSING_BUYER_LOCATION", RoutingFailureClassifier.ValidateCoordinates(6.9271m, 79.8612m, null, null));
+        Assert.Equal("INVALID_SELLER_COORDINATES", RoutingFailureClassifier.ValidateCoordinates(0, 0, 6.9271m, 79.8612m));
+        Assert.Equal("INVALID_BUYER_COORDINATES", RoutingFailureClassifier.ValidateCoordinates(6.9271m, 79.8612m, 0, 0));
+        Assert.Null(RoutingFailureClassifier.ValidateCoordinates(6.9271m, 79.8612m, 7.2906m, 80.6337m));
+        Assert.Equal("ROUTING_PROVIDER_ERROR", RoutingFailureClassifier.FromEstimate(
+            new TransportEstimate(RouteResult.Failure("PROVIDER_UNAVAILABLE"), null, ErrorCode: "PROVIDER_UNAVAILABLE")));
     }
 
     [Fact]

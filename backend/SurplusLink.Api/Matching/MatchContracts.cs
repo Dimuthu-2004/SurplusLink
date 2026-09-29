@@ -77,7 +77,15 @@ public sealed record MatchResponse(
     bool AiRecommended = false,
     Guid? RecommendedMatchId = null,
     string? RecommendationReason = null,
-    bool IsPartial = false
+    bool IsPartial = false,
+    string? QuantityMode = null,
+    string? PackageType = null,
+    decimal? PackageSize = null,
+    int? PackageCountAvailable = null,
+    decimal? BaseEquivalentAvailableQuantity = null,
+    decimal? MaximumContribution = null,
+    bool? FullCoverage = null,
+    string? SellerDisplayName = null
 );
 
 public sealed record MatchPage(

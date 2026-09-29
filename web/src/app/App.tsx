@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppLayout } from '../components/AppLayout';
 import { LoginPage } from '../pages/LoginPage';
 import { ManagerCategoriesPage } from '../pages/manager/ManagerCategoriesPage';
+import { ManagerCatalogPage } from '../pages/manager/ManagerCatalogPage';
 import { ManagerListingsPage } from '../pages/manager/ManagerListingsPage';
 import { ManagerDashboardPage } from '../pages/manager/ManagerDashboardPage';
 import { ManagerMaterialDetailsPage } from '../pages/manager/ManagerMaterialDetailsPage';
@@ -60,6 +61,7 @@ export function App() {
             <Route path="manager/materials" element={<ManagerListingsPage />} />
             <Route path="manager/materials/:listingId" element={<ManagerMaterialDetailsPage />} />
             <Route path="manager/categories" element={<ManagerCategoriesPage />} />
+            <Route path="manager/catalog" element={<ManagerCatalogPage />} />
             <Route path="manager/requirements" element={<ManagerRequirementsPage />} />
             <Route path="manager/requirements/:requirementId" element={<ManagerRequirementDetailsPage />} />
             <Route path="manager/matches" element={<ManagerMatchComparisonPage />} />
@@ -74,6 +76,6 @@ export function App() {
         </Route>
       </Route>
       <Route path="*" element={<NotFoundPage />} />
-    </Routes>
+      </Routes>
   );
 }

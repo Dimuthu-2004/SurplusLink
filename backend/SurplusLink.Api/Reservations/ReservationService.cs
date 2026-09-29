@@ -49,6 +49,18 @@ public sealed class ReservationService(SurplusLinkDbContext dbContext) : IReserv
             throw new ReservationRejectedException("Insufficient available quantity.");
         }
 
+        int? packageCount = null;
+        if (listing.QuantityMode is QuantityMode.PACKAGE or QuantityMode.PIECE)
+        {
+            var size = listing.PackageSize ?? 0;
+            if (size <= 0 || quantity / size != decimal.Truncate(quantity / size))
+                throw new ReservationRejectedException("Packaged stock must be reserved as whole packages.");
+            packageCount = (int)(quantity / size);
+            if (listing.ReservedPackageCount + packageCount > listing.PackageCount)
+                throw new ReservationRejectedException("Insufficient available packages.");
+            listing.ReservedPackageCount += packageCount.Value;
+        }
+
         listing.ReservedQuantity += quantity;
         if (listing.ReservedQuantity == listing.Quantity)
         {
@@ -61,6 +73,7 @@ public sealed class ReservationService(SurplusLinkDbContext dbContext) : IReserv
             ListingId = listing.Id,
             MaterialRequestId = request.Id,
             Quantity = quantity,
+            PackageCount = packageCount,
             Status = ReservationStatus.ACTIVE
         };
         dbContext.Reservations.Add(reservation);

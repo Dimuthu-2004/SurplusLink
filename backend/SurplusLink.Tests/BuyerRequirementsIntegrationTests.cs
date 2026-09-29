@@ -433,23 +433,25 @@ public sealed class RequirementsDatabase : IAsyncLifetime
                     INSERT INTO "Users" ("Id", "Email", "PasswordHash", "Role")
                     VALUES ({id}, {id + "@requirements.test"}, 'unused-test-hash', {role.ToString()});
                     """);
-            await db.SaveChangesAsync();
             var category = Guid.Parse("00000000-0000-0000-0000-000000000101");
-            var listing = new Listing { Id = Guid.NewGuid(), SellerId = Seller, CategoryId = category, Title = "Test stock",
-                Quantity = 100, ReservedQuantity = 2, Unit = "kg", UnitPrice = 10, AvailableUntil = DateTime.UtcNow.AddDays(30),
-                Status = ListingStatus.ACTIVE, Condition = MaterialCondition.GOOD };
-            db.Listings.Add(listing);
-            await db.SaveChangesAsync();
+            var listingId = Guid.NewGuid();
+            var availableUntil = DateTime.UtcNow.AddDays(30);
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO "Listings" ("Id", "SellerId", "CategoryId", "Title", "Description", "Quantity", "ReservedQuantity", "Unit", "UnitPrice", "AvailableUntil", "Status", "Condition")
+                VALUES ({listingId}, {Seller}, {category}, 'Test stock', 'Legacy test stock description', 100, 2, 'kg', 10, {availableUntil}, 'ACTIVE', 'GOOD');
+                """);
             await db.Database.ExecuteSqlInterpolatedAsync($"""
                 INSERT INTO "MaterialRequests" ("Id", "BuyerId", "CategoryId", "Title", "Quantity", "Budget", "DeadlineUtc", "Status")
                 VALUES ({LegacyRequest}, {Buyer}, {category}, 'Legacy request', 5, 100, {DateTime.UtcNow.AddDays(7)}, 'MATCHED');
                 """);
             await db.Database.ExecuteSqlInterpolatedAsync($"""
                 INSERT INTO "Matches" ("Id", "MaterialRequestId", "ListingId", "Score")
-                VALUES ({Guid.NewGuid()}, {LegacyRequest}, {listing.Id}, {0.5m});
+                VALUES ({Guid.NewGuid()}, {LegacyRequest}, {listingId}, {0.5m});
                 """);
-            db.Reservations.Add(new Reservation { Id = Guid.NewGuid(), MaterialRequestId = LegacyRequest, ListingId = listing.Id, Quantity = 2, Status = ReservationStatus.ACTIVE });
-            await db.SaveChangesAsync();
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO "Reservations" ("Id", "MaterialRequestId", "ListingId", "Quantity", "Status")
+                VALUES ({Guid.NewGuid()}, {LegacyRequest}, {listingId}, 2, 'ACTIVE');
+                """);
             await migrator.MigrateAsync();
         }
         catch { await DisposeAsync(); throw; }

@@ -81,16 +81,25 @@ public sealed partial class MatchService
         }
         else
         {
+            var routingFailure = RoutingFailureClassifier.ValidateCoordinates(
+                listing.Latitude, listing.Longitude, request.Latitude, request.Longitude);
             TransportEstimate? estimate = null;
-            if (listing.Latitude is decimal lat && listing.Longitude is decimal lon &&
-                request.Latitude is decimal buyerLat && request.Longitude is decimal buyerLon)
-                estimate = await transport.EstimateAsync(new(lat, lon, buyerLat, buyerLon), ct);
+            if (routingFailure is null)
+                estimate = await transport.EstimateAsync(new(
+                    listing.Latitude!.Value, listing.Longitude!.Value,
+                    request.Latitude!.Value, request.Longitude!.Value), ct);
             var success = estimate is { Route.Success: true, Route.DistanceKm: >= 0, Route.DurationMinutes: >= 0, EstimatedTransportCost: >= 0, ErrorCode: null };
+            logger?.LogInformation(
+                "Route evaluation listing {ListingId}, requirement {RequirementId}: originPresent={OriginPresent}, destinationPresent={DestinationPresent}, provider={Provider}, outcome={Outcome}",
+                listing.Id, request.Id, listing.Latitude.HasValue && listing.Longitude.HasValue,
+                request.Latitude.HasValue && request.Longitude.HasValue,
+                routingOptions?.Provider ?? "unconfigured",
+                success ? "ROUTED" : routingFailure ?? RoutingFailureClassifier.FromEstimate(estimate));
             match.Distance = success ? estimate!.Route.DistanceKm : null;
             match.DurationMinutes = success ? estimate!.Route.DurationMinutes : null;
             match.EstimatedTransportCost = success ? estimate!.EstimatedTransportCost : null;
             match.Status = success ? MatchStatus.ROUTED : MatchStatus.ROUTE_FAILED;
-            match.RejectionReason = success ? null : "ROUTE_UNAVAILABLE";
+            match.RejectionReason = success ? null : routingFailure ?? RoutingFailureClassifier.FromEstimate(estimate);
             Audit(match, actor, success ? "ROUTE_SUCCEEDED" : "ROUTE_FAILED");
             if (success && (listing.UnitPrice * request.RequiredQuantity + match.EstimatedTransportCost > request.MaximumBudget ||
                 match.DurationMinutes > (decimal)(request.Deadline - DateTime.UtcNow).TotalMinutes))
@@ -144,12 +153,19 @@ public sealed partial class MatchService
             x.Listing.AvailableUntil, x.MaterialRequest.Deadline, available,
             x.MaterialRequest.MaximumBudget, x.MaterialRequest.Status.ToString(),
             x.Listing.Seller.FullName, x.Listing.Seller.BusinessName, x.Listing.Condition.ToString(),
-            x.Listing.Latitude, x.Listing.Longitude, x.Listing.Seller.Address,
+            // A seller's account address is not necessarily the listing origin.  The
+            // current listing schema has no separately persisted display address, so
+            // only expose its authoritative coordinates here.
+            x.Listing.Latitude, x.Listing.Longitude, null,
             x.Id == x.MaterialRequest.RecommendedMatchId,
             x.MaterialRequest.RecommendedMatchId,
             x.MaterialRequest.RecommendationReason ?? (x.Id == x.MaterialRequest.RecommendedMatchId
                 ? "Highest deterministic final score among valid routed candidates; ties use condition, total estimated cost, distance, then listing ID."
                 : null),
-            available < required);
+            available < required,
+            x.Listing.QuantityMode.ToString(), x.Listing.PackageType?.ToString(), x.Listing.PackageSize,
+            x.Listing.PackageCount is null ? null : x.Listing.PackageCount - x.Listing.ReservedPackageCount,
+            available, Math.Min(available, required), available >= required,
+            x.Listing.Seller.BusinessName ?? x.Listing.Seller.FullName ?? "Verified seller");
     }
 }

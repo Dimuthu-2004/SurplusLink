@@ -57,7 +57,9 @@ builder.Services.AddControllers()
             var problemDetails = new ValidationProblemDetails(context.ModelState)
             {
                 Status = StatusCodes.Status400BadRequest,
-                Title = "One or more validation errors occurred.",
+                // Clients render field errors from `errors`; this summary must never be the
+                // only thing a Sri Lankan seller or buyer sees.
+                Title = "Please correct the highlighted fields.",
                 Type = "https://www.rfc-editor.org/rfc/rfc9110#name-400-bad-request",
                 Instance = context.HttpContext.Request.Path
             };

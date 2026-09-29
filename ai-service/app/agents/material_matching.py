@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from decimal import Decimal
+from decimal import Decimal, ROUND_CEILING
 from typing import Any, Literal, Mapping, TypedDict, cast
 
 from langgraph.graph import END, START, StateGraph
@@ -177,7 +177,9 @@ class MaterialMatchingAgent:
             return False
         if listing.available_until.astimezone(timezone.utc).date() < request.deadline.astimezone(timezone.utc).date():
             return False
-        if listing.unit_price * request.requiredQuantity > request.maximumBudget:
+        required_packages = (request.requiredQuantity / listing.package_size).to_integral_value(rounding=ROUND_CEILING) if listing.quantity_mode in {"PACKAGE", "PIECE"} and listing.package_size else None
+        expected_cost = listing.unit_price * (required_packages if required_packages is not None else request.requiredQuantity)
+        if expected_cost > request.maximumBudget:
             return False
         if request.categoryId and listing.category_id != request.categoryId:
             return False
@@ -189,7 +191,8 @@ class MaterialMatchingAgent:
 
     @staticmethod
     def _candidate(listing: MaterialListingRecord, request: MatchingRequest) -> Candidate:
-        total_cost = listing.unit_price * request.requiredQuantity
+        required_packages = (request.requiredQuantity / listing.package_size).to_integral_value(rounding=ROUND_CEILING) if listing.quantity_mode in {"PACKAGE", "PIECE"} and listing.package_size else None
+        total_cost = listing.unit_price * (required_packages if required_packages is not None else request.requiredQuantity)
         budget_headroom = (request.maximumBudget - total_cost) / request.maximumBudget
         # Preliminary score only: routing is required for the final score.
         score = round(float(Decimal("50") * condition_rank(listing.condition) / 4
@@ -201,10 +204,17 @@ class MaterialMatchingAgent:
             condition=listing.condition,
             basicFitScore=score,
             reason=(
-                f"Active verified {listing.condition.lower()} listing with "
-                f"{listing.available_quantity} {listing.unit} available; "
+                (f"Seller has {listing.package_count_available} {listing.package_type.lower() if listing.package_type else 'packages'} "
+                 f"of {listing.package_size}{listing.unit}; can contribute {listing.maximum_contribution or listing.available_quantity} {listing.unit}. "
+                 if listing.quantity_mode in {"PACKAGE", "PIECE"} else "") +
+                f"Active verified {listing.condition.lower()} listing with {listing.available_quantity} {listing.unit} available; "
                 f"estimated cost {total_cost} is within the maximum budget."
             ),
+            quantityMode=listing.quantity_mode, packageType=listing.package_type, packageSize=listing.package_size,
+            packageCountAvailable=listing.package_count_available,
+            baseEquivalentAvailableQuantity=listing.base_equivalent_available_quantity or listing.available_quantity,
+            maximumContribution=listing.maximum_contribution or min(listing.available_quantity, request.requiredQuantity),
+            fullCoverage=listing.full_coverage if listing.full_coverage is not None else listing.available_quantity >= request.requiredQuantity,
         )
 
     @staticmethod

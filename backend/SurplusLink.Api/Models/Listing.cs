@@ -1,4 +1,4 @@
-﻿namespace SurplusLink.Api.Models;
+namespace SurplusLink.Api.Models;
 
 public sealed class Listing : AuditableEntity
 {
@@ -16,6 +16,15 @@ public sealed class Listing : AuditableEntity
 
     public decimal ReservedQuantity { get; set; }
 
+    // Legacy decimal fields remain base-equivalent values. Package stock is
+    // deliberately tracked as whole sellable units alongside them.
+    public QuantityMode QuantityMode { get; set; } = QuantityMode.LEGACY;
+    public string? BaseUnit { get; set; }
+    public PackageType? PackageType { get; set; }
+    public decimal? PackageSize { get; set; }
+    public int? PackageCount { get; set; }
+    public int ReservedPackageCount { get; set; }
+
     public string Unit { get; set; } = string.Empty;
 
     public MaterialCondition Condition { get; set; }
@@ -32,9 +41,20 @@ public sealed class Listing : AuditableEntity
 
     public uint Version { get; set; }
 
+    public Guid? ConstructionItemTemplateId { get; set; }
+
+    public ConstructionItemTemplate? ConstructionItemTemplate { get; set; }
+
+    public string? SpecificationsJson { get; set; }
+
+    public bool IsCustomPendingReview { get; set; }
+
     public User Seller { get; set; } = null!;
 
     public Category Category { get; set; } = null!;
 
     public ICollection<ListingPhoto> Photos { get; } = new List<ListingPhoto>();
 }
+
+public enum QuantityMode { LEGACY, PACKAGE, PIECE, CONTINUOUS }
+public enum PackageType { CAN, BAG, BOX, CARTRIDGE, ROLL, SHEET, ROD, PIPE, PACK, PIECE, OTHER }

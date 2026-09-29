@@ -15,17 +15,32 @@ public sealed class MaterialInventoryService(
         CreateMaterialListingRequest request,
         CancellationToken cancellationToken)
     {
-        ValidateListingRequest(request);
-        await EnsureCategoryUnitAsync(request.CategoryId, request.Unit, cancellationToken);
+        ConstructionItemTemplate? template = null;
+        if (request.ConstructionItemTemplateId.HasValue)
+        {
+            template = await dbContext.ConstructionItemTemplates
+                .AsNoTracking()
+                .SingleOrDefaultAsync(t => t.Id == request.ConstructionItemTemplateId.Value, cancellationToken);
+        }
+
+        var effectiveCategoryId = template?.CategoryId ?? (request.CategoryId.HasValue && request.CategoryId.Value != Guid.Empty ? request.CategoryId.Value : Guid.Empty);
+        if (effectiveCategoryId == Guid.Empty)
+        {
+            throw new MaterialOperationException(MaterialOperationError.Validation, "Category is required for custom items.");
+        }
+
+        ValidateListingRequest(request, template);
+        var effectiveUnit = string.IsNullOrWhiteSpace(request.Unit) && template is not null ? template.BaseUnit : request.Unit;
+        await EnsureCategoryUnitAsync(effectiveCategoryId, effectiveUnit, template, cancellationToken);
 
         var listing = new Listing
         {
             Id = Guid.NewGuid(),
             SellerId = sellerId,
-            CategoryId = request.CategoryId,
+            CategoryId = effectiveCategoryId,
             Status = ListingStatus.DRAFT
         };
-        ApplyListingRequest(listing, request);
+        ApplyListingRequest(listing, request, template);
         ReplacePhotos(listing, request.Photos);
         dbContext.Listings.Add(listing);
         AddAudit(sellerId, listing.Id, "LISTING_CREATED");
@@ -48,6 +63,7 @@ public sealed class MaterialInventoryService(
         var items = await MaterialListingQueryBuilder.ApplySort(listings, query)
             .Include(listing => listing.Seller)
             .Include(listing => listing.Category)
+            .Include(listing => listing.ConstructionItemTemplate)
             .Include(listing => listing.Photos)
             .Skip((query.Page - 1) * query.PageSize)
             .Take(query.PageSize)
@@ -118,6 +134,7 @@ public sealed class MaterialInventoryService(
             .Where(listing => listing.SellerId == sellerId)
             .Include(listing => listing.Seller)
             .Include(listing => listing.Category)
+            .Include(listing => listing.ConstructionItemTemplate)
             .Include(listing => listing.Photos)
             .OrderByDescending(listing => listing.CreatedAtUtc)
             .ToListAsync(cancellationToken);
@@ -131,7 +148,15 @@ public sealed class MaterialInventoryService(
         UpdateMaterialListingRequest request,
         CancellationToken cancellationToken)
     {
-        ValidateListingRequest(request);
+        ConstructionItemTemplate? template = null;
+        if (request.ConstructionItemTemplateId.HasValue)
+        {
+            template = await dbContext.ConstructionItemTemplates
+                .AsNoTracking()
+                .SingleOrDefaultAsync(t => t.Id == request.ConstructionItemTemplateId.Value, cancellationToken);
+        }
+
+        ValidateListingRequest(request, template);
         var listing = await GetOwnedListingAsync(sellerId, listingId, cancellationToken);
         if (listing.Status is not ListingStatus.DRAFT and not ListingStatus.REJECTED)
         {
@@ -140,12 +165,19 @@ public sealed class MaterialInventoryService(
                 "Only DRAFT or REJECTED listings can be edited. Publish the updated listing for manager verification.");
         }
 
-        await EnsureCategoryUnitAsync(request.CategoryId, request.Unit, cancellationToken);
+        var effectiveCategoryId = template?.CategoryId ?? (request.CategoryId.HasValue && request.CategoryId.Value != Guid.Empty ? request.CategoryId.Value : listing.CategoryId);
+        if (effectiveCategoryId == Guid.Empty)
+        {
+            throw new MaterialOperationException(MaterialOperationError.Validation, "Category is required for custom items.");
+        }
+
+        var effectiveUnit = string.IsNullOrWhiteSpace(request.Unit) && template is not null ? template.BaseUnit : request.Unit;
+        await EnsureCategoryUnitAsync(effectiveCategoryId, effectiveUnit, template, cancellationToken);
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         try
         {
-            listing.CategoryId = request.CategoryId;
-            ApplyListingRequest(listing, request);
+            listing.CategoryId = effectiveCategoryId;
+            ApplyListingRequest(listing, request, template);
             listing.Photos.Clear();
             AddAudit(sellerId, listing.Id, "LISTING_UPDATED");
             await dbContext.SaveChangesAsync(cancellationToken);
@@ -357,6 +389,10 @@ public sealed class MaterialInventoryService(
     public Task<IReadOnlyList<string>> GetUnitCatalogAsync(CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<string>>(MaterialUnits.Catalog);
 
+    public Task<IReadOnlyList<UnitDefinitionResponse>> GetUnitDefinitionsAsync(CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<UnitDefinitionResponse>>(MaterialUnits.Definitions.Select(x =>
+            new UnitDefinitionResponse(x.Code, x.DisplayName, x.MeasurementType, x.QuantityMode.ToString(), x.AllowedStep, x.DecimalPrecision)).ToArray());
+
     public async Task<IReadOnlyList<string>> GetCategoryUnitsAsync(Guid categoryId, CancellationToken cancellationToken)
     {
         var units = await dbContext.Categories.AsNoTracking().Where(category => category.Id == categoryId)
@@ -444,14 +480,24 @@ public sealed class MaterialInventoryService(
             .SingleOrDefaultAsync(item => item.Id == listingId && item.SellerId == sellerId, cancellationToken)
         ?? throw new MaterialOperationException(MaterialOperationError.NotFound, "Material listing was not found.");
 
-    private async Task EnsureCategoryUnitAsync(Guid categoryId, string unit, CancellationToken cancellationToken)
+    private async Task EnsureCategoryUnitAsync(Guid categoryId, string unit, ConstructionItemTemplate? template, CancellationToken cancellationToken)
     {
         var category = await dbContext.Categories.SingleOrDefaultAsync(category => category.Id == categoryId, cancellationToken);
         if (category is null)
         {
             throw new MaterialOperationException(MaterialOperationError.Validation, "CategoryId must reference an existing material category.");
         }
-        if (!MaterialUnits.Distinct(category.AllowedUnits).Contains(MaterialUnits.Normalize(unit)))
+        var normalized = MaterialUnits.Normalize(unit);
+        var allowed = MaterialUnits.Distinct(category.AllowedUnits);
+        if (template is not null && template.AllowedUnits.Length > 0)
+        {
+            var templateUnits = template.AllowedUnits.Select(MaterialUnits.Normalize).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            if (templateUnits.Contains(normalized))
+            {
+                return;
+            }
+        }
+        if (!allowed.Contains(normalized))
             throw new MaterialOperationException(MaterialOperationError.Validation, "Select an allowed unit for this category.");
     }
 
@@ -459,6 +505,7 @@ public sealed class MaterialInventoryService(
         await dbContext.Listings.AsNoTracking()
             .Include(listing => listing.Seller)
             .Include(listing => listing.Category)
+            .Include(listing => listing.ConstructionItemTemplate)
             .Include(listing => listing.Photos)
             .SingleOrDefaultAsync(listing => listing.Id == listingId, cancellationToken);
 
@@ -469,7 +516,7 @@ public sealed class MaterialInventoryService(
         return ToResponse(listing);
     }
 
-    private static void ValidateListingRequest(CreateMaterialListingRequest request)
+    private static void ValidateListingRequest(CreateMaterialListingRequest request, ConstructionItemTemplate? template = null)
     {
         if (request.AvailableUntil is null || request.AvailableUntil <= DateTime.UtcNow)
         {
@@ -483,19 +530,246 @@ public sealed class MaterialInventoryService(
         {
             throw new MaterialOperationException(MaterialOperationError.Validation, "Photos must have unique SortOrder values and contain at most ten items.");
         }
+        if (template is not null)
+        {
+            var mode = template.QuantityMode.ToUpperInvariant();
+            if (mode == "PACKAGE")
+            {
+                var packageCount = request.PackageCount ?? (request.PackageSize.HasValue && request.PackageSize.Value > 0 ? (int)Math.Max(1, Math.Round(request.Quantity / request.PackageSize.Value)) : null);
+                var packageSize = request.PackageSize ?? (template.AllowedPackageSizes.Length > 0 ? template.AllowedPackageSizes[0] : 1m);
+                if (packageCount is null || packageCount <= 0 || packageSize <= 0)
+                {
+                    throw new MaterialOperationException(MaterialOperationError.Validation, "Packaged items require a positive package size and a whole package count.");
+                }
+            }
+            else if (mode == "PIECE")
+            {
+                var qty = request.PackageCount ?? request.Quantity;
+                if (qty <= 0)
+                {
+                    throw new MaterialOperationException(MaterialOperationError.Validation, "Quantity must be greater than zero.");
+                }
+            }
+            else
+            {
+                if (request.Quantity <= 0)
+                {
+                    throw new MaterialOperationException(MaterialOperationError.Validation, "Quantity must be greater than zero.");
+                }
+            }
+
+            ValidateTemplateAttributes(template, request.SpecificationsJson);
+        }
+        else
+        {
+            var qMode = request.QuantityMode?.ToUpperInvariant() ?? "LEGACY";
+            if (qMode == "PACKAGE")
+            {
+                if (request.PackageCount is null || request.PackageCount <= 0 ||
+                    request.PackageSize is null || request.PackageSize <= 0 ||
+                    string.IsNullOrWhiteSpace(request.BaseUnit) ||
+                    string.IsNullOrWhiteSpace(request.PackageType))
+                {
+                    throw new MaterialOperationException(MaterialOperationError.Validation, "Packaged listings require package type, base unit, package size and a whole package count.");
+                }
+                if (request.Quantity != request.PackageCount.Value * request.PackageSize.Value)
+                {
+                    throw new MaterialOperationException(MaterialOperationError.Validation, "Quantity must equal package count multiplied by package size; package stock cannot be fractional.");
+                }
+            }
+            else if (qMode == "PIECE")
+            {
+                var count = request.PackageCount ?? (request.Quantity > 0 ? (int)Math.Round(request.Quantity) : 0);
+                if (count <= 0)
+                {
+                    throw new MaterialOperationException(MaterialOperationError.Validation, "Piece listings require a quantity greater than zero.");
+                }
+                if (request.Quantity > 0 && request.Quantity % 1 != 0)
+                {
+                    throw new MaterialOperationException(MaterialOperationError.Validation, "Piece listings must have a whole unit quantity.");
+                }
+            }
+            else if (qMode == "CONTINUOUS")
+            {
+                if (request.Quantity <= 0)
+                {
+                    throw new MaterialOperationException(MaterialOperationError.Validation, "Continuous listings require a quantity greater than zero.");
+                }
+            }
+        }
     }
 
-    private static void ApplyListingRequest(Listing listing, CreateMaterialListingRequest request)
+    private static void ValidateTemplateAttributes(ConstructionItemTemplate template, string? specificationsJson)
+    {
+        if (string.IsNullOrWhiteSpace(template.AttributeSchema))
+        {
+            return;
+        }
+
+        System.Text.Json.JsonDocument schemaDoc;
+        try
+        {
+            schemaDoc = System.Text.Json.JsonDocument.Parse(template.AttributeSchema);
+        }
+        catch
+        {
+            return;
+        }
+
+        if (schemaDoc.RootElement.ValueKind != System.Text.Json.JsonValueKind.Array)
+        {
+            return;
+        }
+
+        System.Text.Json.JsonDocument? specsDoc = null;
+        if (!string.IsNullOrWhiteSpace(specificationsJson))
+        {
+            try
+            {
+                specsDoc = System.Text.Json.JsonDocument.Parse(specificationsJson);
+            }
+            catch
+            {
+                throw new MaterialOperationException(MaterialOperationError.Validation, "Specifications must be a valid JSON object.");
+            }
+        }
+
+        foreach (var element in schemaDoc.RootElement.EnumerateArray())
+        {
+            var isRequired = element.TryGetProperty("required", out var reqProp) && reqProp.ValueKind == System.Text.Json.JsonValueKind.True;
+            if (!isRequired)
+            {
+                continue;
+            }
+
+            var id = element.TryGetProperty("id", out var idProp) ? idProp.GetString() : null;
+            if (string.IsNullOrWhiteSpace(id))
+            {
+                continue;
+            }
+
+            var label = element.TryGetProperty("label", out var labelProp) && !string.IsNullOrWhiteSpace(labelProp.GetString())
+                ? labelProp.GetString()
+                : id;
+
+            var hasValue = false;
+            if (specsDoc is not null && specsDoc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Object)
+            {
+                if (specsDoc.RootElement.TryGetProperty(id, out var val))
+                {
+                    if (val.ValueKind == System.Text.Json.JsonValueKind.String && !string.IsNullOrWhiteSpace(val.GetString()))
+                    {
+                        hasValue = true;
+                    }
+                    else if (val.ValueKind == System.Text.Json.JsonValueKind.Number)
+                    {
+                        hasValue = true;
+                    }
+                    else if (val.ValueKind is System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False)
+                    {
+                        hasValue = true;
+                    }
+                }
+
+                // If this is widthMm or heightMm, accept dimensionsMm as fallback
+                if (!hasValue && (id == "widthMm" || id == "heightMm") && specsDoc.RootElement.TryGetProperty("dimensionsMm", out var dimVal) && dimVal.ValueKind == System.Text.Json.JsonValueKind.String && !string.IsNullOrWhiteSpace(dimVal.GetString()))
+                {
+                    hasValue = true;
+                }
+            }
+
+            if (!hasValue)
+            {
+                throw new MaterialOperationException(MaterialOperationError.Validation, $"The field '{label}' is required.");
+            }
+        }
+    }
+
+    private static void ApplyListingRequest(Listing listing, CreateMaterialListingRequest request, ConstructionItemTemplate? template = null)
     {
         listing.Title = request.Title.Trim();
         listing.Description = request.Description.Trim();
         listing.Quantity = request.Quantity;
-        listing.Unit = MaterialUnits.Normalize(request.Unit);
+        listing.Unit = MaterialUnits.Normalize(string.IsNullOrWhiteSpace(request.Unit) ? "unit" : request.Unit);
         listing.Condition = Enum.Parse<MaterialCondition>(request.Condition, ignoreCase: false);
         listing.UnitPrice = request.UnitPrice;
         listing.Latitude = request.Latitude;
         listing.Longitude = request.Longitude;
         listing.AvailableUntil = request.AvailableUntil!.Value.ToUniversalTime();
+
+        listing.ConstructionItemTemplateId = request.ConstructionItemTemplateId;
+        listing.SpecificationsJson = request.SpecificationsJson;
+        listing.IsCustomPendingReview = request.IsCustomPendingReview;
+
+        if (template is not null)
+        {
+            var tMode = template.QuantityMode.ToUpperInvariant();
+            if (tMode == "PACKAGE")
+            {
+                listing.QuantityMode = QuantityMode.PACKAGE;
+                listing.PackageType = Enum.TryParse<PackageType>(request.PackageType ?? template.PackageType ?? "BOX", true, out var pType) ? pType : PackageType.BOX;
+                listing.PackageSize = request.PackageSize ?? (template.AllowedPackageSizes.Length > 0 ? template.AllowedPackageSizes[0] : 1m);
+                listing.PackageCount = request.PackageCount ?? (int)Math.Max(1, Math.Round(request.Quantity / listing.PackageSize.Value));
+                listing.Quantity = listing.PackageSize.Value * listing.PackageCount.Value;
+                listing.BaseUnit = MaterialUnits.Normalize(request.BaseUnit ?? template.BaseUnit);
+                listing.Unit = MaterialUnits.Normalize(string.IsNullOrWhiteSpace(request.Unit) ? template.BaseUnit : request.Unit);
+            }
+            else if (tMode == "PIECE")
+            {
+                listing.QuantityMode = QuantityMode.PIECE;
+                listing.PackageType = PackageType.PIECE;
+                listing.PackageSize = 1m;
+                var count = request.PackageCount ?? (int)Math.Max(1, Math.Round(request.Quantity));
+                listing.PackageCount = count;
+                listing.Quantity = count;
+                listing.BaseUnit = MaterialUnits.Normalize(template.BaseUnit);
+                listing.Unit = MaterialUnits.Normalize(string.IsNullOrWhiteSpace(request.Unit) ? template.BaseUnit : request.Unit);
+            }
+            else
+            {
+                listing.QuantityMode = QuantityMode.CONTINUOUS;
+                listing.Quantity = request.Quantity;
+                listing.PackageType = null;
+                listing.PackageSize = null;
+                listing.PackageCount = null;
+                listing.BaseUnit = MaterialUnits.Normalize(template.BaseUnit);
+                listing.Unit = MaterialUnits.Normalize(string.IsNullOrWhiteSpace(request.Unit) ? template.BaseUnit : request.Unit);
+            }
+        }
+        else
+        {
+            var qMode = request.QuantityMode is null ? QuantityMode.LEGACY : Enum.Parse<QuantityMode>(request.QuantityMode, true);
+            listing.QuantityMode = qMode;
+            listing.Unit = MaterialUnits.Normalize(string.IsNullOrWhiteSpace(request.Unit) ? "unit" : request.Unit);
+
+            if (qMode == QuantityMode.PIECE)
+            {
+                listing.PackageType = PackageType.PIECE;
+                listing.PackageSize = 1m;
+                var count = request.PackageCount ?? (int)Math.Max(1, Math.Round(request.Quantity));
+                listing.PackageCount = count;
+                listing.Quantity = count;
+                listing.BaseUnit = request.BaseUnit is not null ? MaterialUnits.Normalize(request.BaseUnit) : listing.Unit;
+            }
+            else if (qMode == QuantityMode.PACKAGE)
+            {
+                listing.BaseUnit = request.BaseUnit is null ? null : MaterialUnits.Normalize(request.BaseUnit);
+                listing.PackageType = request.PackageType is null ? null : Enum.Parse<PackageType>(request.PackageType, true);
+                listing.PackageSize = request.PackageSize;
+                listing.PackageCount = request.PackageCount;
+                listing.Quantity = request.Quantity;
+            }
+            else
+            {
+                listing.Quantity = request.Quantity;
+                listing.BaseUnit = request.BaseUnit is null ? null : MaterialUnits.Normalize(request.BaseUnit);
+                listing.PackageType = null;
+                listing.PackageSize = null;
+                listing.PackageCount = null;
+            }
+        }
+
+        listing.ReservedPackageCount = 0;
     }
 
     private static void ReplacePhotos(Listing listing, IReadOnlyList<ListingPhotoRequest> photos)
@@ -573,6 +847,12 @@ public sealed class MaterialInventoryService(
         listing.Description,
         listing.Quantity,
         listing.ReservedQuantity,
+        listing.QuantityMode.ToString(),
+        listing.BaseUnit,
+        listing.PackageType?.ToString(),
+        listing.PackageSize,
+        listing.PackageCount,
+        listing.ReservedPackageCount,
         listing.Unit,
         listing.Condition.ToString(),
         listing.UnitPrice,
@@ -586,7 +866,11 @@ public sealed class MaterialInventoryService(
             .Select(photo => new ListingPhotoResponse(photo.Id, photo.PhotoUrl, photo.SortOrder))
             .ToList(),
         listing.Seller is null ? null : new SellerContactResponse(listing.Seller.FullName,
-            listing.Seller.BusinessName, listing.Seller.Email, listing.Seller.PhoneNumber));
+            listing.Seller.BusinessName, listing.Seller.Email, listing.Seller.PhoneNumber),
+        listing.ConstructionItemTemplateId,
+        listing.ConstructionItemTemplate?.Name,
+        listing.SpecificationsJson,
+        listing.IsCustomPendingReview);
 
     private static MaterialCategoryResponse ToResponse(Category category) =>
         new(category.Id, category.Name, category.CreatedAtUtc, category.UpdatedAtUtc, MaterialUnits.Distinct(category.AllowedUnits));

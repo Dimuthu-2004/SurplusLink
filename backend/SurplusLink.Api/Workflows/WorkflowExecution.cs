@@ -27,7 +27,10 @@ public sealed class WorkflowExecutionOptions
 public sealed record WorkflowListingSnapshot(Guid MatchId, Guid ListingId, Guid SellerId, Guid CategoryId,
     decimal AvailableQuantity, string Unit, decimal UnitPrice, string Condition, string Status,
     DateTime AvailableUntil, decimal? Latitude, decimal? Longitude, decimal? DistanceKm,
-    decimal? DurationMinutes, decimal? TransportCost, string? RoutingError);
+    decimal? DurationMinutes, decimal? TransportCost, string? RoutingError,
+    string? QuantityMode = null, string? PackageType = null, decimal? PackageSize = null,
+    int? PackageCountAvailable = null, decimal? BaseEquivalentAvailableQuantity = null,
+    decimal? MaximumContribution = null, bool? FullCoverage = null);
 public sealed record WorkflowRunRequest(Guid WorkflowId, object BuyerRequest, IReadOnlyList<WorkflowListingSnapshot> Listings,
     string? Objective = null);
 public sealed record WorkflowValidation(bool Valid, bool RequiresApproval, Guid? RecommendedMatchId,
@@ -90,7 +93,8 @@ public sealed class AgentWorkflowClient(HttpClient client, IOptions<WorkflowExec
 public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkflowClient client,
     ITransportEstimateService transport, IOptions<WorkflowExecutionOptions> settings,
     ILogger<WorkflowQueueProcessor>? logger = null,
-    INotificationService? notifications = null)
+    INotificationService? notifications = null,
+    IOptions<RoutingOptions>? routingSettings = null)
 {
     public async Task<bool> ProcessNextAsync(CancellationToken stop)
     {
@@ -180,18 +184,31 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
         var rows = new List<WorkflowListingSnapshot>();
         foreach (var listing in listings)
         {
+            var routingFailure = RoutingFailureClassifier.ValidateCoordinates(
+                listing.Latitude, listing.Longitude, request.Latitude, request.Longitude);
             TransportEstimate? estimate = null;
-            if (MatchService.EligibilityReason(request, listing) is null &&
-                listing.Latitude.HasValue && listing.Longitude.HasValue && request.Latitude.HasValue && request.Longitude.HasValue)
-                estimate = await transport.EstimateAsync(new RouteRequest(listing.Latitude.Value, listing.Longitude.Value,
-                    request.Latitude.Value, request.Longitude.Value), ct);
+            if (MatchService.EligibilityReason(request, listing) is null && routingFailure is null &&
+                listing.Latitude is decimal sellerLat && listing.Longitude is decimal sellerLon &&
+                request.Latitude is decimal buyerLat && request.Longitude is decimal buyerLon)
+                estimate = await transport.EstimateAsync(new RouteRequest(sellerLat, sellerLon, buyerLat, buyerLon), ct);
             var routed = estimate is { Route.Success: true, Route.DistanceKm: >= 0, Route.DurationMinutes: >= 0,
                 EstimatedTransportCost: >= 0, ErrorCode: null };
+            logger?.LogInformation(
+                "Workflow route listing {ListingId}, requirement {RequirementId}: originPresent={OriginPresent}, destinationPresent={DestinationPresent}, provider={Provider}, outcome={Outcome}",
+                listing.Id, request.Id, listing.Latitude.HasValue && listing.Longitude.HasValue,
+                request.Latitude.HasValue && request.Longitude.HasValue,
+                routingSettings?.Value.Provider ?? "unconfigured",
+                routed ? "ROUTED" : routingFailure ?? RoutingFailureClassifier.FromEstimate(estimate));
             rows.Add(new(existing.GetValueOrDefault(listing.Id, Guid.NewGuid()), listing.Id, listing.SellerId,
                 listing.CategoryId, listing.Quantity - listing.ReservedQuantity, listing.Unit, listing.UnitPrice,
                 listing.Condition.ToString(), listing.Status.ToString(), listing.AvailableUntil, listing.Latitude,
                 listing.Longitude, routed ? estimate!.Route.DistanceKm : null, routed ? estimate!.Route.DurationMinutes : null,
-                routed ? estimate!.EstimatedTransportCost : null, routed ? null : "ROUTE_UNAVAILABLE"));
+                routed ? estimate!.EstimatedTransportCost : null, routed ? null : routingFailure ?? RoutingFailureClassifier.FromEstimate(estimate),
+                listing.QuantityMode.ToString(), listing.PackageType?.ToString(), listing.PackageSize,
+                listing.PackageCount is null ? null : listing.PackageCount - listing.ReservedPackageCount,
+                listing.Quantity - listing.ReservedQuantity,
+                Math.Min(listing.Quantity - listing.ReservedQuantity, request.RequiredQuantity),
+                listing.Quantity - listing.ReservedQuantity >= request.RequiredQuantity));
         }
         return new(workflow.Id, new { id = request.Id, buyerId = request.BuyerId, categoryId = request.CategoryId,
             requiredQuantity = request.RequiredQuantity, unit = request.Unit, maximumBudget = request.MaximumBudget,
@@ -210,11 +227,11 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
                 x.AvailableQuantity > 0 && request.Deadline > now &&
                 x.RoutingError is null && x.DistanceKm is >= 0 && x.DurationMinutes is >= 0 && x.TransportCost is >= 0 &&
                 x.DurationMinutes <= (decimal)(request.Deadline - now).TotalMinutes &&
-                x.UnitPrice * request.RequiredQuantity + x.TransportCost <= request.MaximumBudget)
-            .Select(x => new { Row = x, Score = MatchScoring.Score(x.Condition, x.UnitPrice * request.RequiredQuantity,
+                MaterialCost(request.RequiredQuantity, x.UnitPrice, x.QuantityMode, x.PackageSize) + x.TransportCost <= request.MaximumBudget)
+            .Select(x => new { Row = x, Score = MatchScoring.Score(x.Condition, MaterialCost(request.RequiredQuantity, x.UnitPrice, x.QuantityMode, x.PackageSize),
                 request.MaximumBudget, x.DistanceKm, x.TransportCost) })
             .OrderByDescending(x => x.Score).ThenByDescending(x => MatchScoring.ConditionRank(x.Row.Condition))
-            .ThenBy(x => x.Row.UnitPrice * request.RequiredQuantity + x.Row.TransportCost)
+            .ThenBy(x => MaterialCost(request.RequiredQuantity, x.Row.UnitPrice, x.Row.QuantityMode, x.Row.PackageSize) + x.Row.TransportCost)
             .ThenBy(x => x.Row.DistanceKm).ThenBy(x => x.Row.ListingId.ToString(), StringComparer.Ordinal).FirstOrDefault();
         if (winner is null || winner.Row.MatchId != recommendation.MatchId || winner.Score != recommendation.Score)
             throw new JsonException("Recommendation must follow deterministic ranking of valid routed candidates.");
@@ -226,7 +243,12 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
         listing.SellerId != request.BuyerId && listing.CategoryId == request.CategoryId &&
         string.Equals(listing.Unit, request.Unit, StringComparison.OrdinalIgnoreCase) &&
         listing.Quantity - listing.ReservedQuantity > 0 && transportCost >= 0 &&
-        listing.UnitPrice * request.RequiredQuantity + transportCost <= request.MaximumBudget;
+        MaterialCost(request.RequiredQuantity, listing.UnitPrice, listing.QuantityMode.ToString(), listing.PackageSize) + transportCost <= request.MaximumBudget;
+
+    internal static decimal MaterialCost(decimal requiredQuantity, decimal unitPrice, string? quantityMode, decimal? packageSize) =>
+        quantityMode is "PACKAGE" or "PIECE" && packageSize is > 0
+            ? decimal.Ceiling(requiredQuantity / packageSize.Value) * unitPrice
+            : requiredQuantity * unitPrice;
 
     internal static void ValidateResult(WorkflowRunRequest input, WorkflowRunResult result)
     {
@@ -318,7 +340,7 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
                 reason ??= "DELIVERY_DEADLINE_EXCEEDED";
             var routeSucceeded = row.RoutingError is null && row.DistanceKm is >= 0 && row.DurationMinutes is >= 0 && row.TransportCost is >= 0;
             candidate.Status = reason is not null ? MatchStatus.REJECTED : routeSucceeded ? MatchStatus.ROUTED : MatchStatus.ROUTE_FAILED;
-            candidate.RejectionReason = reason ?? (routeSucceeded ? null : "ROUTE_UNAVAILABLE");
+            candidate.RejectionReason = reason ?? (routeSucceeded ? null : row.RoutingError ?? "ROUTING_PROVIDER_ERROR");
             candidate.Distance = routeSucceeded ? row.DistanceKm : null;
             candidate.DurationMinutes = routeSucceeded ? row.DurationMinutes : null;
             candidate.EstimatedTransportCost = routeSucceeded ? row.TransportCost : null;

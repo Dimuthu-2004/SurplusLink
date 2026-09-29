@@ -22,6 +22,12 @@ export interface MaterialListingItem {
   description: string;
   quantity: number;
   reservedQuantity: number;
+  quantityMode?: 'LEGACY' | 'PACKAGE' | 'PIECE' | 'CONTINUOUS';
+  baseUnit?: string | null;
+  packageType?: string | null;
+  packageSize?: number | null;
+  packageCount?: number | null;
+  reservedPackageCount?: number;
   unit: string;
   condition: string;
   unitPrice: number;
@@ -33,6 +39,9 @@ export interface MaterialListingItem {
   updatedAtUtc: string;
   photos: MaterialListingPhoto[];
   seller?: SellerContact;
+  constructionItemTemplateId?: string | null;
+  constructionItemTemplateName?: string | null;
+  specificationsJson?: string | null;
 }
 
 export interface PagedMaterialListings {
@@ -54,6 +63,7 @@ export interface MaterialCategoryItem {
 export interface MarketplaceQueryParams {
   search?: string;
   category?: string;
+  templateId?: string;
   condition?: string;
   minPrice?: number;
   maxPrice?: number;
@@ -91,6 +101,7 @@ export async function fetchMarketplaceListings(
 
   if (params.search?.trim()) query.search = params.search.trim();
   if (params.category?.trim()) query.category = params.category.trim();
+  if (params.templateId?.trim()) query.templateId = params.templateId.trim();
   if (params.condition?.trim()) query.condition = params.condition.trim();
   if (params.minPrice !== undefined && params.minPrice !== null && !isNaN(params.minPrice)) {
     query.minPrice = params.minPrice;

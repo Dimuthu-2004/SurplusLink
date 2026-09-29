@@ -46,6 +46,13 @@ class Candidate(BaseModel):
     condition: str = Field(min_length=1)
     basicFitScore: float = Field(ge=0, le=100)
     reason: str = Field(min_length=1, max_length=500)
+    quantityMode: str = "LEGACY"
+    packageType: str | None = None
+    packageSize: Decimal | None = None
+    packageCountAvailable: int | None = None
+    baseEquivalentAvailableQuantity: Decimal | None = None
+    maximumContribution: Decimal | None = None
+    fullCoverage: bool | None = None
 
 
 class MatchingFailure(BaseModel):

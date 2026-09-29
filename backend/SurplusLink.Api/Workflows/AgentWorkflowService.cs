@@ -194,15 +194,26 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db, INotificationS
                 if (!existingRes)
                 {
                     var quantity = match.MaterialRequest.RequiredQuantity;
+                    int? packageCount = null;
+                    if (match.Listing.QuantityMode is QuantityMode.PACKAGE or QuantityMode.PIECE)
+                    {
+                        var size = match.Listing.PackageSize ?? 0;
+                        packageCount = size <= 0 ? null : (int)Math.Ceiling(quantity / size);
+                        quantity = packageCount is null ? quantity : packageCount.Value * size;
+                        if (packageCount is null || match.Listing.ReservedPackageCount + packageCount > match.Listing.PackageCount)
+                            throw new AgentWorkflowException(409, "Insufficient available packages.");
+                    }
                     if (match.Listing.ReservedQuantity + quantity > match.Listing.Quantity)
                         throw new AgentWorkflowException(409, "Insufficient available quantity.");
                     match.Listing.ReservedQuantity += quantity;
+                    if (packageCount is not null) match.Listing.ReservedPackageCount += packageCount.Value;
                     if (match.Listing.ReservedQuantity == match.Listing.Quantity)
                         match.Listing.Status = ListingStatus.RESERVED;
                     db.Reservations.Add(new Reservation
                     {
                         Id = Guid.NewGuid(), ListingId = match.ListingId, MaterialRequestId = match.MaterialRequestId,
                         Quantity = quantity, Status = ReservationStatus.ACTIVE
+                        , PackageCount = packageCount
                     });
                     db.AuditLogs.Add(new AuditLog { Id = Guid.NewGuid(), ActorUserId = managerId,
                         EntityType = nameof(Listing), EntityId = match.ListingId, Action = "QUANTITY_RESERVED" });
@@ -241,8 +252,11 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db, INotificationS
                     throw new AgentWorkflowException(409, "The material request is not open for reservation.");
                 if (request.Deadline <= DateTime.UtcNow)
                     throw new AgentWorkflowException(409, "The material request has expired.");
-                if (pendingTransactions.Sum(x => x.Quantity) > request.RequiredQuantity)
-                    throw new AgentWorkflowException(409, "Selected allocations exceed the requested quantity.");
+                var selectedBaseTotal = pendingTransactions.Sum(x => x.Quantity);
+                if (selectedBaseTotal > request.RequiredQuantity &&
+                    (pendingTransactions.Any(x => x.PackageCount is null) ||
+                     pendingTransactions.Any(x => selectedBaseTotal - x.Quantity >= request.RequiredQuantity)))
+                    throw new AgentWorkflowException(409, "Selected allocations include unnecessary quantity beyond the requested quantity.");
 
                 // Validate every transaction allocation
                 foreach (var txRow in pendingTransactions)
@@ -250,9 +264,19 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db, INotificationS
                     var match = txRow.Offer.MaterialMatch;
                     var listing = match.Listing;
                     var allocatedQty = txRow.Quantity;
+                    var packageMode = listing.QuantityMode is QuantityMode.PACKAGE or QuantityMode.PIECE;
 
                     if (allocatedQty <= 0)
                         throw new AgentWorkflowException(409, "Allocated quantity must be positive.");
+
+                    if (packageMode)
+                    {
+                        if (txRow.PackageCount is null || txRow.PackageCount <= 0 ||
+                            allocatedQty != txRow.PackageCount.Value * listing.PackageSize)
+                            throw new AgentWorkflowException(409, "Package allocation is invalid.");
+                        if (listing.ReservedPackageCount + txRow.PackageCount > listing.PackageCount)
+                            throw new AgentWorkflowException(409, $"STOCK_CHANGED: package allocation conflict for listing '{listing.Title}'.");
+                    }
 
                     if (MaterialUnits.IsDiscrete(request.Unit) && decimal.Truncate(allocatedQty) != allocatedQty)
                         throw new AgentWorkflowException(409, $"Allocated quantity for '{request.Unit}' must be a whole number.");
@@ -279,7 +303,8 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db, INotificationS
                         throw new AgentWorkflowException(409, $"Delivery duration exceeds deadline for '{listing.Title}'.");
 
                     // Terms check:
-                    if (txRow.Offer.UnitValue != listing.UnitPrice || txRow.Offer.TotalValue != txRow.Quantity * listing.UnitPrice ||
+                    var expectedMaterialValue = packageMode ? txRow.PackageCount!.Value * listing.UnitPrice : txRow.Quantity * listing.UnitPrice;
+                    if (txRow.Offer.UnitValue != listing.UnitPrice || txRow.Offer.TotalValue != expectedMaterialValue ||
                         txRow.Offer.BuyerId != request.BuyerId || txRow.Offer.SellerId != listing.SellerId)
                         throw new AgentWorkflowException(409, "The offered terms changed. Request a revision.");
 
@@ -289,7 +314,8 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db, INotificationS
                 }
 
                 // Total budget check:
-                var totalMaterialCost = pendingTransactions.Sum(x => x.Quantity * x.Offer.UnitValue);
+                var totalMaterialCost = pendingTransactions.Sum(x => x.PackageCount is null
+                    ? x.Quantity * x.Offer.UnitValue : x.PackageCount.Value * x.Offer.UnitValue);
                 var totalTransportCost = pendingTransactions.Select(x => x.Offer.MaterialMatch).DistinctBy(x => x.Id).Sum(x => x.EstimatedTransportCost ?? 0);
                 if (totalMaterialCost + totalTransportCost > request.MaximumBudget)
                     throw new AgentWorkflowException(409, "Total cost across all selections exceeds the requirement budget.");
@@ -308,6 +334,8 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db, INotificationS
                     if (!existing)
                     {
                         listing.ReservedQuantity += allocatedQty;
+                        if (listing.QuantityMode is QuantityMode.PACKAGE or QuantityMode.PIECE)
+                            listing.ReservedPackageCount += txRow.PackageCount!.Value;
                         if (listing.ReservedQuantity == listing.Quantity)
                             listing.Status = ListingStatus.RESERVED;
 
@@ -317,6 +345,7 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db, INotificationS
                             ListingId = listing.Id,
                             MaterialRequestId = request.Id,
                             Quantity = allocatedQty,
+                            PackageCount = txRow.PackageCount,
                             Status = ReservationStatus.ACTIVE
                         });
 
@@ -505,10 +534,12 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db, INotificationS
                 x.Offer.MaterialMatch.Listing.Quantity - x.Offer.MaterialMatch.Listing.ReservedQuantity,
                 x.Offer.MaterialMatch.Listing.Unit, x.Offer.UnitValue, x.Offer.TotalValue,
                 x.Offer.MaterialMatch.Score, x.Offer.MaterialMatch.Distance,
-                x.Offer.MaterialMatch.EstimatedTransportCost, x.Status.ToString())).ToArray();
+                x.Offer.MaterialMatch.EstimatedTransportCost, x.Status.ToString(), x.PackageCount,
+                x.Offer.MaterialMatch.Listing.PackageType?.ToString(), x.Offer.MaterialMatch.Listing.PackageSize,
+                x.Offer.MaterialMatch.Listing.BaseUnit)).ToArray();
         return new ApprovalGroupResponse(request.Title, allocations[0].Offer.Buyer.FullName ?? "Buyer",
-            request.RequiredQuantity, selected, request.RequiredQuantity - selected, request.Unit,
-            selected == request.RequiredQuantity ? "FULL" : "PARTIAL", rows.Select(x => x.SellerId).Distinct().Count(),
+            request.RequiredQuantity, selected, Math.Max(0, request.RequiredQuantity - selected), request.Unit,
+            selected >= request.RequiredQuantity ? "FULL" : "PARTIAL", rows.Select(x => x.SellerId).Distinct().Count(),
             rows.Sum(x => x.MaterialValue) + rows.Sum(x => x.TransportCost ?? 0), rows);
     }
 

@@ -1,0 +1,15 @@
+{
+  "@@locale": "si",
+  "appTitle": "SurplusLink",
+  "language": "භාෂාව",
+  "english": "English",
+  "sinhala": "සිංහල",
+  "tamil": "தமிழ்",
+  "createRequirement": "අවශ්‍යතාවය සාදන්න",
+  "whatDoYouNeed": "ඔබට අවශ්‍ය කුමක්ද?",
+  "searchConstructionItems": "ඉදිකිරීම් අයිතම සොයන්න...",
+  "category": "කාණ්ඩය",
+  "preferencesOptional": "කැමැත්තන් (විකල්ප)",
+  "saveDraft": "කෙටුම්පත සුරකින්න",
+  "validationSummary": "සලකුණු කළ ක්ෂේත්‍ර නිවැරදි කරන්න."
+}
