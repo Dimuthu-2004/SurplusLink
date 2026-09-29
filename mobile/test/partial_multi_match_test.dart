@@ -34,6 +34,10 @@ class FakeMultiMatchGateway implements MatchGateway {
       matches.firstWhere((m) => m.id == matchId);
 
   @override
+  Future<RecommendedMatch> retryRoute(String matchId) async =>
+      matches.firstWhere((m) => m.id == matchId);
+
+  @override
   Future<void> select(
     String requirementId,
     String matchId, {

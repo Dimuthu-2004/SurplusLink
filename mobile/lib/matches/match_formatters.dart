@@ -1,4 +1,49 @@
+import 'package:flutter/widgets.dart';
 import 'match_models.dart';
+
+String localizedRoutingText(BuildContext context, String key) {
+  final language = Localizations.localeOf(context).languageCode;
+  const values = {
+    'si': {
+      'retryRoute': 'මාර්ගය නැවත උත්සාහ කරන්න',
+      'cannotSelect': 'මෙම ගැළපීම තෝරාගත නොහැක.',
+      'MISSING_SELLER_LOCATION': 'විකුණුම්කරුගේ ලැයිස්තු ස්ථානය නොමැත.',
+      'MISSING_BUYER_LOCATION': 'ගැනුම්කරුගේ බෙදාහැරීමේ ස්ථානය නොමැත.',
+      'INVALID_SELLER_COORDINATES': 'විකුණුම්කරුගේ ස්ථාන දත්ත වලංගු නොවේ.',
+      'INVALID_BUYER_COORDINATES': 'ගැනුම්කරුගේ ස්ථාන දත්ත වලංගු නොවේ.',
+      'ROUTING_TIMEOUT': 'මාර්ග සේවාව ප්‍රතිචාර දැක්වීමට වැඩි කාලයක් ගත්තේය.',
+      'NO_ROUTE_FOUND': 'මෙම ස්ථාන අතර මාර්ගයක් හමු නොවීය.',
+      'ROUTING_PROVIDER_ERROR': 'මාර්ග තොරතුරු දැනට ලබාගත නොහැක.',
+      'ROUTE_UNAVAILABLE': 'මාර්ග තොරතුරු දැනට ලබාගත නොහැක.',
+      'MALFORMED_ROUTING_RESPONSE': 'මාර්ග සේවාව වලංගු ප්‍රතිචාරයක් ලබා දුන්නේ නැත.',
+    },
+    'ta': {
+      'retryRoute': 'வழியை மீண்டும் முயற்சிக்கவும்',
+      'cannotSelect': 'இந்த பொருத்தத்தை தற்போது தேர்ந்தெடுக்க முடியாது.',
+      'MISSING_SELLER_LOCATION': 'விற்பனையாளர் பட்டியல் இடம் இல்லை.',
+      'MISSING_BUYER_LOCATION': 'வாங்குபவர் விநியோக இடம் இல்லை.',
+      'INVALID_SELLER_COORDINATES': 'விற்பனையாளர் இடத் தரவு செல்லுபடியாகாது.',
+      'INVALID_BUYER_COORDINATES': 'வாங்குபவர் இடத் தரவு செல்லுபடியாகாது.',
+      'ROUTING_TIMEOUT': 'வழிசெலுத்தல் சேவை பதிலளிக்க அதிக நேரம் எடுத்தது.',
+      'NO_ROUTE_FOUND': 'இந்த இடங்களுக்கு இடையில் வழி கிடைக்கவில்லை.',
+      'ROUTING_PROVIDER_ERROR': 'வழித் தகவல் தற்போது கிடைக்கவில்லை.',
+      'ROUTE_UNAVAILABLE': 'வழித் தகவல் தற்போது கிடைக்கவில்லை.',
+      'MALFORMED_ROUTING_RESPONSE': 'வழிசெலுத்தல் சேவை செல்லுபடியாகும் பதிலை வழங்கவில்லை.',
+    },
+  };
+  const english = {
+    'retryRoute': 'Retry route', 'cannotSelect': 'This match cannot currently be selected.',
+    'MISSING_SELLER_LOCATION': 'Seller listing location is missing.',
+    'MISSING_BUYER_LOCATION': 'Buyer delivery location is missing.',
+    'INVALID_SELLER_COORDINATES': 'Seller listing coordinates are invalid.',
+    'INVALID_BUYER_COORDINATES': 'Buyer delivery coordinates are invalid.',
+    'ROUTING_TIMEOUT': 'The routing service timed out.', 'NO_ROUTE_FOUND': 'No route was found between these locations.',
+    'ROUTING_PROVIDER_ERROR': 'Route information is currently unavailable.',
+    'ROUTE_UNAVAILABLE': 'Route information is currently unavailable.',
+    'MALFORMED_ROUTING_RESPONSE': 'The routing service returned an invalid response.',
+  };
+  return values[language]?[key] ?? english[key] ?? readableRejectionReason(key);
+}
 
 String readableRejectionReason(String? code) => switch (code) {
   'LISTING_EXPIRES_BEFORE_DELIVERY' =>

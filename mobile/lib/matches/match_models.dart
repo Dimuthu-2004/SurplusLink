@@ -45,6 +45,7 @@ class RecommendedMatch {
     this.requirementStatus,
     this.sellerName,
     this.sellerBusinessName,
+    this.sellerDisplayName,
     this.condition,
     this.latitude,
     this.longitude,
@@ -71,7 +72,7 @@ class RecommendedMatch {
   final DateTime? availableUntil, requiredBy;
   final double? availableQuantity, maximumBudget;
   final String? requirementStatus;
-  final String? sellerName, sellerBusinessName, condition, sellerAddress;
+  final String? sellerName, sellerBusinessName, sellerDisplayName, condition, sellerAddress;
   final double? latitude, longitude;
   final String? recommendedMatchId;
   final bool? _isPartial;
@@ -136,6 +137,7 @@ class RecommendedMatch {
         requirementStatus: _optionalString(json, 'requirementStatus'),
         sellerName: _optionalString(json, 'sellerName'),
         sellerBusinessName: _optionalString(json, 'sellerBusinessName'),
+        sellerDisplayName: _optionalString(json, 'sellerDisplayName'),
         condition: _optionalString(json, 'condition'),
         latitude: _number(json, 'latitude', optional: true),
         longitude: _number(json, 'longitude', optional: true),

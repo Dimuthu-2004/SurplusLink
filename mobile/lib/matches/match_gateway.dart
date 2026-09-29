@@ -6,6 +6,7 @@ abstract interface class MatchGateway {
     MatchQuery query,
   );
   Future<RecommendedMatch> get(String requirementId, String matchId);
+  Future<RecommendedMatch> retryRoute(String matchId);
   Future<void> select(String requirementId, String matchId, {double? quantity, int? packageCount});
   Future<void> selectMatches(
     String requirementId,

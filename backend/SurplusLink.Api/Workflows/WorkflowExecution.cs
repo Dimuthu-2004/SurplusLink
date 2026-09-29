@@ -93,7 +93,8 @@ public sealed class AgentWorkflowClient(HttpClient client, IOptions<WorkflowExec
 public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkflowClient client,
     ITransportEstimateService transport, IOptions<WorkflowExecutionOptions> settings,
     ILogger<WorkflowQueueProcessor>? logger = null,
-    INotificationService? notifications = null)
+    INotificationService? notifications = null,
+    IOptions<RoutingOptions>? routingSettings = null)
 {
     public async Task<bool> ProcessNextAsync(CancellationToken stop)
     {
@@ -183,18 +184,26 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
         var rows = new List<WorkflowListingSnapshot>();
         foreach (var listing in listings)
         {
+            var routingFailure = RoutingFailureClassifier.ValidateCoordinates(
+                listing.Latitude, listing.Longitude, request.Latitude, request.Longitude);
             TransportEstimate? estimate = null;
-            if (MatchService.EligibilityReason(request, listing) is null &&
-                listing.Latitude.HasValue && listing.Longitude.HasValue && request.Latitude.HasValue && request.Longitude.HasValue)
-                estimate = await transport.EstimateAsync(new RouteRequest(listing.Latitude.Value, listing.Longitude.Value,
-                    request.Latitude.Value, request.Longitude.Value), ct);
+            if (MatchService.EligibilityReason(request, listing) is null && routingFailure is null &&
+                listing.Latitude is decimal sellerLat && listing.Longitude is decimal sellerLon &&
+                request.Latitude is decimal buyerLat && request.Longitude is decimal buyerLon)
+                estimate = await transport.EstimateAsync(new RouteRequest(sellerLat, sellerLon, buyerLat, buyerLon), ct);
             var routed = estimate is { Route.Success: true, Route.DistanceKm: >= 0, Route.DurationMinutes: >= 0,
                 EstimatedTransportCost: >= 0, ErrorCode: null };
+            logger?.LogInformation(
+                "Workflow route listing {ListingId}, requirement {RequirementId}: originPresent={OriginPresent}, destinationPresent={DestinationPresent}, provider={Provider}, outcome={Outcome}",
+                listing.Id, request.Id, listing.Latitude.HasValue && listing.Longitude.HasValue,
+                request.Latitude.HasValue && request.Longitude.HasValue,
+                routingSettings?.Value.Provider ?? "unconfigured",
+                routed ? "ROUTED" : routingFailure ?? RoutingFailureClassifier.FromEstimate(estimate));
             rows.Add(new(existing.GetValueOrDefault(listing.Id, Guid.NewGuid()), listing.Id, listing.SellerId,
                 listing.CategoryId, listing.Quantity - listing.ReservedQuantity, listing.Unit, listing.UnitPrice,
                 listing.Condition.ToString(), listing.Status.ToString(), listing.AvailableUntil, listing.Latitude,
                 listing.Longitude, routed ? estimate!.Route.DistanceKm : null, routed ? estimate!.Route.DurationMinutes : null,
-                routed ? estimate!.EstimatedTransportCost : null, routed ? null : "ROUTE_UNAVAILABLE",
+                routed ? estimate!.EstimatedTransportCost : null, routed ? null : routingFailure ?? RoutingFailureClassifier.FromEstimate(estimate),
                 listing.QuantityMode.ToString(), listing.PackageType?.ToString(), listing.PackageSize,
                 listing.PackageCount is null ? null : listing.PackageCount - listing.ReservedPackageCount,
                 listing.Quantity - listing.ReservedQuantity,
@@ -331,7 +340,7 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
                 reason ??= "DELIVERY_DEADLINE_EXCEEDED";
             var routeSucceeded = row.RoutingError is null && row.DistanceKm is >= 0 && row.DurationMinutes is >= 0 && row.TransportCost is >= 0;
             candidate.Status = reason is not null ? MatchStatus.REJECTED : routeSucceeded ? MatchStatus.ROUTED : MatchStatus.ROUTE_FAILED;
-            candidate.RejectionReason = reason ?? (routeSucceeded ? null : "ROUTE_UNAVAILABLE");
+            candidate.RejectionReason = reason ?? (routeSucceeded ? null : row.RoutingError ?? "ROUTING_PROVIDER_ERROR");
             candidate.Distance = routeSucceeded ? row.DistanceKm : null;
             candidate.DurationMinutes = routeSucceeded ? row.DurationMinutes : null;
             candidate.EstimatedTransportCost = routeSucceeded ? row.TransportCost : null;

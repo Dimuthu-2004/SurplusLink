@@ -24,7 +24,7 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
   RecommendedMatch? _match;
   MatchPage<MatchHistoryEntry>? _history;
   String? _error, _historyError;
-  bool _loading = true, _historyLoading = false, _selecting = false;
+  bool _loading = true, _historyLoading = false, _selecting = false, _routing = false;
   String? _selectionError;
   int _historyPage = 1;
   double? _selectedQuantity;
@@ -100,6 +100,19 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
       if (mounted) setState(() => _historyError = matchError(error));
     } finally {
       if (mounted) setState(() => _historyLoading = false);
+    }
+  }
+
+  Future<void> _retryRoute() async {
+    setState(() => _routing = true);
+    try {
+      final match = await widget.gateway.retryRoute(widget.matchId);
+      if (mounted) setState(() => _match = match);
+      await _loadHistory(1);
+    } on Object catch (error) {
+      if (mounted) setState(() => _error = matchDetailsError(error));
+    } finally {
+      if (mounted) setState(() => _routing = false);
     }
   }
 
@@ -525,13 +538,23 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
             const SizedBox(height: 8),
             Text(
               match.rejectionReason != null
-                  ? readableRejectionReason(match.rejectionReason)
+                  ? localizedRoutingText(context, match.rejectionReason!)
                   : match.status == 'ROUTE_FAILED'
                   ? 'Delivery route could not be calculated. Please try again later.'
                   : readableRejectionReason(null),
             ),
             const SizedBox(height: 8),
-            const Text('This match cannot be selected.'),
+            Text(localizedRoutingText(context, 'cannotSelect')),
+            if (match.status == 'ROUTE_FAILED') ...[
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: _routing ? null : _retryRoute,
+                icon: _routing
+                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.refresh),
+                label: Text(localizedRoutingText(context, 'retryRoute')),
+              ),
+            ],
           ],
         ),
       ),
@@ -731,9 +754,10 @@ class _SummaryCardState extends State<_SummaryCard>
             ),
             const SizedBox(height: 8),
             Text(
-              match.sellerBusinessName ??
+              match.sellerDisplayName ??
+                  match.sellerBusinessName ??
                   match.sellerName ??
-                  'Seller not recorded',
+                  (match.sellerId == null ? 'Seller not recorded' : 'Verified seller'),
               style: Theme.of(context).textTheme.titleMedium,
             ),
             if (match.sellerBusinessName != null && match.sellerName != null)

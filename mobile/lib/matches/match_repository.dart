@@ -53,6 +53,15 @@ class MatchRepository implements MatchGateway {
   }
 
   @override
+  Future<RecommendedMatch> retryRoute(String matchId) => _guard(
+    () async => RecommendedMatch.fromJson(await _api.postJson(
+      '/api/matches/${Uri.encodeComponent(matchId)}/route',
+      {},
+      authenticated: true,
+    )),
+  );
+
+  @override
   Future<void> select(String requirementId, String matchId, {double? quantity, int? packageCount}) => _guard(
     () => _api.postJson('/api/requirements/$requirementId/select-match', {
       'matchId': matchId,

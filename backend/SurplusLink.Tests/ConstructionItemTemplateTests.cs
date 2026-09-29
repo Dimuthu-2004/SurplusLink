@@ -4,6 +4,8 @@ using Microsoft.EntityFrameworkCore;
 using SurplusLink.Api.Data;
 using SurplusLink.Api.Materials;
 using SurplusLink.Api.Models;
+using SurplusLink.Api.Requirements;
+using SurplusLink.Api.Workflows;
 using Xunit;
 
 namespace SurplusLink.Tests;
@@ -423,11 +425,78 @@ public sealed class ConstructionItemTemplateTests
             Unit = "L",
             AvailableUntil = DateTime.UtcNow.AddDays(7),
             ConstructionItemTemplateId = paintTemplate.Id,
+            Latitude = 6.927079m,
+            Longitude = 79.861244m,
             SpecificationsJson = "{\"paintType\":\"Gloss / Enamel\",\"colour\":\"Red\"}"
         };
 
         var response = await service.CreateListingAsync(seller.Id, request, default);
         Assert.Equal(paintTemplate.CategoryId, response.CategoryId);
+        var stored = await db.Listings.SingleAsync(x => x.Id == response.Id);
+        Assert.Equal(seller.Id, stored.SellerId);
+        Assert.Equal(paintTemplate.Id, stored.ConstructionItemTemplateId);
+        Assert.Equal(6.927079m, stored.Latitude);
+        Assert.Equal(79.861244m, stored.Longitude);
+    }
+
+    [Fact]
+    public async Task CreateListingAsync_preserves_owner_and_location_for_custom_piece_item()
+    {
+        using var db = CreateInMemoryDbContext();
+        var service = new MaterialInventoryService(db);
+        var category = db.Categories.First(x => x.Id == ConstructionItemTemplateCatalogSeed.ConstructionToolsId);
+        var seller = new User
+        {
+            Id = Guid.NewGuid(), Email = "custom-seller@example.com", FullName = "Custom Seller",
+            PasswordHash = "hash", PhoneNumber = "+1234567892"
+        };
+        seller.RoleAssignments.Add(new UserRoleAssignment { UserId = seller.Id, Role = UserRole.SELLER });
+        db.Users.Add(seller);
+        await db.SaveChangesAsync();
+
+        var response = await service.CreateListingAsync(seller.Id, new CreateMaterialListingRequest
+        {
+            CategoryId = category.Id, Title = "Custom construction tool", Description = "Sold by piece",
+            Quantity = 1m, QuantityMode = "PIECE", Unit = "piece", UnitPrice = 6000m,
+            Condition = "NEW", AvailableUntil = DateTime.UtcNow.AddDays(7),
+            Latitude = 6.914722m, Longitude = 79.972778m
+        }, default);
+
+        var stored = await db.Listings.SingleAsync(x => x.Id == response.Id);
+        Assert.Equal(seller.Id, stored.SellerId);
+        Assert.Null(stored.ConstructionItemTemplateId);
+        Assert.Equal(6.914722m, stored.Latitude);
+        Assert.Equal(79.972778m, stored.Longitude);
+    }
+
+    [Fact]
+    public async Task CreateRequirementAsync_preserves_item_first_template_and_delivery_location()
+    {
+        using var db = CreateInMemoryDbContext();
+        var drill = db.ConstructionItemTemplates.First(x => x.Name == "Drill");
+        var buyer = new User
+        {
+            Id = Guid.NewGuid(), Email = "buyer@example.com", FullName = "Test Buyer",
+            PasswordHash = "hash", PhoneNumber = "+1234567893"
+        };
+        buyer.RoleAssignments.Add(new UserRoleAssignment { UserId = buyer.Id, Role = UserRole.BUYER });
+        db.Users.Add(buyer);
+        await db.SaveChangesAsync();
+
+        var service = new RequirementService(db, new NoopRequirementWorkflowStarter());
+        var response = await service.CreateAsync(buyer.Id, new SaveRequirementRequest
+        {
+            CategoryId = drill.CategoryId, ConstructionItemTemplateId = drill.Id,
+            RequiredQuantity = 1m, Unit = "piece", MaximumBudget = 10000m,
+            Deadline = DateTimeOffset.UtcNow.AddDays(7),
+            Latitude = 6.927079m, Longitude = 79.861244m
+        }, default);
+
+        var stored = await db.BuyerRequests.SingleAsync(x => x.Id == response.Id);
+        Assert.Equal(buyer.Id, stored.BuyerId);
+        Assert.Equal(drill.Id, stored.ConstructionItemTemplateId);
+        Assert.Equal(6.927079m, stored.Latitude);
+        Assert.Equal(79.861244m, stored.Longitude);
     }
 
     [Fact]
@@ -463,5 +532,11 @@ public sealed class ConstructionItemTemplateTests
         var ex = await Assert.ThrowsAsync<MaterialOperationException>(() =>
             service.CreateListingAsync(seller.Id, request, default));
         Assert.Contains("Category is required for custom items", ex.Message);
+    }
+
+    private sealed class NoopRequirementWorkflowStarter : IRequirementWorkflowStarter
+    {
+        public Task<Guid> StartAsync(Guid requirementId, Guid buyerId, CancellationToken cancellationToken) =>
+            Task.FromResult(Guid.NewGuid());
     }
 }

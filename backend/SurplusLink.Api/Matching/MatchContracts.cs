@@ -84,7 +84,8 @@ public sealed record MatchResponse(
     int? PackageCountAvailable = null,
     decimal? BaseEquivalentAvailableQuantity = null,
     decimal? MaximumContribution = null,
-    bool? FullCoverage = null
+    bool? FullCoverage = null,
+    string? SellerDisplayName = null
 );
 
 public sealed record MatchPage(
