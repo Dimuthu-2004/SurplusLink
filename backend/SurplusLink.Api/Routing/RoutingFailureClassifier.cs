@@ -14,7 +14,7 @@ public static class RoutingFailureClassifier
         return null;
     }
 
-    public static string FromEstimate(TransportEstimate? estimate) => estimate?.ErrorCode ?? estimate?.Route.ErrorCode switch
+    public static string FromEstimate(TransportEstimate? estimate) => (estimate?.ErrorCode ?? estimate?.Route.ErrorCode) switch
     {
         "ROUTING_TIMEOUT" => "ROUTING_TIMEOUT",
         "ROUTING_INVALID_RESPONSE" => "MALFORMED_ROUTING_RESPONSE",

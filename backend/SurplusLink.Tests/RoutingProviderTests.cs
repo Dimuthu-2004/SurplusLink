@@ -153,6 +153,8 @@ public sealed class RoutingProviderTests
         Assert.Equal("INVALID_SELLER_COORDINATES", RoutingFailureClassifier.ValidateCoordinates(0, 0, 6.9271m, 79.8612m));
         Assert.Equal("INVALID_BUYER_COORDINATES", RoutingFailureClassifier.ValidateCoordinates(6.9271m, 79.8612m, 0, 0));
         Assert.Null(RoutingFailureClassifier.ValidateCoordinates(6.9271m, 79.8612m, 7.2906m, 80.6337m));
+        Assert.Equal("ROUTING_PROVIDER_ERROR", RoutingFailureClassifier.FromEstimate(
+            new TransportEstimate(RouteResult.Failure("PROVIDER_UNAVAILABLE"), null, ErrorCode: "PROVIDER_UNAVAILABLE")));
     }
 
     [Fact]
