@@ -173,7 +173,10 @@ class MaterialMatchingAgent:
         # how much to take. Only unavailable stock is a hard exclusion.
         if listing.available_quantity <= 0:
             return False
-        if listing.unit.casefold() != request.unit.casefold():
+        # Unit conversion is deliberately not reimplemented in Python. The
+        # backend sends canonical base measurements; package type never enters
+        # this comparison because it is a physical selling form, not a unit.
+        if (listing.base_unit or listing.unit).casefold() != (request.baseUnit or request.unit).casefold():
             return False
         if listing.available_until.astimezone(timezone.utc).date() < request.deadline.astimezone(timezone.utc).date():
             return False
@@ -215,6 +218,9 @@ class MaterialMatchingAgent:
             baseEquivalentAvailableQuantity=listing.base_equivalent_available_quantity or listing.available_quantity,
             maximumContribution=listing.maximum_contribution or min(listing.available_quantity, request.requiredQuantity),
             fullCoverage=listing.full_coverage if listing.full_coverage is not None else listing.available_quantity >= request.requiredQuantity,
+            baseUnit=listing.base_unit or listing.unit,
+            minimumSellableIncrement=listing.minimum_sellable_increment,
+            decimalPrecision=listing.decimal_precision,
         )
 
     @staticmethod

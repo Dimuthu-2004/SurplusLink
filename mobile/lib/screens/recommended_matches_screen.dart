@@ -101,7 +101,9 @@ class _RecommendedMatchesScreenState extends State<RecommendedMatchesScreen> {
         var defaultQty = (remainingNeeded > 0 && remainingNeeded <= avail)
             ? remainingNeeded
             : (avail > 0 ? avail : 1.0);
-        if (quantities.isDiscreteUnit(match.unit ?? '')) {
+        if (match.isPackaged) {
+          defaultQty = match.packageQuantityFor(defaultQty).clamp(0.0, avail).toDouble();
+        } else if (quantities.isDiscreteUnit(match.unit ?? '')) {
           defaultQty = defaultQty.floorToDouble();
         }
         _selectedQuantities[match.id] = defaultQty > 0 ? defaultQty : 1.0;
@@ -130,7 +132,7 @@ class _RecommendedMatchesScreenState extends State<RecommendedMatchesScreen> {
         .where((entry) => entry.key != match.id)
         .fold(0.0, (total, entry) => total + entry.value);
     final remaining = (requestedQuantity - otherTotal).clamp(0.0, double.infinity);
-    final maximum = (match.availableQuantity ?? 0).clamp(0.0, remaining).toDouble();
+    final maximum = (match.availableQuantity ?? 0).clamp(0.0, match.isPackaged ? double.infinity : remaining).toDouble();
     return quantities.isDiscreteUnit(match.unit ?? '')
         ? maximum.floorToDouble()
         : maximum;
@@ -142,6 +144,9 @@ class _RecommendedMatchesScreenState extends State<RecommendedMatchesScreen> {
     if (qty <= 0) return 'Quantity must be greater than 0.';
     if (quantities.isDiscreteUnit(match.unit ?? '') && qty != qty.roundToDouble()) {
       return 'This unit must use a whole quantity.';
+    }
+    if (!match.isWholePackageQuantity(qty)) {
+      return 'Packaged materials must use whole ${match.packageType?.toLowerCase() ?? 'packages'}.';
     }
     final avail = match.availableQuantity ?? 0;
     if (qty > avail) {
@@ -160,7 +165,8 @@ class _RecommendedMatchesScreenState extends State<RecommendedMatchesScreen> {
     final totalMaterialCost =
         _selectedQuantities.entries.fold(0.0, (sum, entry) {
       final match = _selectedMatches[entry.key];
-      return sum + (entry.value * (match?.unitPrice ?? 0.0));
+      final packages = match?.packageCountFor(entry.value);
+      return sum + ((packages ?? entry.value) * (match?.unitPrice ?? 0.0));
     });
 
     final totalTransportCost =

@@ -94,6 +94,20 @@ class MaterialMatchingAgentTests(unittest.TestCase):
         self.assertEqual([candidate.listingId for candidate in response.candidates], ["partial"])
         self.assertEqual(response.candidates[0].availableQuantity, Decimal("2"))
 
+    def test_package_type_is_not_compared_with_base_measurement(self) -> None:
+        canned_paint = replace(
+            listing("paint-cans", quantity="5", unit_price="100"),
+            unit="CAN", base_unit="L", quantity_mode="PACKAGE", package_type="CAN",
+            package_size=Decimal("1"), package_count_available=5,
+            base_equivalent_available_quantity=Decimal("5"),
+        )
+        raw = request()
+        raw.update({"unit": "L", "baseUnit": "L", "requiredQuantity": "2", "maximumBudget": "300"})
+        response = MaterialMatchingAgent(FakeActiveMaterialsBoundary([canned_paint]), clock=lambda: NOW).match(raw)
+        self.assertEqual(response.status, "ok")
+        self.assertEqual(response.candidates[0].packageType, "CAN")
+        self.assertEqual(response.candidates[0].baseUnit, "L")
+
     def test_self_match_excluded_while_other_seller_matches(self):
         own = replace(listing("own", quantity="10", unit_price="8"),
                       seller_id=UUID(str(request()["buyerUserId"])))

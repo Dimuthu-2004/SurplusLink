@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using SurplusLink.Api.Data;
 using SurplusLink.Api.Matching;
+using SurplusLink.Api.Materials;
 using SurplusLink.Api.Models;
 using SurplusLink.Api.Notifications;
 using SurplusLink.Api.Routing;
@@ -30,7 +31,8 @@ public sealed record WorkflowListingSnapshot(Guid MatchId, Guid ListingId, Guid 
     decimal? DurationMinutes, decimal? TransportCost, string? RoutingError,
     string? QuantityMode = null, string? PackageType = null, decimal? PackageSize = null,
     int? PackageCountAvailable = null, decimal? BaseEquivalentAvailableQuantity = null,
-    decimal? MaximumContribution = null, bool? FullCoverage = null);
+    decimal? MaximumContribution = null, bool? FullCoverage = null,
+    string? BaseUnit = null, decimal? MinimumSellableIncrement = null, int? DecimalPrecision = null);
 public sealed record WorkflowRunRequest(Guid WorkflowId, object BuyerRequest, IReadOnlyList<WorkflowListingSnapshot> Listings,
     string? Objective = null);
 public sealed record WorkflowValidation(bool Valid, bool RequiresApproval, Guid? RecommendedMatchId,
@@ -173,12 +175,13 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
     {
         // Keep rejected candidates visible, with eligible stock first. Self-owned
         // stock remains excluded before the candidate cap.
-        var listings = await db.Listings.AsNoTracking().Where(x => x.CategoryId == request.CategoryId &&
-            x.SellerId != request.BuyerId)
-            .OrderByDescending(x => x.Status == ListingStatus.ACTIVE && x.AvailableUntil > DateTime.UtcNow &&
-                x.Quantity - x.ReservedQuantity > 0 &&
-                x.Unit.ToLower() == request.Unit.ToLower() && x.UnitPrice * request.RequiredQuantity <= request.MaximumBudget)
-            .ThenBy(x => x.UnitPrice).ThenBy(x => x.Id).ToListAsync(ct);
+        var listings = (await db.Listings.AsNoTracking().Where(x => x.CategoryId == request.CategoryId &&
+            x.SellerId != request.BuyerId).OrderBy(x => x.UnitPrice).ThenBy(x => x.Id).ToListAsync(ct))
+            // The worker persists rejected rows too.  This keeps the buyer's
+            // candidate history intact while allowing valid base-unit matches
+            // to be ranked before ineligible rows.
+            .OrderBy(x => MatchService.EligibilityReason(request, x) is null ? 0 : 1)
+            .ThenBy(x => x.UnitPrice).ThenBy(x => x.Id).ToList();
         var existing = await db.Matches.AsNoTracking().Where(x => x.MaterialRequestId == request.Id)
             .ToDictionaryAsync(x => x.ListingId, x => x.Id, ct);
         var rows = new List<WorkflowListingSnapshot>();
@@ -199,19 +202,21 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
                 request.Latitude.HasValue && request.Longitude.HasValue,
                 routingSettings?.Value.Provider ?? "unconfigured",
                 routed ? "ROUTED" : routingFailure ?? RoutingFailureClassifier.FromEstimate(estimate));
+            var quantity = QuantitySemantics.FromListing(listing);
             rows.Add(new(existing.GetValueOrDefault(listing.Id, Guid.NewGuid()), listing.Id, listing.SellerId,
-                listing.CategoryId, listing.Quantity - listing.ReservedQuantity, listing.Unit, listing.UnitPrice,
+                listing.CategoryId, quantity.AvailableBaseQuantity, quantity.BaseUnit, listing.UnitPrice,
                 listing.Condition.ToString(), listing.Status.ToString(), listing.AvailableUntil, listing.Latitude,
                 listing.Longitude, routed ? estimate!.Route.DistanceKm : null, routed ? estimate!.Route.DurationMinutes : null,
                 routed ? estimate!.EstimatedTransportCost : null, routed ? null : routingFailure ?? RoutingFailureClassifier.FromEstimate(estimate),
-                listing.QuantityMode.ToString(), listing.PackageType?.ToString(), listing.PackageSize,
-                listing.PackageCount is null ? null : listing.PackageCount - listing.ReservedPackageCount,
-                listing.Quantity - listing.ReservedQuantity,
-                Math.Min(listing.Quantity - listing.ReservedQuantity, request.RequiredQuantity),
-                listing.Quantity - listing.ReservedQuantity >= request.RequiredQuantity));
+                quantity.QuantityMode.ToString(), quantity.PackageType, quantity.PackageSize,
+                quantity.AvailablePackageCount, quantity.AvailableBaseQuantity,
+                QuantitySemantics.TryRequiredBaseQuantity(request, listing, out var requestedBase)
+                    ? Math.Min(quantity.AvailableBaseQuantity, requestedBase) : 0,
+                QuantitySemantics.TryRequiredBaseQuantity(request, listing, out requestedBase) && quantity.AvailableBaseQuantity >= requestedBase,
+                quantity.BaseUnit, quantity.MinimumSellableIncrement, quantity.DecimalPrecision));
         }
         return new(workflow.Id, new { id = request.Id, buyerId = request.BuyerId, categoryId = request.CategoryId,
-            requiredQuantity = request.RequiredQuantity, unit = request.Unit, maximumBudget = request.MaximumBudget,
+            requiredQuantity = request.RequiredQuantity, unit = request.Unit, baseUnit = request.Unit, maximumBudget = request.MaximumBudget,
             deadline = request.Deadline, latitude = request.Latitude, longitude = request.Longitude,
             notes = request.Notes, status = request.Status.ToString() }, rows,
             request.Title.Length <= 2000 ? request.Title : request.Title[..2000]);
@@ -223,15 +228,15 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
         var now = DateTime.UtcNow;
         var winner = snapshot.Listings.Where(x => x.SellerId != request.BuyerId && x.CategoryId == request.CategoryId &&
                 x.Status == "ACTIVE" && x.AvailableUntil > now && x.AvailableUntil.Date >= request.Deadline.Date &&
-                string.Equals(x.Unit, request.Unit, StringComparison.OrdinalIgnoreCase) &&
+                SnapshotCompatible(request, x) &&
                 x.AvailableQuantity > 0 && request.Deadline > now &&
                 x.RoutingError is null && x.DistanceKm is >= 0 && x.DurationMinutes is >= 0 && x.TransportCost is >= 0 &&
                 x.DurationMinutes <= (decimal)(request.Deadline - now).TotalMinutes &&
-                MaterialCost(request.RequiredQuantity, x.UnitPrice, x.QuantityMode, x.PackageSize) + x.TransportCost <= request.MaximumBudget)
-            .Select(x => new { Row = x, Score = MatchScoring.Score(x.Condition, MaterialCost(request.RequiredQuantity, x.UnitPrice, x.QuantityMode, x.PackageSize),
+                MaterialCost(request, x) + x.TransportCost <= request.MaximumBudget)
+            .Select(x => new { Row = x, Score = MatchScoring.Score(x.Condition, MaterialCost(request, x),
                 request.MaximumBudget, x.DistanceKm, x.TransportCost) })
             .OrderByDescending(x => x.Score).ThenByDescending(x => MatchScoring.ConditionRank(x.Row.Condition))
-            .ThenBy(x => MaterialCost(request.RequiredQuantity, x.Row.UnitPrice, x.Row.QuantityMode, x.Row.PackageSize) + x.Row.TransportCost)
+            .ThenBy(x => MaterialCost(request, x.Row) + x.Row.TransportCost)
             .ThenBy(x => x.Row.DistanceKm).ThenBy(x => x.Row.ListingId.ToString(), StringComparer.Ordinal).FirstOrDefault();
         if (winner is null || winner.Row.MatchId != recommendation.MatchId || winner.Score != recommendation.Score)
             throw new JsonException("Recommendation must follow deterministic ranking of valid routed candidates.");
@@ -241,14 +246,22 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
         request.Status == BuyerRequestStatus.MATCHING && request.Deadline > DateTime.UtcNow &&
         listing.Status == ListingStatus.ACTIVE && listing.AvailableUntil > DateTime.UtcNow &&
         listing.SellerId != request.BuyerId && listing.CategoryId == request.CategoryId &&
-        string.Equals(listing.Unit, request.Unit, StringComparison.OrdinalIgnoreCase) &&
-        listing.Quantity - listing.ReservedQuantity > 0 && transportCost >= 0 &&
-        MaterialCost(request.RequiredQuantity, listing.UnitPrice, listing.QuantityMode.ToString(), listing.PackageSize) + transportCost <= request.MaximumBudget;
+        QuantitySemantics.IsCompatible(request, listing) &&
+        QuantitySemantics.FromListing(listing).AvailableBaseQuantity > 0 && transportCost >= 0 &&
+        QuantitySemantics.MaterialCost(request, listing) + transportCost <= request.MaximumBudget;
 
     internal static decimal MaterialCost(decimal requiredQuantity, decimal unitPrice, string? quantityMode, decimal? packageSize) =>
         quantityMode is "PACKAGE" or "PIECE" && packageSize is > 0
             ? decimal.Ceiling(requiredQuantity / packageSize.Value) * unitPrice
             : requiredQuantity * unitPrice;
+
+    internal static bool SnapshotCompatible(BuyerRequest request, WorkflowListingSnapshot listing) =>
+        QuantitySemantics.TryConvert(request.RequiredQuantity, request.Unit, listing.BaseUnit ?? listing.Unit, out _);
+
+    internal static decimal MaterialCost(BuyerRequest request, WorkflowListingSnapshot listing) =>
+        QuantitySemantics.TryConvert(request.RequiredQuantity, request.Unit, listing.BaseUnit ?? listing.Unit, out var requiredBase)
+            ? MaterialCost(requiredBase, listing.UnitPrice, listing.QuantityMode, listing.PackageSize)
+            : decimal.MaxValue;
 
     internal static void ValidateResult(WorkflowRunRequest input, WorkflowRunResult result)
     {
@@ -318,10 +331,10 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
         {
             var reason = row.Status != "ACTIVE" ? "LISTING_NOT_ACTIVE"
                 : row.AvailableUntil <= DateTime.UtcNow ? "LISTING_EXPIRED"
-                : !string.Equals(row.Unit, request.Unit, StringComparison.OrdinalIgnoreCase) ? "UNIT_MISMATCH"
+                : !SnapshotCompatible(request, row) ? "UNIT_MISMATCH"
                 : row.AvailableQuantity <= 0 ? "INSUFFICIENT_QUANTITY"
-                : row.UnitPrice * request.RequiredQuantity > request.MaximumBudget ? "BUDGET_EXCEEDED"
-                : row.UnitPrice * request.RequiredQuantity + (row.TransportCost ?? 0) > request.MaximumBudget && row.TransportCost is not null ? "TOTAL_COST_EXCEEDS_BUDGET"
+                : MaterialCost(request, row) > request.MaximumBudget ? "BUDGET_EXCEEDED"
+                : MaterialCost(request, row) + (row.TransportCost ?? 0) > request.MaximumBudget && row.TransportCost is not null ? "TOTAL_COST_EXCEEDS_BUDGET"
                 : null;
             if (!persisted.TryGetValue(row.MatchId, out var candidate))
             {
@@ -345,7 +358,7 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
             candidate.DurationMinutes = routeSucceeded ? row.DurationMinutes : null;
             candidate.EstimatedTransportCost = routeSucceeded ? row.TransportCost : null;
             candidate.Score = reason is null && routeSucceeded
-                ? MatchScoring.Score(row.Condition, row.UnitPrice * request.RequiredQuantity,
+                ? MatchScoring.Score(row.Condition, MaterialCost(request, row),
                     request.MaximumBudget, row.DistanceKm, row.TransportCost) : 0;
             if (reason is null || routeSucceeded)
                 db.AuditLogs.Add(new AuditLog { Id = Guid.NewGuid(), EntityType = nameof(MaterialMatch), EntityId = candidate.Id,

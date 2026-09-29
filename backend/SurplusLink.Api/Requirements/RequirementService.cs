@@ -25,7 +25,7 @@ public sealed class RequirementService(
             BuyerId = buyerId,
             Title = (template?.Name ?? category.Name) + " requirement"
         };
-        Apply(request, input, template?.CategoryId);
+        Apply(request, input, template);
         db.BuyerRequests.Add(request);
         Audit(request, "CREATED");
         await db.SaveChangesAsync(ct);
@@ -105,7 +105,7 @@ public sealed class RequirementService(
         if (request.Status is not (BuyerRequestStatus.DRAFT or BuyerRequestStatus.OPEN or BuyerRequestStatus.MATCH_FOUND))
             throw new RequirementException(409, "Only a non-approved draft, open, or match-found requirement can be edited.");
         var (_, template) = await ValidateAsync(input, ct);
-        Apply(request, input, template?.CategoryId);
+        Apply(request, input, template);
         if (request.Status != BuyerRequestStatus.DRAFT)
         {
             await InvalidateCandidatesAsync(request, ct);
@@ -202,12 +202,14 @@ public sealed class RequirementService(
         var request = await db.BuyerRequests.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct)
             ?? throw new RequirementException(404, "Requirement was not found.");
 
-        var availableStock = match.Listing.Quantity - match.Listing.ReservedQuantity;
+        if (!QuantitySemantics.TryRequiredBaseQuantity(request, match.Listing, out var requiredBase))
+            throw new RequirementException(409, "Listing unit is not compatible with requirement.");
+        var availableStock = QuantitySemantics.FromListing(match.Listing).AvailableBaseQuantity;
         if (match.Listing.QuantityMode is QuantityMode.PACKAGE or QuantityMode.PIECE)
         {
             var size = match.Listing.PackageSize ?? 0;
             var availablePackages = (match.Listing.PackageCount ?? 0) - match.Listing.ReservedPackageCount;
-            var packages = Math.Min(availablePackages, (int)Math.Ceiling(request.RequiredQuantity / size));
+            var packages = Math.Min(availablePackages, (int)Math.Ceiling(requiredBase / size));
             return await SelectMatchesAsync(id, buyerId, [new MatchAllocationRequest { MatchId = matchId, PackageCount = packages, Quantity = packages * size }], ct);
         }
         var selectedQty = quantity ?? Math.Min(request.RequiredQuantity, Math.Max(0, availableStock));
@@ -278,8 +280,14 @@ public sealed class RequirementService(
             if (selectedBase > availableStock)
                 throw new RequirementException(409, $"Selected quantity ({allocation.Quantity}) exceeds available stock ({availableStock}) for listing '{match.Listing.Title}'.");
 
-            totalSelected += selectedBase;
-            normalizedAllocations.Add((allocation, match, selectedBase, packageCount));
+            if (!QuantitySemantics.TryConvert(selectedBase, QuantitySemantics.ListingBaseUnit(match.Listing), request.Unit,
+                    out var selectedRequirementBase))
+                throw new RequirementException(409, $"Listing '{match.Listing.Title}' unit does not match requirement.");
+            totalSelected += selectedRequirementBase;
+            // Selection and package-overage rules compare buyer-facing base
+            // quantities; the offer/reservation below keeps the listing's base
+            // quantity so physical stock is never fractional.
+            normalizedAllocations.Add((allocation, match, selectedRequirementBase, packageCount));
 
             if (match.Status != MatchStatus.ROUTED || match.Distance is null || match.DurationMinutes is null || match.EstimatedTransportCost is null)
                 throw new RequirementException(409, $"Match for listing '{match.Listing.Title}' does not have complete route and transport data.");
@@ -293,7 +301,7 @@ public sealed class RequirementService(
             if (match.Listing.CategoryId != request.CategoryId)
                 throw new RequirementException(409, $"Listing '{match.Listing.Title}' category does not match requirement.");
 
-            if (!string.Equals(match.Listing.Unit, request.Unit, StringComparison.OrdinalIgnoreCase))
+            if (!QuantitySemantics.IsCompatible(request, match.Listing))
                 throw new RequirementException(409, $"Listing '{match.Listing.Title}' unit does not match requirement.");
 
             if (MarketplaceMatchPolicy.RejectionReason(request.BuyerId, match.Listing.SellerId) is not null)
@@ -501,6 +509,8 @@ public sealed class RequirementService(
         var allowedUnits = template?.AllowedUnits ?? category.AllowedUnits;
         if (!MaterialUnits.Distinct(allowedUnits).Contains(MaterialUnits.Normalize(input.Unit)))
             throw new RequirementException(400, "Select a valid unit for the chosen item.");
+        if (template is not null && !QuantitySemantics.TryConvert(input.RequiredQuantity, input.Unit, template.BaseUnit, out _))
+            throw new RequirementException(400, "The selected item requires a compatible base measurement.");
         return (category, template);
     }
 
@@ -522,16 +532,24 @@ public sealed class RequirementService(
             throw new RequirementException(409, $"This operation requires status {state}; current status is {request.Status}.");
     }
 
-    private static void Apply(BuyerRequest request, SaveRequirementRequest input, Guid? templateCategoryId = null)
+    private static void Apply(BuyerRequest request, SaveRequirementRequest input, ConstructionItemTemplate? template = null)
     {
         request.ConstructionItemTemplateId = input.ConstructionItemTemplateId;
-        request.CategoryId = templateCategoryId ?? input.CategoryId;
+        request.CategoryId = template?.CategoryId ?? input.CategoryId;
         request.Notes = input.Notes?.Trim() ?? string.Empty;
         request.BuyerPreferencesJson = string.IsNullOrWhiteSpace(input.BuyerPreferencesJson)
             ? null
             : input.BuyerPreferencesJson.Trim();
-        request.RequiredQuantity = input.RequiredQuantity;
-        request.Unit = MaterialUnits.Normalize(input.Unit);
+        if (template is not null && QuantitySemantics.TryConvert(input.RequiredQuantity, input.Unit, template.BaseUnit, out var baseQuantity))
+        {
+            request.RequiredQuantity = baseQuantity;
+            request.Unit = QuantitySemantics.CanonicalUnit(template.BaseUnit);
+        }
+        else
+        {
+            request.RequiredQuantity = input.RequiredQuantity;
+            request.Unit = QuantitySemantics.CanonicalUnit(input.Unit);
+        }
         request.MaximumBudget = input.MaximumBudget;
         request.Deadline = input.Deadline!.Value.UtcDateTime;
         request.Latitude = input.Latitude is decimal lat ? decimal.Round(lat, 6) : null;

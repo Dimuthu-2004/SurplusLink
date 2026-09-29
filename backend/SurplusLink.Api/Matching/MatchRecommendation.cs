@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SurplusLink.Api.Data;
+using SurplusLink.Api.Materials;
 using SurplusLink.Api.Models;
 
 namespace SurplusLink.Api.Matching;
@@ -14,14 +15,14 @@ internal static class MatchRecommendation
         ?? (match.Distance is null or < 0 || match.DurationMinutes is null or < 0 ||
             match.EstimatedTransportCost is null or < 0 ? "ROUTE_DATA_INCOMPLETE" : null)
         ?? (match.DurationMinutes > (decimal)(request.Deadline - now).TotalMinutes ? "DELIVERY_DEADLINE_EXCEEDED" : null)
-        ?? (match.Listing.UnitPrice * request.RequiredQuantity + match.EstimatedTransportCost > request.MaximumBudget
+        ?? (QuantitySemantics.MaterialCost(request, match.Listing) + match.EstimatedTransportCost > request.MaximumBudget
             ? "TOTAL_COST_EXCEEDS_BUDGET" : null);
 
     internal static MaterialMatch? Choose(BuyerRequest request, IEnumerable<MaterialMatch> matches, DateTime now) =>
         matches.Where(x => InvalidReason(request, x, now) is null)
             .OrderByDescending(x => x.Score)
             .ThenByDescending(x => MatchScoring.ConditionRank(x.Listing.Condition.ToString()))
-            .ThenBy(x => x.Listing.UnitPrice * request.RequiredQuantity + x.EstimatedTransportCost)
+            .ThenBy(x => QuantitySemantics.MaterialCost(request, x.Listing) + x.EstimatedTransportCost)
             .ThenBy(x => x.Distance)
             .ThenBy(x => x.ListingId.ToString(), StringComparer.Ordinal)
             .ThenBy(x => x.Id.ToString(), StringComparer.Ordinal).FirstOrDefault();

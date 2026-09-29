@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SurplusLink.Api.Materials;
 using SurplusLink.Api.Models;
 using SurplusLink.Api.Routing;
 
@@ -25,11 +26,14 @@ public sealed partial class MatchService
     {
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         var request = await LockOpenRequirement(id, actor, manager, ct);
-        var listings = await db.Listings.AsNoTracking().Where(x => x.CategoryId == request.CategoryId)
-            .OrderByDescending(x => x.Status == ListingStatus.ACTIVE && x.AvailableUntil > DateTime.UtcNow &&
-                x.SellerId != request.BuyerId && x.Quantity - x.ReservedQuantity > 0 &&
-                x.Unit.ToLower() == request.Unit.ToLower() && x.UnitPrice * request.RequiredQuantity <= request.MaximumBudget)
-            .ThenBy(x => x.UnitPrice).ThenBy(x => x.Id).Take(100).ToListAsync(ct);
+        // Unit compatibility is domain normalization, not a SQL equality filter:
+        // a CAN is a selling form while L is the comparable base measurement.
+        var listings = (await db.Listings.AsNoTracking().Where(x => x.CategoryId == request.CategoryId)
+            .OrderBy(x => x.UnitPrice).ThenBy(x => x.Id).Take(500).ToListAsync(ct))
+            // Rejected candidates stay visible/auditable.  Do not filter them
+            // out before GenerateAsync can persist their deterministic reason.
+            .OrderBy(x => EligibilityReason(request, x) is null ? 0 : 1)
+            .ThenBy(x => x.UnitPrice).ThenBy(x => x.Id).Take(100).ToList();
         foreach (var listing in listings)
         {
             await GenerateAsync(id, listing.Id, actor, ct);
@@ -48,14 +52,14 @@ public sealed partial class MatchService
         {
             var reason = EligibilityReason(request, match.Listing);
             if (match.Status == MatchStatus.ROUTED &&
-                match.Listing.UnitPrice * request.RequiredQuantity + match.EstimatedTransportCost > request.MaximumBudget)
+                QuantitySemantics.MaterialCost(request, match.Listing) + match.EstimatedTransportCost > request.MaximumBudget)
                 reason ??= "TOTAL_COST_EXCEEDS_BUDGET";
             if (match.Status == MatchStatus.ROUTED &&
                 match.DurationMinutes > (decimal)(request.Deadline - DateTime.UtcNow).TotalMinutes)
                 reason ??= "DELIVERY_DEADLINE_EXCEEDED";
             if (reason is not null) { match.Score = 0; match.Status = MatchStatus.REJECTED; match.RejectionReason = reason; Audit(match, actor, "REJECT"); continue; }
             match.Score = match.Status == MatchStatus.ROUTED
-                ? MatchScoring.Score(match.Listing.Condition.ToString(), match.Listing.UnitPrice * request.RequiredQuantity,
+                ? MatchScoring.Score(match.Listing.Condition.ToString(), QuantitySemantics.MaterialCost(request, match.Listing),
                     request.MaximumBudget, match.Distance, match.EstimatedTransportCost) : 0;
             if (match.Status == MatchStatus.GENERATED) match.Status = MatchStatus.RANKED;
             Audit(match, actor, "RANK");
@@ -101,17 +105,17 @@ public sealed partial class MatchService
             match.Status = success ? MatchStatus.ROUTED : MatchStatus.ROUTE_FAILED;
             match.RejectionReason = success ? null : routingFailure ?? RoutingFailureClassifier.FromEstimate(estimate);
             Audit(match, actor, success ? "ROUTE_SUCCEEDED" : "ROUTE_FAILED");
-            if (success && (listing.UnitPrice * request.RequiredQuantity + match.EstimatedTransportCost > request.MaximumBudget ||
+            if (success && (QuantitySemantics.MaterialCost(request, listing) + match.EstimatedTransportCost > request.MaximumBudget ||
                 match.DurationMinutes > (decimal)(request.Deadline - DateTime.UtcNow).TotalMinutes))
             {
                 match.Status = MatchStatus.REJECTED;
-                match.RejectionReason = listing.UnitPrice * request.RequiredQuantity + match.EstimatedTransportCost > request.MaximumBudget
+                match.RejectionReason = QuantitySemantics.MaterialCost(request, listing) + match.EstimatedTransportCost > request.MaximumBudget
                     ? "TOTAL_COST_EXCEEDS_BUDGET" : "DELIVERY_DEADLINE_EXCEEDED";
                 Audit(match, actor, "REJECT");
             }
         }
         match.Score = match.Status == MatchStatus.ROUTED
-            ? MatchScoring.Score(listing.Condition.ToString(), listing.UnitPrice * request.RequiredQuantity,
+            ? MatchScoring.Score(listing.Condition.ToString(), QuantitySemantics.MaterialCost(request, listing),
                 request.MaximumBudget, match.Distance, match.EstimatedTransportCost) : 0;
         await Save(ct);
         await tx.CommitAsync(ct);
@@ -138,18 +142,20 @@ public sealed partial class MatchService
         ?? (listing.Status != ListingStatus.ACTIVE ? "LISTING_NOT_ACTIVE" : null)
         ?? (listing.AvailableUntil <= DateTime.UtcNow ? "LISTING_EXPIRED" : null)
         ?? (listing.CategoryId != request.CategoryId ? "CATEGORY_MISMATCH" : null)
-        ?? (!string.Equals(listing.Unit, request.Unit, StringComparison.OrdinalIgnoreCase) ? "UNIT_MISMATCH" : null)
-        ?? (listing.Quantity - listing.ReservedQuantity <= 0 ? "INSUFFICIENT_QUANTITY" : null)
-        ?? (listing.UnitPrice * request.RequiredQuantity > request.MaximumBudget ? "BUDGET_EXCEEDED" : null);
+        ?? QuantitySemantics.IncompatibilityReason(request, listing)
+        ?? (QuantitySemantics.FromListing(listing).AvailableBaseQuantity <= 0 ? "INSUFFICIENT_QUANTITY" : null)
+        ?? (QuantitySemantics.MaterialCost(request, listing) > request.MaximumBudget ? "BUDGET_EXCEEDED" : null);
 
     private static MatchResponse Response(MaterialMatch x)
     {
-        var available = x.Listing.Quantity - x.Listing.ReservedQuantity;
-        var required = x.MaterialRequest.RequiredQuantity;
+        var normalized = QuantitySemantics.FromListing(x.Listing);
+        var available = normalized.AvailableBaseQuantity;
+        var required = QuantitySemantics.TryRequiredBaseQuantity(x.MaterialRequest, x.Listing, out var convertedRequired)
+            ? convertedRequired : x.MaterialRequest.RequiredQuantity;
         return new(x.Id, x.MaterialRequestId, x.ListingId,
             x.Score, x.Distance, x.EstimatedTransportCost, x.Status.ToString(), MatchRecommendation.InvalidReason(x.MaterialRequest, x, DateTime.UtcNow) is null,
             x.Status == MatchStatus.REJECTED, x.RejectionReason, x.CreatedAtUtc, x.DurationMinutes,
-            x.Listing.Title, x.Listing.Category.Name, x.Listing.SellerId, required, x.Listing.Unit, x.Listing.UnitPrice,
+            x.Listing.Title, x.Listing.Category.Name, x.Listing.SellerId, required, normalized.BaseUnit, x.Listing.UnitPrice,
             x.Listing.AvailableUntil, x.MaterialRequest.Deadline, available,
             x.MaterialRequest.MaximumBudget, x.MaterialRequest.Status.ToString(),
             x.Listing.Seller.FullName, x.Listing.Seller.BusinessName, x.Listing.Condition.ToString(),
@@ -163,8 +169,8 @@ public sealed partial class MatchService
                 ? "Highest deterministic final score among valid routed candidates; ties use condition, total estimated cost, distance, then listing ID."
                 : null),
             available < required,
-            x.Listing.QuantityMode.ToString(), x.Listing.PackageType?.ToString(), x.Listing.PackageSize,
-            x.Listing.PackageCount is null ? null : x.Listing.PackageCount - x.Listing.ReservedPackageCount,
+            normalized.QuantityMode.ToString(), normalized.PackageType, normalized.PackageSize,
+            normalized.AvailablePackageCount,
             available, Math.Min(available, required), available >= required,
             x.Listing.Seller.BusinessName ?? x.Listing.Seller.FullName ?? "Verified seller");
     }

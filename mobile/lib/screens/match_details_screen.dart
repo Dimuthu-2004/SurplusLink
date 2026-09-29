@@ -66,10 +66,10 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
         _match = match;
         _loading = false;
         if (match.availableQuantity != null && match.quantity != null) {
-          _selectedQuantity = (match.availableQuantity! < match.quantity!
-                  ? match.availableQuantity!
-                  : match.quantity!)
-              .toDouble();
+          final desired = match.availableQuantity! < match.quantity!
+              ? match.availableQuantity! : match.quantity!;
+          _selectedQuantity = match.packageQuantityFor(desired)
+              .clamp(0.0, match.availableQuantity!).toDouble();
           _quantityController.text = quantities.formatQuantity(
             _selectedQuantity!,
             match.unit ?? '',
@@ -166,7 +166,9 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
                       runSpacing: 8,
                       children: [
                         Text(
-                          'Quantity (${_match!.unit ?? ''}):',
+                          _match!.isPackaged
+                              ? 'Quantity to take (${_match!.packageType?.toLowerCase() ?? 'package'}s):'
+                              : 'Quantity (${_match!.unit ?? ''}):',
                           style: const TextStyle(fontWeight: FontWeight.w600),
                         ),
                         Row(
@@ -314,11 +316,18 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
                     'Available quantity',
                     _quantity(match.availableQuantity, match.unit),
                   ),
+                  if (match.isPackaged) ...[
+                    _detail('Physical stock', '${match.packageCountAvailable ?? 0} ${match.packageType?.toLowerCase() ?? 'packages'} (${_quantity(match.availableQuantity, match.unit)} total)'),
+                    _detail('Package size', '${quantities.formatQuantity(match.packageSize ?? 1, match.unit ?? '')} ${match.unit ?? ''} per ${match.packageType?.toLowerCase() ?? 'package'}'),
+                    _detail('Quantity to take', '${match.packageCountFor(_selectedQuantity ?? 0) ?? 0} ${match.packageType?.toLowerCase() ?? 'packages'} = ${_quantity(_selectedQuantity, match.unit)}'),
+                    if ((_selectedQuantity ?? 0) > (match.quantity ?? 0))
+                      _detail('Package overage', _quantity((_selectedQuantity ?? 0) - (match.quantity ?? 0), match.unit)),
+                  ],
                   _detail(
                     'Required / selected quantity',
                     _quantity(match.quantity, match.unit),
                   ),
-                  _detail('Unit price', formatCurrency(match.unitPrice)),
+                  _detail(match.isPackaged ? 'Price per ${match.packageType?.toLowerCase() ?? 'package'}' : 'Unit price', formatCurrency(match.unitPrice)),
                   _detail(
                     'Material value',
                     formatCurrency(match.estimatedMaterialCost),
@@ -479,7 +488,7 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
 
   double _stepFor(String? unit) => _match?.selectionStep ?? (quantities.isDiscreteUnit(unit ?? '') ? 1 : 0.1);
   double _maximumSelectable(RecommendedMatch match) =>
-      (match.availableQuantity ?? 0).clamp(0.0, match.quantity ?? double.infinity).toDouble();
+      (match.availableQuantity ?? 0).clamp(0.0, match.isPackaged ? double.infinity : (match.quantity ?? double.infinity)).toDouble();
   void _setSelectedQuantity(double value) {
     _selectedQuantity = value;
     _quantityController.text = quantities.formatQuantity(value, _match?.unit ?? '');
