@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useMemo, useRef, useState } from 'react';
 import type {
   ConstructionItemTemplate,
   AttributeFieldDefinition,
@@ -6,6 +6,7 @@ import type {
 import type { MaterialCategory } from '../features/materials/managerMaterialsApi';
 import { ConstructionItemPicker } from './ConstructionItemPicker';
 import { localized, useLanguage } from '../i18n/LanguageContext';
+import { ApiError } from '../api/apiClient';
 
 export interface ListingSubmitData {
   title: string;
@@ -41,7 +42,15 @@ export function TemplateDrivenMaterialForm({
   initialData,
   onCancel,
 }: TemplateDrivenMaterialFormProps) {
-  const { language } = useLanguage();
+  const { language, t } = useLanguage();
+  const fieldRefs = useRef<Record<string, HTMLElement | null>>({});
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const reportFieldErrors = (next: Record<string, string>) => {
+    setFieldErrors(next);
+    const first = Object.keys(next)[0];
+    if (first) window.setTimeout(() => fieldRefs.current[first]?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 0);
+    if (first) window.setTimeout(() => fieldRefs.current[first]?.focus(), 250);
+  };
   // Template selection
   const [selectedTemplate, setSelectedTemplate] = useState<ConstructionItemTemplate | null>(() => {
     if (initialData?.constructionItemTemplateId) {
@@ -192,17 +201,18 @@ export function TemplateDrivenMaterialForm({
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
+    setFieldErrors({});
 
     if (!selectedTemplate && !isCustomSelected) {
       setError('Please choose what item you are listing, or select "Can\'t find your item".');
       return;
     }
     if (!title.trim()) {
-      setError('Item title is required.');
+      reportFieldErrors({ title: t('required') });
       return;
     }
     if (!categoryId) {
-      setError('Category is required.');
+      reportFieldErrors({ categoryId: t('required') });
       return;
     }
 
@@ -216,11 +226,11 @@ export function TemplateDrivenMaterialForm({
 
     if (effectiveMode === 'PACKAGE') {
       if (packageCount <= 0 || packageSize <= 0) {
-        setError('Package size and count must be greater than zero.');
+        reportFieldErrors({ ...(packageSize <= 0 ? { packageSize: t('quantityRequired') } : {}), ...(packageCount <= 0 ? { packageCount: t('packageCountRequired') } : {}) });
         return;
       }
       if (pricePerPackage <= 0) {
-        setError('Price per package must be greater than zero.');
+        reportFieldErrors({ pricePerPackage: t('priceRequired') });
         return;
       }
       finalPackageCount = Math.floor(packageCount);
@@ -232,7 +242,7 @@ export function TemplateDrivenMaterialForm({
       finalUnitPrice = pricePerPackage / finalPackageSize;
     } else if (effectiveMode === 'PIECE') {
       if (pieceCount <= 0 || pricePerPiece <= 0) {
-        setError('Number of units and price must be greater than zero.');
+        reportFieldErrors({ ...(pieceCount <= 0 ? { quantity: t('quantityRequired') } : {}), ...(pricePerPiece <= 0 ? { unitPrice: t('priceRequired') } : {}) });
         return;
       }
       finalQuantity = Math.floor(pieceCount);
@@ -244,7 +254,7 @@ export function TemplateDrivenMaterialForm({
     } else {
       // CONTINUOUS / BULK
       if (bulkQuantity <= 0 || pricePerBulkUnit <= 0) {
-        setError('Quantity and price must be greater than zero.');
+        reportFieldErrors({ ...(bulkQuantity <= 0 ? { quantity: t('quantityRequired') } : {}), ...(pricePerBulkUnit <= 0 ? { unitPrice: t('priceRequired') } : {}) });
         return;
       }
       finalQuantity = bulkQuantity;
@@ -278,6 +288,10 @@ export function TemplateDrivenMaterialForm({
     try {
       await onSubmit(payload);
     } catch (err: unknown) {
+      if (err instanceof ApiError && err.validationErrors) {
+        const normalized = Object.fromEntries(Object.entries(err.validationErrors).map(([field, messages]) => [normalizeField(field), localizedValidation(messages[0], field, t)]));
+        if (Object.keys(normalized).length) { reportFieldErrors(normalized); return; }
+      }
       setError(err instanceof Error ? err.message : 'Failed to submit listing.');
     } finally {
       setIsSubmitting(false);
@@ -301,7 +315,7 @@ export function TemplateDrivenMaterialForm({
       {(selectedTemplate || isCustomSelected) && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem' }}>
-            <div className="catalog-field">
+            <div className={`catalog-field ${fieldErrors.title ? 'has-error' : ''}`}>
               <label>Listing Title *</label>
               <input
                 type="text"
@@ -310,17 +324,22 @@ export function TemplateDrivenMaterialForm({
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 data-testid="input-listing-title"
+                ref={element => { fieldRefs.current.title = element; }}
+                aria-invalid={Boolean(fieldErrors.title)}
               />
+              {fieldErrors.title && <small className="field-error">{fieldErrors.title}</small>}
             </div>
 
             {isCustomSelected && (
-              <div className="catalog-field">
+              <div className={`catalog-field ${fieldErrors.categoryId ? 'has-error' : ''}`}>
                 <label>Category *</label>
                 <select
                   required
                   value={categoryId}
                   onChange={(e) => setCategoryId(e.target.value)}
                   data-testid="select-custom-category"
+                  ref={element => { fieldRefs.current.categoryId = element; }}
+                  aria-invalid={Boolean(fieldErrors.categoryId)}
                 >
                   <option value="">Select Category</option>
                   {categories.map((c) => (
@@ -329,6 +348,7 @@ export function TemplateDrivenMaterialForm({
                     </option>
                   ))}
                 </select>
+                {fieldErrors.categoryId && <small className="field-error">{fieldErrors.categoryId}</small>}
               </div>
             )}
 
@@ -628,7 +648,10 @@ export function TemplateDrivenMaterialForm({
                     onChange={(e) => setPackageCount(parseInt(e.target.value, 10) || 0)}
                     placeholder="e.g. 5"
                     data-testid="package-count-input"
+                    ref={element => { fieldRefs.current.packageCount = element; }}
+                    aria-invalid={Boolean(fieldErrors.packageCount)}
                   />
+                  {fieldErrors.packageCount && <small className="field-error">{fieldErrors.packageCount}</small>}
                 </div>
 
                 <div className="catalog-field">
@@ -644,7 +667,10 @@ export function TemplateDrivenMaterialForm({
                     onChange={(e) => setPricePerPackage(parseFloat(e.target.value) || 0)}
                     placeholder="e.g. 4500"
                     data-testid="price-per-package-input"
+                    ref={element => { fieldRefs.current.pricePerPackage = element; }}
+                    aria-invalid={Boolean(fieldErrors.pricePerPackage)}
                   />
+                  {fieldErrors.pricePerPackage && <small className="field-error">{fieldErrors.pricePerPackage}</small>}
                 </div>
               </div>
             )}
@@ -662,7 +688,10 @@ export function TemplateDrivenMaterialForm({
                     onChange={(e) => setPieceCount(parseInt(e.target.value, 10) || 0)}
                     placeholder="e.g. 1"
                     data-testid="piece-count-input"
+                    ref={element => { fieldRefs.current.quantity = element; }}
+                    aria-invalid={Boolean(fieldErrors.quantity)}
                   />
+                  {fieldErrors.quantity && <small className="field-error">{fieldErrors.quantity}</small>}
                 </div>
 
                 <div className="catalog-field">
@@ -676,7 +705,10 @@ export function TemplateDrivenMaterialForm({
                     onChange={(e) => setPricePerPiece(parseFloat(e.target.value) || 0)}
                     placeholder="e.g. 150000"
                     data-testid="price-per-piece-input"
+                    ref={element => { fieldRefs.current.unitPrice = element; }}
+                    aria-invalid={Boolean(fieldErrors.unitPrice)}
                   />
+                  {fieldErrors.unitPrice && <small className="field-error">{fieldErrors.unitPrice}</small>}
                 </div>
               </div>
             )}
@@ -694,7 +726,10 @@ export function TemplateDrivenMaterialForm({
                     onChange={(e) => setBulkQuantity(parseFloat(e.target.value) || 0)}
                     placeholder="e.g. 5"
                     data-testid="bulk-quantity-input"
+                    ref={element => { fieldRefs.current.quantity = element; }}
+                    aria-invalid={Boolean(fieldErrors.quantity)}
                   />
+                  {fieldErrors.quantity && <small className="field-error">{fieldErrors.quantity}</small>}
                 </div>
 
                 <div className="catalog-field">
@@ -734,7 +769,10 @@ export function TemplateDrivenMaterialForm({
                     onChange={(e) => setPricePerBulkUnit(parseFloat(e.target.value) || 0)}
                     placeholder="e.g. 12000"
                     data-testid="price-per-bulk-input"
+                    ref={element => { fieldRefs.current.unitPrice = element; }}
+                    aria-invalid={Boolean(fieldErrors.unitPrice)}
                   />
+                  {fieldErrors.unitPrice && <small className="field-error">{fieldErrors.unitPrice}</small>}
                 </div>
               </div>
             )}
@@ -820,4 +858,23 @@ export function TemplateDrivenMaterialForm({
       )}
     </form>
   );
+}
+
+function normalizeField(field: string): string {
+  const compact = field.replace(/^\$?\.?/u, '').replaceAll('.', '').toLowerCase();
+  if (compact.includes('packagecount')) return 'packageCount';
+  if (compact.includes('packagesize')) return 'packageSize';
+  if (compact.includes('price')) return compact.includes('package') ? 'pricePerPackage' : 'unitPrice';
+  if (compact.includes('quantity')) return 'quantity';
+  if (compact.includes('category')) return 'categoryId';
+  if (compact.includes('title')) return 'title';
+  return field;
+}
+
+function localizedValidation(message: string | undefined, field: string, t: (key: string) => string): string {
+  const code = (message ?? '').toUpperCase();
+  if (code.includes('PACKAGE_COUNT')) return t('packageCountRequired');
+  if (code.includes('PRICE') || field.toLowerCase().includes('price')) return t('priceRequired');
+  if (code.includes('QUANTITY') || field.toLowerCase().includes('quantity')) return t('quantityRequired');
+  return t('required');
 }

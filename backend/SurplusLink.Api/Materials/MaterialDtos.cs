@@ -122,6 +122,10 @@ public sealed class MaterialListingQuery
     [MaxLength(120)]
     public string? Category { get; init; }
 
+    // Read-only marketplace narrowing; it never affects listing eligibility,
+    // matching, approval, reservation, or any transaction workflow.
+    public Guid? TemplateId { get; init; }
+
     [MaxLength(24)]
     public string? Status { get; init; }
 

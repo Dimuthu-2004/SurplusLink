@@ -7,6 +7,7 @@ import { roleHomePath, roleLabels } from '../routing/roleRoutes';
 import { BuyerMarketplaceLayout } from '../pages/buyer/BuyerMarketplaceLayout';
 import { LogoutConfirmation } from './LogoutConfirmation';
 import { SurplusLinkLogo } from './SurplusLinkLogo';
+import { LanguageSelector } from '../i18n/LanguageContext';
 
 export function AppLayout() {
   const { user, logout } = useAuth();
@@ -39,6 +40,7 @@ export function AppLayout() {
           <SurplusLinkLogo className="app-brand-logo" />
         </Link>
         <div className="account-summary">
+          {location.pathname === roleHomePath(user.roles) && <LanguageSelector />}
           <span>{user.email}</span>
           <span className="role-badge">{user.roles.map(role => roleLabels[role]).join(' + ')}</span>
           <LogoutConfirmation onLogout={logout}><><AppIcon name="logout" /> Log out</></LogoutConfirmation>

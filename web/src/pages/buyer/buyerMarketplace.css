@@ -448,6 +448,27 @@
   transform: scale(1.05);
 }
 
+/* Category-first discovery.  Images are supplied by the first real active
+   listing in that category; the fallback is deliberately construction-neutral. */
+.category-discovery { max-width: 1180px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+.marketplace-discovery-header { max-width: 680px; padding: 2rem 0 2.5rem; }
+.marketplace-discovery-header h1, .marketplace-listing-header h1 { margin: .2rem 0 .45rem; color: var(--sl-market-text-main); font-size: clamp(2rem, 4vw, 3rem); }
+.marketplace-discovery-header p, .marketplace-listing-header p { color: var(--sl-market-text-muted); }
+.marketplace-kicker { color: var(--sl-market-orange) !important; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; font-size: .75rem; }
+.marketplace-discovery-search { display: flex; align-items: center; gap: .6rem; margin-top: 1.25rem; background: #fff; border: 1px solid var(--sl-market-border); border-radius: 12px; padding: .15rem 1rem; box-shadow: var(--sl-market-shadow); }
+.marketplace-discovery-search input { width: 100%; border: 0; outline: 0; padding: .85rem 0; font: inherit; min-width: 0; }
+.marketplace-category-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 1rem; margin-top: 1rem; }
+.marketplace-category-card { appearance: none; padding: 0; overflow: hidden; text-align: left; border: 1px solid var(--sl-market-border); border-radius: 14px; background: #fff; color: inherit; cursor: pointer; box-shadow: var(--sl-market-shadow); animation: category-card-in .42s both ease-out; transition: transform .22s ease, box-shadow .22s ease; }
+.marketplace-category-card:hover { transform: translateY(-4px); box-shadow: var(--sl-market-shadow-hover); }
+.marketplace-category-image, .marketplace-category-fallback { display: block; width: 100%; height: 138px; object-fit: cover; background: linear-gradient(135deg, #e8edf0, #cbd5db); }
+.marketplace-category-fallback { display: grid; place-items: center; color: #43545d; font-size: 2.2rem; }
+.marketplace-category-card-body { display: grid; grid-template-columns: 1fr auto; gap: .25rem .5rem; padding: .95rem 1rem; }
+.marketplace-category-card-body strong { text-transform: uppercase; letter-spacing: .04em; font-size: .88rem; }.marketplace-category-card-body small { color: var(--sl-market-text-muted); }.marketplace-category-card-body span { grid-row: span 2; align-self: center; color: var(--sl-market-orange); font-size: 1.3rem; transition: transform .2s ease; }.marketplace-category-card:hover .marketplace-category-card-body span { transform: translateX(3px); }
+.marketplace-listing-header { max-width: 1180px; margin: 0 auto; padding: 1.5rem 1.25rem .75rem; }.marketplace-listing-header .back-link { border: 0; background: transparent; cursor: pointer; padding: 0; }
+.marketplace-template-filter { max-width: 1180px; margin: 0 auto; padding: 0 1.25rem .75rem; display: flex; gap: .5rem; overflow-x: auto; }.marketplace-template-filter button { white-space: nowrap; border: 1px solid var(--sl-market-border); border-radius: 999px; padding: .42rem .8rem; background: #fff; cursor: pointer; }.marketplace-template-filter button.active { background: var(--sl-market-orange); color: #fff; border-color: var(--sl-market-orange); }
+.marketplace-ai-prompt { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 1rem; background: rgba(15,23,42,.38); backdrop-filter: blur(5px); }.marketplace-ai-prompt > div { max-width: 480px; background: #fff; border-radius: 18px; padding: 1.75rem; box-shadow: 0 24px 56px rgba(15,23,42,.28); animation: category-card-in .25s both ease-out; }.marketplace-ai-prompt h2 { margin-top: 0; }.marketplace-ai-prompt .button + .button { margin-left: .65rem; }
+@keyframes category-card-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+
 .marketplace-card-placeholder {
   width: 100%;
   height: 100%;
@@ -1034,6 +1055,7 @@
     transition: none !important;
     transform: none !important;
   }
+  .marketplace-category-card, .marketplace-ai-prompt > div { animation: none !important; transition: none !important; }
 }
 
 /* Responsive Breakpoints */
@@ -1079,6 +1101,8 @@
   .details-layout {
     padding: 1.25rem;
   }
+  .marketplace-category-cards { grid-template-columns: 1fr; }
+  .marketplace-ai-prompt .button { width: 100%; margin: .4rem 0 0 !important; }
 }
 
 /* Unified Mobile Drawer & Header Controls */

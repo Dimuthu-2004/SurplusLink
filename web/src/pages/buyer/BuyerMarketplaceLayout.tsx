@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
 import { LogoutConfirmation } from '../../components/LogoutConfirmation';
 import { SurplusLinkLogo } from '../../components/SurplusLinkLogo';
+import { LanguageSelector } from '../../i18n/LanguageContext';
 import './buyerMarketplace.css';
 
 export interface BuyerMarketplaceLayoutProps {
@@ -51,6 +52,7 @@ export function BuyerMarketplaceLayout({ children }: BuyerMarketplaceLayoutProps
 
           {/* Desktop User Section */}
           <div className="marketplace-nav-user">
+            {location.pathname === '/app/buyer' && <LanguageSelector />}
             {user && (
               <div className="marketplace-user-pill">
                 <span title={user.email}>{user.email}</span>

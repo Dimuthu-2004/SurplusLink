@@ -49,6 +49,8 @@ class MaterialListingFormScreen extends StatefulWidget {
 
 class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _packageCountFieldKey = GlobalKey();
+  final _packageCountFocus = FocusNode();
   List<MaterialCategory> _categories = [];
   List<ConstructionItemTemplate> _templates = [];
   ConstructionItemTemplate? _selectedTemplate;
@@ -93,6 +95,7 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
 
   @override
   void dispose() {
+    _packageCountFocus.dispose();
     _titleController.dispose();
     _descriptionController.dispose();
     _quantityController.dispose();
@@ -426,7 +429,7 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
       return;
     }
     if (!_formKey.currentState!.validate()) {
-      _showMessage('Please review the highlighted fields before saving.');
+      _scrollToFirstInvalidField();
       return;
     }
     final effectiveCategoryId = _selectedTemplate?.categoryId ?? _category;
@@ -524,6 +527,21 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
       if (mounted) setState(() => _error = 'Unable to save the material.');
     } finally {
       if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  void _scrollToFirstInvalidField() {
+    // Flutter's Form has already painted the field-level error.  Move the
+    // seller directly to a concrete invalid input instead of showing an
+    // unanchored summary message.
+    final isPackage = _selectedTemplate?.isPackage == true ||
+        (_isCustom && _customSaleType == 'PACKAGE') || _quantityMode == 'PACKAGE';
+    if (isPackage && _wholePackageCount(_packageCountController.text) != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final fieldContext = _packageCountFieldKey.currentContext;
+        if (fieldContext != null) Scrollable.ensureVisible(fieldContext, duration: const Duration(milliseconds: 260), alignment: .25);
+        _packageCountFocus.requestFocus();
+      });
     }
   }
 
@@ -984,8 +1002,9 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                               ),
                               const SizedBox(height: 10),
                               TextFormField(
-                                key: const Key('material-package-count'),
+                                key: _packageCountFieldKey,
                                 controller: _packageCountController,
+                                focusNode: _packageCountFocus,
                                 keyboardType: TextInputType.number,
                                 decoration: InputDecoration(
                                   labelText: 'Number of ${_selectedTemplate?.packageType != null ? (_selectedTemplate!.packageType!.toLowerCase() == 'box' ? 'boxes' : "${_selectedTemplate!.packageType}s") : (_packageType.toLowerCase() == 'box' ? 'boxes' : "${_packageType}s")} available *',

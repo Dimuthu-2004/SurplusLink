@@ -27,13 +27,10 @@ import {
   RoleRoute,
   RootRoute,
 } from '../routing/RouteGuards';
-import { LanguageSelector } from '../i18n/LanguageContext';
 
 export function App() {
   return (
-    <>
-      <div className="global-language-selector"><LanguageSelector /></div>
-      <Routes>
+    <Routes>
       <Route
         path="/"
         element={
@@ -80,6 +77,5 @@ export function App() {
       </Route>
       <Route path="*" element={<NotFoundPage />} />
       </Routes>
-    </>
   );
 }

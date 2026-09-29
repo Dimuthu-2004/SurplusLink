@@ -56,6 +56,7 @@ class _SurplusLinkAppState extends State<SurplusLinkApp> {
   late final GoRouter _router;
   late final LocaleController _localeController;
   late int _modeRevision;
+  late String _routePath;
 
   @override
   void initState() {
@@ -74,6 +75,8 @@ class _SurplusLinkAppState extends State<SurplusLinkApp> {
       addressSearch: widget.addressSearch,
       initialLocation: widget.initialLocation,
     );
+    _routePath = _router.routeInformationProvider.value.uri.path;
+    _router.routeInformationProvider.addListener(_routeChanged);
     _modeRevision = widget.authController.marketplace.revision;
     widget.authController.marketplace.addListener(_modeChanged);
     unawaited(widget.authController.initialize());
@@ -87,9 +90,24 @@ class _SurplusLinkAppState extends State<SurplusLinkApp> {
     if (widget.authController.isAuthenticated) _router.go(AppRoutes.home);
   }
 
+  void _routeChanged() {
+    final next = _router.routeInformationProvider.value.uri.path;
+    if (next != _routePath && mounted) setState(() => _routePath = next);
+  }
+
+  bool get _showLanguageSelector => {
+    AppRoutes.login,
+    AppRoutes.register,
+    AppRoutes.verifyEmail,
+    AppRoutes.forgotPassword,
+    AppRoutes.home,
+    '/profile',
+  }.contains(_routePath);
+
   @override
   void dispose() {
     widget.authController.marketplace.removeListener(_modeChanged);
+    _router.routeInformationProvider.removeListener(_routeChanged);
     _router.dispose();
     super.dispose();
   }
@@ -115,7 +133,8 @@ class _SurplusLinkAppState extends State<SurplusLinkApp> {
             child: child!,
           ),
         ),
-        Positioned(top: 2, left: 2, child: SafeArea(child: LanguageSelector(controller: _localeController))),
+        if (_showLanguageSelector)
+          Positioned(top: 2, left: 2, child: SafeArea(child: LanguageSelector(controller: _localeController))),
       ]),
     ),
   ));

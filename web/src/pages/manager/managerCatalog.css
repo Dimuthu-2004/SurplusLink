@@ -287,6 +287,14 @@
   font-family: inherit;
 }
 
+.catalog-field.has-error input,
+.catalog-field.has-error select,
+.catalog-field input[aria-invalid="true"],
+.catalog-field select[aria-invalid="true"] {
+  border-color: #dc2626;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, .12);
+}
+
 .catalog-field textarea {
   font-family: monospace;
   font-size: 0.82rem;

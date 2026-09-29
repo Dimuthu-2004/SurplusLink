@@ -4,7 +4,7 @@ export type AppLanguage = 'en' | 'si' | 'ta';
 const storageKey = 'surpluslink.language';
 const labels: Record<AppLanguage, string> = { en: 'English', si: 'සිංහල', ta: 'தமிழ்' };
 const dictionary: Record<AppLanguage, Record<string, string>> = {
-  en: { language: 'Language', listing: 'What are you listing?', searchItems: 'Search construction items...', category: 'Category', preferences: 'Preferences (optional)' },
+  en: { language: 'Language', listing: 'What are you listing?', searchItems: 'Search construction items...', category: 'Category', preferences: 'Preferences (optional)', marketplace: 'Marketplace', myActivity: 'My Activity', findMaterials: 'Find surplus construction materials', browseCategories: 'Browse by category', backToCategories: 'Back to categories', activeListings: 'active listings', searchMaterials: 'Search materials...', allConditions: 'All conditions', sortNewest: 'Newest listings', clearFilters: 'Clear filters', filters: 'Filters', loading: 'Loading…', noListings: 'No active listings found.', findBestMatch: 'Find my best match with AI', handoffTitle: 'Want the best match for your requirement?', handoffDescription: 'SurplusLink AI compares available materials using your required quantity, budget, location and delivery needs.', continueQr: 'Show QR code', notNow: 'Not now', selectedCategory: 'Selected category', scanQr: 'Open SurplusLink Mobile and scan this QR code to continue.', packageCountRequired: 'Enter the number of packages available.', quantityRequired: 'Enter the quantity available.', priceRequired: 'Enter the price for this item.', required: 'This field is required.', correctFields: 'Please correct the highlighted fields.' },
   si: { language: 'භාෂාව', listing: 'ඔබ ලැයිස්තුගත කරන්නේ කුමක්ද?', searchItems: 'ඉදිකිරීම් අයිතම සොයන්න...', category: 'කාණ්ඩය', preferences: 'කැමැත්තන් (විකල්ප)' },
   ta: { language: 'மொழி', listing: 'நீங்கள் பட்டியலிடுவது என்ன?', searchItems: 'கட்டுமானப் பொருட்களைத் தேடுங்கள்...', category: 'வகை', preferences: 'விருப்பங்கள் (விருப்பத்தேர்வு)' },
 };
@@ -25,6 +25,24 @@ export function localized(value: unknown, language: AppLanguage, fallback = ''):
     return String(record[language] ?? record.en ?? fallback);
   }
   return fallback;
+}
+
+// Canonical catalog values remain unchanged in the API.  This display map is a
+// client concern so saved records and matching inputs are never language-specific.
+const catalogDisplay: Record<string, Partial<Record<AppLanguage, string>>> = {
+  'Rapid Hardening': { si: 'ඉක්මන් දැඩිවන', ta: 'விரைவாக உறையும்' },
+  Tiles: { si: 'ටයිල්', ta: 'டைல்ஸ்' },
+  Paint: { si: 'තීන්ත', ta: 'பெயிண்ட்' },
+  Cement: { si: 'සිමෙන්ති', ta: 'சிமெண்டு' },
+  'Structural & Masonry': { si: 'ව්‍යුහාත්මක සහ පෙදරේරු', ta: 'கட்டமைப்பு மற்றும் கல் வேலை' },
+  'Concrete & Aggregates': { si: 'කොන්ක්‍රීට් සහ මිශ්‍ර ද්‍රව්‍ය', ta: 'கான்கிரீட் மற்றும் கலவைகள்' },
+  Finishes: { si: 'නිමාවන්', ta: 'முடிப்புகள்' },
+  'Construction Tools': { si: 'ඉදිකිරීම් මෙවලම්', ta: 'கட்டுமானக் கருவிகள்' },
+  'Machinery / Equipment': { si: 'යන්ත්‍රෝපකරණ', ta: 'இயந்திரங்கள் / உபகரணங்கள்' },
+};
+
+export function catalogLabel(value: string, language: AppLanguage): string {
+  return catalogDisplay[value]?.[language] ?? value;
 }
 
 export function LanguageSelector() {
