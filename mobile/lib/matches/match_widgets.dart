@@ -119,12 +119,10 @@ class MatchListCard extends StatelessWidget {
     final isRouteFailed = match.status == 'ROUTE_FAILED';
     final isFailed = isRejected || isRouteFailed;
 
-    // Location short label: prefer address, then coordinates
+    // Coordinates are routing data, not a buyer-facing address.
     final locationLabel = match.sellerAddress != null && match.sellerAddress!.trim().isNotEmpty
         ? match.sellerAddress!.trim()
-        : (match.latitude != null && match.longitude != null
-              ? '${match.latitude!.toStringAsFixed(3)}, ${match.longitude!.toStringAsFixed(3)}'
-              : null);
+        : (match.latitude != null && match.longitude != null ? 'Location available' : null);
 
     // Distance: max 1 decimal, e.g. "27.5 km away"
     final distanceLabel = match.distance != null
@@ -133,6 +131,15 @@ class MatchListCard extends StatelessWidget {
 
     // Score: max 1 decimal
     final scoreLabel = '${(match.score * 100).toStringAsFixed(1)}%';
+    final selectedControlQuantity = match.isPackaged
+        ? (match.packageCountFor(selectedQuantity ?? 0) ?? 0).toDouble()
+        : selectedQuantity ?? 0;
+    final maximumControlQuantity = match.isPackaged
+        ? (match.packageCountAvailable ?? 0).toDouble()
+        : maximumQuantity ?? match.availableQuantity ?? double.infinity;
+    double baseForControl(double value) => match.isPackaged
+        ? value * (match.packageSize ?? 1)
+        : value;
 
     // Status chip data
     final (statusText, statusColor, statusIcon) = _statusData(
@@ -344,7 +351,7 @@ class MatchListCard extends StatelessWidget {
                                 children: [
                                   Expanded(
                                     child: Text(
-                                      'Quantity to take (${match.unit ?? ''}):',
+                                      'Quantity to take (${match.isPackaged ? (match.packageType?.toLowerCase() ?? 'packages') : (match.unit ?? '')}):',
                                       style: const TextStyle(
                                         fontSize: 12,
                                         fontWeight: FontWeight.w600,
@@ -371,9 +378,9 @@ class MatchListCard extends StatelessWidget {
                                       minWidth: 32,
                                       minHeight: 32,
                                     ),
-                                    onPressed: (selectedQuantity ?? match.selectionStep) > match.selectionStep
+                                    onPressed: selectedControlQuantity > (match.isPackaged ? 1 : match.selectionStep)
                                         ? () => onQuantityChanged!(
-                                            (selectedQuantity ?? match.selectionStep) - match.selectionStep,
+                                            baseForControl(selectedControlQuantity - (match.isPackaged ? 1 : match.selectionStep)),
                                           )
                                         : null,
                                   ),
@@ -381,9 +388,9 @@ class MatchListCard extends StatelessWidget {
                                     width: 90,
                                     child: _QuantityInput(
                                       fieldKey: Key('quantity-input-${match.id}'),
-                                      quantity: selectedQuantity ?? 0,
-                                      unit: match.unit ?? '',
-                                      onChanged: onQuantityChanged!,
+                                      quantity: selectedControlQuantity,
+                                      unit: match.isPackaged ? '' : (match.unit ?? ''),
+                                      onChanged: (value) => onQuantityChanged!(baseForControl(value)),
                                     ),
                                   ),
                                   IconButton(
@@ -394,12 +401,10 @@ class MatchListCard extends StatelessWidget {
                                       minWidth: 32,
                                       minHeight: 32,
                                     ),
-                                    onPressed: ((selectedQuantity ?? 0) <
-                                            (maximumQuantity ?? match.availableQuantity ?? double.infinity))
+                                    onPressed: selectedControlQuantity < maximumControlQuantity
                                         ? () => onQuantityChanged!(
-                                            ((selectedQuantity ?? 0) + match.selectionStep)
-                                                .clamp(0.0, maximumQuantity ?? match.availableQuantity ?? double.infinity)
-                                                .toDouble(),
+                                            baseForControl((selectedControlQuantity + (match.isPackaged ? 1 : match.selectionStep))
+                                                .clamp(0.0, maximumControlQuantity).toDouble()),
                                           )
                                         : null,
                                   ),
@@ -407,7 +412,7 @@ class MatchListCard extends StatelessWidget {
                                   TextButton(
                                     key: Key('qty-max-${match.id}'),
                                     onPressed: () => onQuantityChanged!(
-                                      maximumQuantity ?? match.availableQuantity ?? 0,
+                                      baseForControl(maximumControlQuantity),
                                     ),
                                     child: const Text('Max', style: TextStyle(fontSize: 12)),
                                   ),
@@ -432,7 +437,7 @@ class MatchListCard extends StatelessWidget {
                               if (selectedQuantity != null && match.unitPrice != null) ...[
                                 const SizedBox(height: 4),
                                 Text(
-                                  'Est: ${formatCurrency((selectedQuantity ?? 0) * (match.unitPrice ?? 0))} + ${formatCurrency(match.estimatedTransportCost ?? 0)} transport',
+                                  'Est: ${formatCurrency(match.materialCostFor(selectedQuantity ?? 0))} + ${formatCurrency(match.estimatedTransportCost ?? 0)} transport',
                                   style: const TextStyle(
                                     fontSize: 11,
                                     color: SurplusLinkTheme.slate600,

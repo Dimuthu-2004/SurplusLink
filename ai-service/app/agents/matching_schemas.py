@@ -20,6 +20,13 @@ class MatchingRequest(BaseModel):
     requiredQuantity: Decimal = Field(gt=0)
     unit: str = Field(min_length=1, max_length=32)
     baseUnit: str | None = Field(default=None, min_length=1, max_length=32)
+    normalizedBaseUnit: str | None = Field(default=None, min_length=1, max_length=32)
+    normalizedRequiredQuantity: Decimal | None = Field(default=None, gt=0)
+    inputMode: str | None = Field(default=None, min_length=1, max_length=32)
+    enteredQuantity: Decimal | None = Field(default=None, gt=0)
+    enteredUnit: str | None = Field(default=None, min_length=1, max_length=32)
+    preferredPackageSize: Decimal | None = Field(default=None, gt=0)
+    packageBaseUnit: str | None = Field(default=None, min_length=1, max_length=32)
     maximumBudget: Decimal = Field(gt=0)
     deadline: datetime
 

@@ -146,7 +146,12 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
         db.AuditLogs.Add(new AuditLog { Id = Guid.NewGuid(), EntityId = workflow.Id, EntityType = nameof(AgentWorkflow),
             Action = "WORKFLOW_" + workflow.Status });
         await db.SaveChangesAsync(stop);
-        await MatchRecommendation.RefreshAsync(db, request.Id, stop);
+        var refreshedRequest = await MatchRecommendation.RefreshAsync(db, request.Id, stop);
+        // The request recommendation is calculated only after final candidate
+        // persistence. Keep the workflow pointer aligned with that same
+        // authoritative result rather than the agent's preliminary choice.
+        workflow.MaterialMatchId = refreshedRequest.RecommendedMatchId;
+        await db.SaveChangesAsync(stop);
         if (completedResult is not null && notifications is not null)
         {
             var validMatchCount = await db.Matches.CountAsync(item =>
@@ -216,7 +221,11 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
                 quantity.BaseUnit, quantity.MinimumSellableIncrement, quantity.DecimalPrecision));
         }
         return new(workflow.Id, new { id = request.Id, buyerId = request.BuyerId, categoryId = request.CategoryId,
-            requiredQuantity = request.RequiredQuantity, unit = request.Unit, baseUnit = request.Unit, maximumBudget = request.MaximumBudget,
+            requiredQuantity = request.RequiredQuantity, unit = request.Unit, baseUnit = request.Unit,
+            normalizedBaseUnit = request.Unit, normalizedRequiredQuantity = request.RequiredQuantity,
+            inputMode = request.InputMode, enteredQuantity = request.EnteredQuantity,
+            enteredUnit = request.EnteredUnit, preferredPackageSize = request.PreferredPackageSize,
+            packageBaseUnit = request.PackageBaseUnit, maximumBudget = request.MaximumBudget,
             deadline = request.Deadline, latitude = request.Latitude, longitude = request.Longitude,
             notes = request.Notes, status = request.Status.ToString() }, rows,
             request.Title.Length <= 2000 ? request.Title : request.Title[..2000]);
@@ -327,9 +336,15 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
         var listing = result.Recommendation is { } chosen
             ? await db.Listings.AsNoTracking().SingleAsync(x => x.Id == chosen.ListingId, ct) : null;
         var persisted = await db.Matches.Where(x => x.MaterialRequestId == request.Id).ToDictionaryAsync(x => x.Id, ct);
+        var finalValidationPassed = result.Status == "MATCH_FOUND" && result.Validation.Valid && result.Validation.RequiresApproval;
         foreach (var row in snapshot.Listings)
         {
-            var reason = row.Status != "ACTIVE" ? "LISTING_NOT_ACTIVE"
+            // A snapshot is an input to the agent, not a final candidate set.
+            // If final validation rejected the workflow, its rows must not be
+            // resurfaced as selectable or recommended by the later refresh.
+            var reason = !finalValidationPassed
+                ? result.ErrorCode ?? result.Validation.Violations.FirstOrDefault() ?? "WORKFLOW_REJECTED"
+                : row.Status != "ACTIVE" ? "LISTING_NOT_ACTIVE"
                 : row.AvailableUntil <= DateTime.UtcNow ? "LISTING_EXPIRED"
                 : !SnapshotCompatible(request, row) ? "UNIT_MISMATCH"
                 : row.AvailableQuantity <= 0 ? "INSUFFICIENT_QUANTITY"
@@ -366,7 +381,10 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
             db.AuditLogs.Add(new AuditLog { Id = Guid.NewGuid(), EntityType = nameof(MaterialMatch), EntityId = candidate.Id,
                 Action = reason is null ? "RANK" : "REJECT" });
         }
-        var awaitingBuyerSelection = result.Status == "MATCH_FOUND";
+        // Candidate status is derived from authoritative listing facts, but it
+        // becomes selectable only after the workflow's final validation passes.
+        var awaitingBuyerSelection = finalValidationPassed && persisted.Values.Any(candidate =>
+            candidate.Status == MatchStatus.ROUTED && candidate.RejectionReason is null);
         workflow.Status = awaitingBuyerSelection
             ? AgentWorkflowStatus.COMPLETED
             : Enum.Parse<AgentWorkflowStatus>(result.Status);
@@ -378,10 +396,12 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
         workflow.ValidationJson = JsonSerializer.Serialize(result.Validation, AgentWorkflowClient.Json);
         workflow.ErrorJson = result.ErrorCode is null ? null : JsonSerializer.Serialize(new { code = result.ErrorCode });
         workflow.RetryCount = retries + result.Steps.Sum(x => x.RetryCount + x.ToolCalls.Sum(t => t.RetryCount));
-        workflow.MaterialMatchId = result.Recommendation?.MatchId;
-        request.RecommendedMatchId = result.Recommendation?.MatchId;
-        request.RecommendationReason = result.Recommendation is null
-            ? result.ErrorCode ?? string.Join("; ", result.Validation.Violations) : null;
+        // MatchRecommendation.RefreshAsync runs after persistence and is the
+        // single final authority for both the badge and the persisted ID.
+        workflow.MaterialMatchId = null;
+        request.RecommendedMatchId = null;
+        request.RecommendationReason = awaitingBuyerSelection ? null
+            : result.ErrorCode ?? string.Join("; ", result.Validation.Violations);
         // A workflow recommendation is informative only. It must never create an
         // offer, transaction, or manager queue entry until the buyer confirms it.
         if (false && result.Recommendation is { } rec)
@@ -414,7 +434,12 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
         }
         // Keep every generated candidate available to the buyer, including a
         // route failure. A retry is still explicit through Start Matching.
-        request.Status = BuyerRequestStatus.MATCH_FOUND;
+        // REJECTED is a completed matching outcome: retain the requirement in
+        // the match-results state so the buyer can inspect the outcome and
+        // explicitly retry. Failed execution still reopens it as before.
+        request.Status = awaitingBuyerSelection || result.Status == "REJECTED"
+            ? BuyerRequestStatus.MATCH_FOUND
+            : BuyerRequestStatus.OPEN;
         foreach (var trace in result.Steps)
         {
             var step = new AgentStep { Id = Guid.NewGuid(), Sequence = trace.Sequence, Stage = trace.Stage,

@@ -97,8 +97,8 @@ class MaterialMatchingAgent:
             buyer_user_id=request.buyerUserId,
             category_id=request.categoryId,
             category=request.category,
-            required_quantity=request.requiredQuantity,
-            unit=request.unit,
+            required_quantity=request.normalizedRequiredQuantity or request.requiredQuantity,
+            unit=request.normalizedBaseUnit or request.baseUnit or request.unit,
             maximum_budget=request.maximumBudget,
             deadline=request.deadline,
             requested_at=self._clock(),
@@ -176,12 +176,14 @@ class MaterialMatchingAgent:
         # Unit conversion is deliberately not reimplemented in Python. The
         # backend sends canonical base measurements; package type never enters
         # this comparison because it is a physical selling form, not a unit.
-        if (listing.base_unit or listing.unit).casefold() != (request.baseUnit or request.unit).casefold():
+        required_quantity = request.normalizedRequiredQuantity or request.requiredQuantity
+        required_unit = request.normalizedBaseUnit or request.baseUnit or request.unit
+        if (listing.base_unit or listing.unit).casefold() != required_unit.casefold():
             return False
         if listing.available_until.astimezone(timezone.utc).date() < request.deadline.astimezone(timezone.utc).date():
             return False
-        required_packages = (request.requiredQuantity / listing.package_size).to_integral_value(rounding=ROUND_CEILING) if listing.quantity_mode in {"PACKAGE", "PIECE"} and listing.package_size else None
-        expected_cost = listing.unit_price * (required_packages if required_packages is not None else request.requiredQuantity)
+        required_packages = (required_quantity / listing.package_size).to_integral_value(rounding=ROUND_CEILING) if listing.quantity_mode in {"PACKAGE", "PIECE"} and listing.package_size else None
+        expected_cost = listing.unit_price * (required_packages if required_packages is not None else required_quantity)
         if expected_cost > request.maximumBudget:
             return False
         if request.categoryId and listing.category_id != request.categoryId:
@@ -194,8 +196,9 @@ class MaterialMatchingAgent:
 
     @staticmethod
     def _candidate(listing: MaterialListingRecord, request: MatchingRequest) -> Candidate:
-        required_packages = (request.requiredQuantity / listing.package_size).to_integral_value(rounding=ROUND_CEILING) if listing.quantity_mode in {"PACKAGE", "PIECE"} and listing.package_size else None
-        total_cost = listing.unit_price * (required_packages if required_packages is not None else request.requiredQuantity)
+        required_quantity = request.normalizedRequiredQuantity or request.requiredQuantity
+        required_packages = (required_quantity / listing.package_size).to_integral_value(rounding=ROUND_CEILING) if listing.quantity_mode in {"PACKAGE", "PIECE"} and listing.package_size else None
+        total_cost = listing.unit_price * (required_packages if required_packages is not None else required_quantity)
         budget_headroom = (request.maximumBudget - total_cost) / request.maximumBudget
         # Preliminary score only: routing is required for the final score.
         score = round(float(Decimal("50") * condition_rank(listing.condition) / 4
@@ -216,8 +219,8 @@ class MaterialMatchingAgent:
             quantityMode=listing.quantity_mode, packageType=listing.package_type, packageSize=listing.package_size,
             packageCountAvailable=listing.package_count_available,
             baseEquivalentAvailableQuantity=listing.base_equivalent_available_quantity or listing.available_quantity,
-            maximumContribution=listing.maximum_contribution or min(listing.available_quantity, request.requiredQuantity),
-            fullCoverage=listing.full_coverage if listing.full_coverage is not None else listing.available_quantity >= request.requiredQuantity,
+            maximumContribution=listing.maximum_contribution or min(listing.available_quantity, required_quantity),
+            fullCoverage=listing.full_coverage if listing.full_coverage is not None else listing.available_quantity >= required_quantity,
             baseUnit=listing.base_unit or listing.unit,
             minimumSellableIncrement=listing.minimum_sellable_increment,
             decimalPrecision=listing.decimal_precision,

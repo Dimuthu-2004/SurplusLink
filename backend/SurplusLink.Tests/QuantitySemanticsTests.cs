@@ -84,6 +84,26 @@ public sealed class QuantitySemanticsTests
         Assert.Equal(8, QuantitySemantics.FromListing(listing).AvailableBaseQuantity);
     }
 
+    [Theory]
+    [InlineData("L", 8, "CAN", 2, 4, "L", 8)]
+    [InlineData("kg", 350, "BAG", 7, 50, "kg", 350)]
+    [InlineData("ml", 900, "CARTRIDGE", 3, 300, "ml", 900)]
+    public void Base_and_physical_package_requirement_inputs_normalize_equivalently(
+        string baseUnit, decimal baseQuantity, string packageLabel, decimal count, decimal packageSize,
+        string packageBaseUnit, decimal expected)
+    {
+        Assert.True(QuantitySemantics.TryNormalizeRequirement(baseQuantity, baseUnit, "BASE_QUANTITY", null, null, baseUnit, out var byBase));
+        Assert.True(QuantitySemantics.TryNormalizeRequirement(count, packageLabel, "PACKAGE_COUNT", packageSize, packageBaseUnit, baseUnit, out var byPackage));
+        Assert.Equal(expected, byBase.RequiredBaseQuantity);
+        Assert.Equal(byBase.RequiredBaseQuantity, byPackage.RequiredBaseQuantity);
+    }
+
+    [Fact]
+    public void Package_requirement_without_size_is_not_guessed()
+    {
+        Assert.False(QuantitySemantics.TryNormalizeRequirement(2, "BOX", "PACKAGE_COUNT", null, null, "kg", out _));
+    }
+
     private static BuyerRequest Request(decimal quantity, string unit, Guid template) => new()
     {
         BuyerId = Guid.NewGuid(), CategoryId = Category, ConstructionItemTemplateId = template,

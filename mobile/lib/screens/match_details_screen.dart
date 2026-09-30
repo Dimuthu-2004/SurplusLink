@@ -27,7 +27,8 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
   bool _loading = true, _historyLoading = false, _selecting = false, _routing = false;
   String? _selectionError;
   int _historyPage = 1;
-  double? _selectedQuantity;
+  MatchAllocation? _selection;
+  double? get _selectedQuantity => _selection?.quantity;
   final TextEditingController _quantityController = TextEditingController();
 
   @override
@@ -68,8 +69,9 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
         if (match.availableQuantity != null && match.quantity != null) {
           final desired = match.availableQuantity! < match.quantity!
               ? match.availableQuantity! : match.quantity!;
-          _selectedQuantity = match.packageQuantityFor(desired)
-              .clamp(0.0, match.availableQuantity!).toDouble();
+          _setSelectedQuantity(match.isPackaged
+              ? (match.packageCountFor(match.packageQuantityFor(desired)) ?? 0).toDouble()
+              : desired.clamp(0.0, match.availableQuantity!).toDouble());
           _quantityController.text = quantities.formatQuantity(
             _selectedQuantity!,
             match.unit ?? '',
@@ -132,6 +134,7 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
       ],
     ),
     bottomNavigationBar:
+        false &&
         !_loading &&
             _error == null &&
             _match?.requirementStatus == 'MATCH_FOUND' &&
@@ -176,9 +179,9 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
                           children: [
                             IconButton(
                               icon: const Icon(Icons.remove_circle_outline, size: 20),
-                              onPressed: (_selectedQuantity ?? 1) > _stepFor(_match!.unit)
+                              onPressed: (_selectionControlValue(_match!) > _stepFor(_match!.unit))
                                   ? () => setState(
-                                      () => _setSelectedQuantity((_selectedQuantity ?? 1) - _stepFor(_match!.unit)),
+                                      () => _setSelectedQuantity(_selectionControlValue(_match!) - _stepFor(_match!.unit)),
                                     )
                                   : null,
                             ),
@@ -201,18 +204,18 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
                                 onChanged: (text) {
                                   final parsed = double.tryParse(text.trim());
                                   if (parsed != null) {
-                                    setState(() => _selectedQuantity = parsed);
+                                    setState(() => _setSelectedQuantity(parsed));
                                   }
                                 },
                               ),
                             ),
                             IconButton(
                               icon: const Icon(Icons.add_circle_outline, size: 20),
-                              onPressed: ((_selectedQuantity ?? 0) <
+                              onPressed: (_selectionControlValue(_match!) <
                                       _maximumSelectable(_match!))
                                   ? () => setState(
                                       () => _setSelectedQuantity((
-                                        (_selectedQuantity ?? 0) + _stepFor(_match!.unit)
+                                        _selectionControlValue(_match!) + _stepFor(_match!.unit)
                                       ).clamp(0.0, _maximumSelectable(_match!)).toDouble()),
                                     )
                                   : null,
@@ -330,9 +333,22 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
                   _detail(match.isPackaged ? 'Price per ${match.packageType?.toLowerCase() ?? 'package'}' : 'Unit price', formatCurrency(match.unitPrice)),
                   _detail(
                     'Material value',
-                    formatCurrency(match.estimatedMaterialCost),
+                    formatCurrency(match.materialCostFor(_selectedQuantity ?? 0)),
                   ),
                 ]),
+                if (match.listingContext != null)
+                  _card('Listing details', [
+                    if (match.listingContext!.templateName != null) _detail('Item', match.listingContext!.templateName!),
+                    if (match.listingContext!.description?.trim().isNotEmpty == true) _detail('Description', match.listingContext!.description!),
+                    if (match.listingContext!.photos.isNotEmpty) SizedBox(
+                      height: 112,
+                      child: ListView(scrollDirection: Axis.horizontal, children: match.listingContext!.photos
+                        .map((url) => Padding(padding: const EdgeInsets.only(right: 8), child: ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(url, width: 140, fit: BoxFit.cover))))
+                        .toList()),
+                    ),
+                    if (match.listingContext!.specificationsJson?.trim().isNotEmpty == true)
+                      _detail('Specifications', match.listingContext!.specificationsJson!),
+                  ]),
                 _card('Delivery / Logistics', [
                   _detail(
                     'Seller location / address',
@@ -360,9 +376,9 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
                   _detail(
                     'Total estimated cost',
                     formatCurrency(
-                      match.estimatedMaterialCost != null &&
+                      match.materialCostFor(_selectedQuantity ?? 0) != null &&
                               match.estimatedTransportCost != null
-                          ? match.estimatedMaterialCost! +
+                          ? match.materialCostFor(_selectedQuantity ?? 0)! +
                                 match.estimatedTransportCost!
                           : null,
                     ),
@@ -466,12 +482,10 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
         ),
       );
       if (confirmed != true || !mounted) return;
-      await widget.gateway.select(
-        widget.requirementId,
-        match.id,
-        quantity: _selectedQuantity,
-        packageCount: match.packageCountFor(_selectedQuantity ?? 0),
-      );
+      final selection = _selection;
+      if (selection == null || selection.matchId != match.id) return;
+      await widget.gateway.select(widget.requirementId, match.id,
+        quantity: selection.quantity, packageCount: selection.packageCount);
       await _load();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -486,12 +500,26 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
     }
   }
 
-  double _stepFor(String? unit) => _match?.selectionStep ?? (quantities.isDiscreteUnit(unit ?? '') ? 1 : 0.1);
-  double _maximumSelectable(RecommendedMatch match) =>
-      (match.availableQuantity ?? 0).clamp(0.0, match.isPackaged ? double.infinity : (match.quantity ?? double.infinity)).toDouble();
+  double _stepFor(String? unit) => _match?.isPackaged == true
+      ? 1
+      : _match?.selectionStep ?? (quantities.isDiscreteUnit(unit ?? '') ? 1 : 0.1);
+  double _maximumSelectable(RecommendedMatch match) => match.isPackaged
+      ? (match.packageCountAvailable ?? 0).toDouble()
+      : (match.availableQuantity ?? 0).clamp(0.0, match.quantity ?? double.infinity).toDouble();
+  double _selectionControlValue(RecommendedMatch match) => match.isPackaged
+      ? (_selection?.packageCount ?? 0).toDouble()
+      : _selectedQuantity ?? 0;
   void _setSelectedQuantity(double value) {
-    _selectedQuantity = value;
-    _quantityController.text = quantities.formatQuantity(value, _match?.unit ?? '');
+    final match = _match;
+    if (match == null) return;
+    final max = _maximumSelectable(match);
+    final base = value.clamp(0.0, max).toDouble();
+    final double normalized = match.isPackaged
+        ? base.round() * (match.packageSize ?? 1)
+        : base;
+    _selection = MatchAllocation(matchId: match.id, quantity: normalized,
+        packageCount: match.packageCountFor(normalized));
+    _quantityController.text = quantities.formatQuantity(_selectionControlValue(match), match.isPackaged ? '' : (match.unit ?? ''));
   }
 
   String _quantity(double? value, String? unit) => value == null

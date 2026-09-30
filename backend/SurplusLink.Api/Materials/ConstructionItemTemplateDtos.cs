@@ -13,6 +13,7 @@ public sealed record ConstructionItemTemplateResponse(
     string? PackageType,
     IReadOnlyList<string> AllowedUnits,
     IReadOnlyList<decimal> AllowedPackageSizes,
+    IReadOnlyList<string> BuyerInputModes,
     string AttributeSchema,
     string PriceBasis,
     bool IsActive,
@@ -43,6 +44,8 @@ public class CreateConstructionItemTemplateRequest
     public string[] AllowedUnits { get; init; } = [];
 
     public decimal[] AllowedPackageSizes { get; init; } = [];
+
+    public string[] BuyerInputModes { get; init; } = [];
 
     public string AttributeSchema { get; init; } = "[]";
 

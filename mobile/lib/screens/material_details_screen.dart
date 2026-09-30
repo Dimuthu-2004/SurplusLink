@@ -316,7 +316,13 @@ class _DetailsTable extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Quantity: ${formatMaterialQuantity(listing.quantity, listing.unit)} ${listing.unit}',
+            listing.quantityMode == 'PACKAGE' || listing.quantityMode == 'PIECE'
+                ? 'Stock: ${listing.packageCount ?? 0} ${(listing.packageType ?? 'package').toLowerCase()}s\n'
+                  'Package size: ${formatMaterialQuantity(listing.packageSize ?? 1, listing.baseUnit ?? listing.unit)} ${listing.baseUnit ?? listing.unit}\n'
+                  'Total material: ${formatMaterialQuantity(listing.quantity, listing.baseUnit ?? listing.unit)} ${listing.baseUnit ?? listing.unit}\n'
+                  'Reserved: ${listing.reservedPackageCount} ${(listing.packageType ?? 'package').toLowerCase()}s\n'
+                  'Available: ${listing.availablePackageCount ?? 0} ${(listing.packageType ?? 'package').toLowerCase()}s'
+                : 'Quantity: ${formatMaterialQuantity(listing.quantity, listing.unit)} ${listing.unit}',
           ),
           Text(
             'Reserved: ${formatMaterialQuantity(listing.reservedQuantity, listing.unit)} ${listing.unit}',

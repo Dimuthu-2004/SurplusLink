@@ -3,6 +3,10 @@ using SurplusLink.Api.Models;
 
 namespace SurplusLink.Api.Matching;
 
+public sealed record MatchListingContext(
+    string Description, string? ConstructionItemTemplateName, string? SpecificationsJson,
+    IReadOnlyList<Materials.ListingPhotoResponse> Photos);
+
 public class MatchPageQuery
 {
     [Range(1, 1_000_000)]
@@ -85,7 +89,8 @@ public sealed record MatchResponse(
     decimal? BaseEquivalentAvailableQuantity = null,
     decimal? MaximumContribution = null,
     bool? FullCoverage = null,
-    string? SellerDisplayName = null
+    string? SellerDisplayName = null,
+    MatchListingContext? ListingContext = null
 );
 
 public sealed record MatchPage(

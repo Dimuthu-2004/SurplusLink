@@ -243,6 +243,11 @@ public static class MarketplaceModelConfiguration
             entity.Property(request => request.Title).HasMaxLength(200).IsRequired();
             entity.Property(request => request.Notes).HasMaxLength(2000).IsRequired();
             entity.Property(request => request.BuyerPreferencesJson).HasColumnType("text");
+            entity.Property(request => request.InputMode).HasMaxLength(32).HasDefaultValue("BASE_QUANTITY").IsRequired();
+            entity.Property(request => request.EnteredQuantity).HasPrecision(18, 3);
+            entity.Property(request => request.EnteredUnit).HasMaxLength(32);
+            entity.Property(request => request.PreferredPackageSize).HasPrecision(18, 3);
+            entity.Property(request => request.PackageBaseUnit).HasMaxLength(32);
             entity.Property(request => request.RequiredQuantity).HasColumnName("Quantity").HasPrecision(18, 3);
             entity.Property(request => request.MaximumBudget).HasColumnName("Budget").HasPrecision(18, 2);
             entity.Property(request => request.Status).HasConversion<string>().HasMaxLength(24).IsRequired();
