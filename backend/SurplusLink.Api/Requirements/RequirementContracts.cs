@@ -11,6 +11,11 @@ public sealed class SaveRequirementRequest : IValidatableObject
     public Guid? ConstructionItemTemplateId { get; init; }
     [StringLength(4000)]
     public string? BuyerPreferencesJson { get; init; }
+    public string InputMode { get; init; } = "BASE_QUANTITY";
+    public decimal? EnteredQuantity { get; init; }
+    public string? EnteredUnit { get; init; }
+    public decimal? PreferredPackageSize { get; init; }
+    public string? PackageBaseUnit { get; init; }
     [StringLength(2000)]
     public string? Notes { get; init; }
     [Range(typeof(decimal), "0.001", "999999999999999.999")]
@@ -49,6 +54,11 @@ public sealed record RequirementResponse(
     public Guid? ConstructionItemTemplateId { get; init; }
     public string? ConstructionItemTemplateName { get; init; }
     public string? BuyerPreferencesJson { get; init; }
+    public string InputMode { get; init; } = "BASE_QUANTITY";
+    public decimal? EnteredQuantity { get; init; }
+    public string? EnteredUnit { get; init; }
+    public decimal? PreferredPackageSize { get; init; }
+    public string? PackageBaseUnit { get; init; }
     public static RequirementResponse From(BuyerRequest request) => new(
         request.Id, request.BuyerId, request.CategoryId, request.RequiredQuantity, request.Unit,
         request.MaximumBudget, request.Deadline, request.Latitude, request.Longitude,
@@ -56,7 +66,10 @@ public sealed record RequirementResponse(
     {
         ConstructionItemTemplateId = request.ConstructionItemTemplateId,
         ConstructionItemTemplateName = request.ConstructionItemTemplate?.Name,
-        BuyerPreferencesJson = request.BuyerPreferencesJson
+        BuyerPreferencesJson = request.BuyerPreferencesJson,
+        InputMode = request.InputMode, EnteredQuantity = request.EnteredQuantity,
+        EnteredUnit = request.EnteredUnit, PreferredPackageSize = request.PreferredPackageSize,
+        PackageBaseUnit = request.PackageBaseUnit
     };
 }
 

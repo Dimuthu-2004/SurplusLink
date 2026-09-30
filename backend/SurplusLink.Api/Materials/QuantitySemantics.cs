@@ -17,6 +17,11 @@ public sealed record NormalizedQuantity(
     decimal MinimumSellableIncrement,
     int DecimalPrecision);
 
+public sealed record NormalizedRequirement(
+    decimal RequiredBaseQuantity, string BaseUnit, string InputMode,
+    decimal EnteredQuantity, string EnteredUnit, decimal? PreferredPackageSize,
+    string? PackageBaseUnit);
+
 public static class QuantitySemantics
 {
     private sealed record Unit(string Dimension, decimal Factor, int Precision);
@@ -57,6 +62,43 @@ public static class QuantitySemantics
             fromDefinition.Dimension != toDefinition.Dimension)
             return false;
         converted = quantity * fromDefinition.Factor / toDefinition.Factor;
+        return true;
+    }
+
+    public static string[] ResolveBuyerInputModes(IEnumerable<string>? configured, string? quantityMode)
+    {
+        var modes = configured?.Where(x => !string.IsNullOrWhiteSpace(x))
+            .Select(x => x.Trim().ToUpperInvariant()).Distinct(StringComparer.Ordinal).ToArray() ?? [];
+        if (modes.Length > 0) return modes;
+        return quantityMode?.ToUpperInvariant() switch
+        {
+            "PACKAGE" => ["BASE_QUANTITY", "PACKAGE_COUNT"],
+            "PIECE" => ["PIECE_COUNT"],
+            _ => ["CONTINUOUS_QUANTITY"]
+        };
+    }
+
+    public static bool TryNormalizeRequirement(decimal enteredQuantity, string enteredUnit, string? inputMode,
+        decimal? preferredPackageSize, string? packageBaseUnit, string canonicalBaseUnit,
+        out NormalizedRequirement normalized)
+    {
+        normalized = default!;
+        if (enteredQuantity <= 0 || string.IsNullOrWhiteSpace(enteredUnit)) return false;
+        var mode = string.IsNullOrWhiteSpace(inputMode) ? "BASE_QUANTITY" : inputMode.Trim().ToUpperInvariant();
+        var baseUnit = CanonicalUnit(canonicalBaseUnit);
+        if (mode == "PACKAGE_COUNT")
+        {
+            if (decimal.Truncate(enteredQuantity) != enteredQuantity || preferredPackageSize is not > 0 ||
+                string.IsNullOrWhiteSpace(packageBaseUnit) ||
+                !TryConvert(enteredQuantity * preferredPackageSize.Value, packageBaseUnit, baseUnit, out var packageBase))
+                return false;
+            normalized = new(packageBase, baseUnit, mode, enteredQuantity, enteredUnit.Trim(), preferredPackageSize,
+                CanonicalUnit(packageBaseUnit));
+            return true;
+        }
+        if (!TryConvert(enteredQuantity, enteredUnit, baseUnit, out var converted)) return false;
+        if (mode == "PIECE_COUNT" && decimal.Truncate(converted) != converted) return false;
+        normalized = new(converted, baseUnit, mode, enteredQuantity, CanonicalUnit(enteredUnit), null, null);
         return true;
     }
 

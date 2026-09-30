@@ -195,6 +195,7 @@ public sealed class ConstructionItemTemplatesController(SurplusLinkDbContext dbC
             PackageType = string.IsNullOrWhiteSpace(request.PackageType) ? null : request.PackageType.Trim().ToUpperInvariant(),
             AllowedUnits = request.AllowedUnits,
             AllowedPackageSizes = request.AllowedPackageSizes ?? [],
+            BuyerInputModes = QuantitySemantics.ResolveBuyerInputModes(request.BuyerInputModes, request.QuantityMode),
             AttributeSchema = string.IsNullOrWhiteSpace(request.AttributeSchema) ? "[]" : request.AttributeSchema.Trim(),
             PriceBasis = string.IsNullOrWhiteSpace(request.PriceBasis) ? "PER_UNIT" : request.PriceBasis.Trim().ToUpperInvariant(),
             IsActive = true,
@@ -239,6 +240,7 @@ public sealed class ConstructionItemTemplatesController(SurplusLinkDbContext dbC
         template.PackageType = string.IsNullOrWhiteSpace(request.PackageType) ? null : request.PackageType.Trim().ToUpperInvariant();
         template.AllowedUnits = request.AllowedUnits;
         template.AllowedPackageSizes = request.AllowedPackageSizes ?? [];
+        template.BuyerInputModes = QuantitySemantics.ResolveBuyerInputModes(request.BuyerInputModes, request.QuantityMode);
         template.AttributeSchema = string.IsNullOrWhiteSpace(request.AttributeSchema) ? "[]" : request.AttributeSchema.Trim();
         template.PriceBasis = string.IsNullOrWhiteSpace(request.PriceBasis) ? "PER_UNIT" : request.PriceBasis.Trim().ToUpperInvariant();
         template.UpdatedAtUtc = DateTime.UtcNow;
@@ -283,6 +285,7 @@ public sealed class ConstructionItemTemplatesController(SurplusLinkDbContext dbC
             template.PackageType,
             template.AllowedUnits,
             template.AllowedPackageSizes,
+            QuantitySemantics.ResolveBuyerInputModes(template.BuyerInputModes, template.QuantityMode),
             template.AttributeSchema,
             template.PriceBasis,
             template.IsActive,

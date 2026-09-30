@@ -38,6 +38,8 @@ class BuyerRequirement {
     this.constructionItemTemplateId,
     this.constructionItemTemplateName,
     this.buyerPreferencesJson,
+    this.inputMode = 'BASE_QUANTITY', this.enteredQuantity, this.enteredUnit,
+    this.preferredPackageSize, this.packageBaseUnit,
     this.latitude,
     this.longitude,
     this.notes = '',
@@ -45,6 +47,9 @@ class BuyerRequirement {
   final String id, buyerId, categoryId, unit, status, notes;
   final String? workflowId, workflowStatus, decisionNote,
       constructionItemTemplateId, constructionItemTemplateName, buyerPreferencesJson;
+  final String inputMode;
+  final num? enteredQuantity, preferredPackageSize;
+  final String? enteredUnit, packageBaseUnit;
   final num requiredQuantity, maximumBudget;
   final double? latitude, longitude;
   final DateTime deadline, createdAt, updatedAt;
@@ -67,6 +72,9 @@ class BuyerRequirement {
         constructionItemTemplateId: json['constructionItemTemplateId'] as String?,
         constructionItemTemplateName: json['constructionItemTemplateName'] as String?,
         buyerPreferencesJson: json['buyerPreferencesJson'] as String?,
+        inputMode: json['inputMode'] as String? ?? 'BASE_QUANTITY',
+        enteredQuantity: json['enteredQuantity'] as num?, enteredUnit: json['enteredUnit'] as String?,
+        preferredPackageSize: json['preferredPackageSize'] as num?, packageBaseUnit: json['packageBaseUnit'] as String?,
         notes: json['notes'] as String? ?? '',
         latitude: (json['latitude'] as num?)?.toDouble(),
         longitude: (json['longitude'] as num?)?.toDouble(),
@@ -87,12 +95,17 @@ class RequirementDraft {
     this.notes = '',
     this.constructionItemTemplateId,
     this.buyerPreferencesJson,
+    this.inputMode = 'BASE_QUANTITY', this.enteredQuantity, this.enteredUnit,
+    this.preferredPackageSize, this.packageBaseUnit,
   });
   final String categoryId, unit, notes;
   final num requiredQuantity, maximumBudget;
   final DateTime deadline;
   final double latitude, longitude;
   final String? constructionItemTemplateId, buyerPreferencesJson;
+  final String inputMode;
+  final num? enteredQuantity, preferredPackageSize;
+  final String? enteredUnit, packageBaseUnit;
   Map<String, dynamic> toJson() => {
     'categoryId': categoryId,
     'requiredQuantity': requiredQuantity,
@@ -104,6 +117,11 @@ class RequirementDraft {
     'notes': notes.trim(),
     if (constructionItemTemplateId != null) 'constructionItemTemplateId': constructionItemTemplateId,
     if (buyerPreferencesJson != null) 'buyerPreferencesJson': buyerPreferencesJson,
+    'inputMode': inputMode,
+    if (enteredQuantity != null) 'enteredQuantity': enteredQuantity,
+    if (enteredUnit != null) 'enteredUnit': enteredUnit,
+    if (preferredPackageSize != null) 'preferredPackageSize': preferredPackageSize,
+    if (packageBaseUnit != null) 'packageBaseUnit': packageBaseUnit,
   };
 }
 

@@ -11,6 +11,8 @@ public sealed partial class MatchService
     {
         var match = await db.Matches.AsNoTracking().Include(x => x.Listing).ThenInclude(x => x.Category)
             .Include(x => x.Listing).ThenInclude(x => x.Seller)
+            .Include(x => x.Listing).ThenInclude(x => x.Photos)
+            .Include(x => x.Listing).ThenInclude(x => x.ConstructionItemTemplate)
             .Include(x => x.MaterialRequest).SingleOrDefaultAsync(x => x.Id == id, ct)
             ?? throw new MatchException(404, "Match not found.");
         await AuthorizeRequirement(match.MaterialRequestId, actor, manager, ct);
@@ -172,6 +174,9 @@ public sealed partial class MatchService
             normalized.QuantityMode.ToString(), normalized.PackageType, normalized.PackageSize,
             normalized.AvailablePackageCount,
             available, Math.Min(available, required), available >= required,
-            x.Listing.Seller.BusinessName ?? x.Listing.Seller.FullName ?? "Verified seller");
+            x.Listing.Seller.BusinessName ?? x.Listing.Seller.FullName ?? "Verified seller",
+            new MatchListingContext(x.Listing.Description, x.Listing.ConstructionItemTemplate?.Name,
+                x.Listing.SpecificationsJson, x.Listing.Photos.OrderBy(photo => photo.SortOrder)
+                    .Select(photo => new ListingPhotoResponse(photo.Id, photo.PhotoUrl, photo.SortOrder)).ToArray()));
     }
 }

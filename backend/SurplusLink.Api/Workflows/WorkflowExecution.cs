@@ -216,7 +216,11 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
                 quantity.BaseUnit, quantity.MinimumSellableIncrement, quantity.DecimalPrecision));
         }
         return new(workflow.Id, new { id = request.Id, buyerId = request.BuyerId, categoryId = request.CategoryId,
-            requiredQuantity = request.RequiredQuantity, unit = request.Unit, baseUnit = request.Unit, maximumBudget = request.MaximumBudget,
+            requiredQuantity = request.RequiredQuantity, unit = request.Unit, baseUnit = request.Unit,
+            normalizedBaseUnit = request.Unit, normalizedRequiredQuantity = request.RequiredQuantity,
+            inputMode = request.InputMode, enteredQuantity = request.EnteredQuantity,
+            enteredUnit = request.EnteredUnit, preferredPackageSize = request.PreferredPackageSize,
+            packageBaseUnit = request.PackageBaseUnit, maximumBudget = request.MaximumBudget,
             deadline = request.Deadline, latitude = request.Latitude, longitude = request.Longitude,
             notes = request.Notes, status = request.Status.ToString() }, rows,
             request.Title.Length <= 2000 ? request.Title : request.Title[..2000]);
@@ -366,7 +370,11 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
             db.AuditLogs.Add(new AuditLog { Id = Guid.NewGuid(), EntityType = nameof(MaterialMatch), EntityId = candidate.Id,
                 Action = reason is null ? "RANK" : "REJECT" });
         }
-        var awaitingBuyerSelection = result.Status == "MATCH_FOUND";
+        // Candidate outcomes are independent from the remote workflow envelope.
+        // A stale/partial rejection must never reject a workflow that persisted
+        // at least one final routed, selectable candidate.
+        var awaitingBuyerSelection = persisted.Values.Any(candidate =>
+            candidate.Status == MatchStatus.ROUTED && candidate.RejectionReason is null);
         workflow.Status = awaitingBuyerSelection
             ? AgentWorkflowStatus.COMPLETED
             : Enum.Parse<AgentWorkflowStatus>(result.Status);
@@ -378,10 +386,12 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
         workflow.ValidationJson = JsonSerializer.Serialize(result.Validation, AgentWorkflowClient.Json);
         workflow.ErrorJson = result.ErrorCode is null ? null : JsonSerializer.Serialize(new { code = result.ErrorCode });
         workflow.RetryCount = retries + result.Steps.Sum(x => x.RetryCount + x.ToolCalls.Sum(t => t.RetryCount));
-        workflow.MaterialMatchId = result.Recommendation?.MatchId;
-        request.RecommendedMatchId = result.Recommendation?.MatchId;
-        request.RecommendationReason = result.Recommendation is null
-            ? result.ErrorCode ?? string.Join("; ", result.Validation.Violations) : null;
+        // MatchRecommendation.RefreshAsync runs after persistence and is the
+        // single final authority for both the badge and the persisted ID.
+        workflow.MaterialMatchId = null;
+        request.RecommendedMatchId = null;
+        request.RecommendationReason = awaitingBuyerSelection ? null
+            : result.ErrorCode ?? string.Join("; ", result.Validation.Violations);
         // A workflow recommendation is informative only. It must never create an
         // offer, transaction, or manager queue entry until the buyer confirms it.
         if (false && result.Recommendation is { } rec)
@@ -414,7 +424,7 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
         }
         // Keep every generated candidate available to the buyer, including a
         // route failure. A retry is still explicit through Start Matching.
-        request.Status = BuyerRequestStatus.MATCH_FOUND;
+        request.Status = awaitingBuyerSelection ? BuyerRequestStatus.MATCH_FOUND : BuyerRequestStatus.OPEN;
         foreach (var trace in result.Steps)
         {
             var step = new AgentStep { Id = Guid.NewGuid(), Sequence = trace.Sequence, Stage = trace.Stage,

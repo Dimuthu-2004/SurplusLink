@@ -18,6 +18,17 @@ class MatchAllocation {
   };
 }
 
+class MatchListingContext {
+  const MatchListingContext({this.description, this.templateName, this.specificationsJson, this.photos = const []});
+  final String? description, templateName, specificationsJson;
+  final List<String> photos;
+  factory MatchListingContext.fromJson(Map<String, dynamic> json) => MatchListingContext(
+    description: json['description'] as String?, templateName: json['constructionItemTemplateName'] as String?,
+    specificationsJson: json['specificationsJson'] as String?,
+    photos: (json['photos'] as List? ?? const []).whereType<Map>().map((x) => x['photoUrl']?.toString()).whereType<String>().toList(),
+  );
+}
+
 class RecommendedMatch {
   const RecommendedMatch({
     required this.id,
@@ -55,6 +66,7 @@ class RecommendedMatch {
     this.packageType,
     this.packageSize,
     this.packageCountAvailable,
+    this.listingContext,
     bool? isPartial,
     // ignore: prefer_initializing_formals
   }) : _isPartial = isPartial;
@@ -67,6 +79,7 @@ class RecommendedMatch {
   final String? quantityMode, packageType;
   final double? packageSize;
   final int? packageCountAvailable;
+  final MatchListingContext? listingContext;
   final String? rejectionReason;
   final DateTime createdAt;
   final DateTime? availableUntil, requiredBy;
@@ -82,8 +95,12 @@ class RecommendedMatch {
       rejected == true || status == 'REJECTED' || rejectionReason != null;
   double? get estimatedMaterialCost {
     if (quantity == null || unitPrice == null) return null;
-    final packages = isPackaged ? packageCountFor(quantity!) : null;
-    return (packages ?? quantity!) * unitPrice!;
+    return materialCostFor(quantity!);
+  }
+  double? materialCostFor(double selectedBaseQuantity) {
+    if (unitPrice == null) return null;
+    final packages = isPackaged ? packageCountFor(selectedBaseQuantity) : null;
+    return (packages ?? selectedBaseQuantity) * unitPrice!;
   }
   bool get isSelectable => valid == true && status == 'ROUTED' && !isRejected;
   bool get isPackaged => quantityMode == 'PACKAGE' || quantityMode == 'PIECE';
@@ -158,6 +175,7 @@ class RecommendedMatch {
         packageType: _optionalString(json, 'packageType'),
         packageSize: _number(json, 'packageSize', optional: true),
         packageCountAvailable: _number(json, 'packageCountAvailable', optional: true)?.toInt(),
+        listingContext: json['listingContext'] is Map ? MatchListingContext.fromJson(Map<String, dynamic>.from(json['listingContext'] as Map)) : null,
       );
 }
 

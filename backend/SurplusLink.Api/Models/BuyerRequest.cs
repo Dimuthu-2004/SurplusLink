@@ -24,6 +24,15 @@ public sealed class BuyerRequest : AuditableEntity
 
     public decimal RequiredQuantity { get; set; }
 
+    // RequiredQuantity/Unit are the canonical comparable base requirement.
+    // These fields preserve how the buyer entered it without letting a seller's
+    // package label become the matching unit.
+    public string InputMode { get; set; } = "BASE_QUANTITY";
+    public decimal? EnteredQuantity { get; set; }
+    public string? EnteredUnit { get; set; }
+    public decimal? PreferredPackageSize { get; set; }
+    public string? PackageBaseUnit { get; set; }
+
     public decimal MaximumBudget { get; set; }
 
     public DateTime Deadline { get; set; }

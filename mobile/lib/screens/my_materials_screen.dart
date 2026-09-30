@@ -162,9 +162,14 @@ class _MyMaterialsScreenState extends State<MyMaterialsScreen> {
                     key: Key('material-card-${listing.id}'),
                     title: Text(listing.title),
                     subtitle: Text(
-                      '${listing.categoryName}\n'
-                      'Total Quantity: ${formatMaterialQuantity(listing.quantity, listing.unit)} ${listing.unit}\n'
-                      'Reserved Quantity: ${formatMaterialQuantity(listing.reservedQuantity, listing.unit)} ${listing.unit}\n'
+                      '${listing.categoryName}\n${
+                      listing.quantityMode == 'PACKAGE' || listing.quantityMode == 'PIECE'
+                          ? 'Stock: ${listing.packageCount ?? 0} ${(listing.packageType ?? 'package').toLowerCase()}s\n'
+                            'Reserved: ${listing.reservedPackageCount} ${(listing.packageType ?? 'package').toLowerCase()}s\n'
+                            'Available: ${listing.availablePackageCount ?? 0} ${(listing.packageType ?? 'package').toLowerCase()}s\n'
+                            'Total material: ${formatMaterialQuantity(listing.quantity, listing.baseUnit ?? listing.unit)} ${listing.baseUnit ?? listing.unit}\n'
+                          : 'Total Quantity: ${formatMaterialQuantity(listing.quantity, listing.unit)} ${listing.unit}\n'
+                            'Reserved Quantity: ${formatMaterialQuantity(listing.reservedQuantity, listing.unit)} ${listing.unit}\n'}'
                       'Remaining Stock: ${formatMaterialQuantity(listing.remainingQuantity, listing.unit)} ${listing.unit}\n'
                       '${listing.status} · LKR ${listing.unitPrice.toStringAsFixed(2)}',
                     ),

@@ -36,6 +36,8 @@ class RequirementFormScreen extends StatefulWidget {
 class _RequirementFormScreenState extends State<RequirementFormScreen> {
   final _form = GlobalKey<FormState>();
   final _quantity = TextEditingController();
+  final _packageCount = TextEditingController();
+  final _packageSize = TextEditingController();
   List<String> _units = [];
   final _budget = TextEditingController();
   final _notes = TextEditingController();
@@ -44,6 +46,8 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
   ConstructionItemTemplate? _selectedTemplate;
   final Map<String, dynamic> _preferences = {};
   String? _category, _unit, _error, _locationError, _unitLoadError;
+  String _inputMode = 'BASE_QUANTITY';
+  bool _packageSizeIsOther = false;
   double? _capturedLatitude, _capturedLongitude, _accuracy;
   DateTime _deadline = DateTime.now().add(const Duration(days: 7));
   bool _loadFailed = false;
@@ -65,6 +69,8 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
   void dispose() {
     for (final controller in [
       _quantity,
+      _packageCount,
+      _packageSize,
       _budget,
       _notes,
     ]) {
@@ -105,7 +111,12 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
               if (value is Map<String, dynamic>) _preferences.addAll(value);
             } catch (_) {}
           }
+          _inputMode = row.inputMode;
           _quantity.text = row.requiredQuantity.toString();
+          _packageCount.text = row.inputMode == 'PACKAGE_COUNT' ? (row.enteredQuantity ?? '').toString() : '';
+          _packageSize.text = row.inputMode == 'PACKAGE_COUNT' ? (row.preferredPackageSize ?? '').toString() : '';
+          _packageSizeIsOther = row.inputMode == 'PACKAGE_COUNT' && _selectedTemplate != null &&
+              !_selectedTemplate!.allowedPackageSizes.map((size) => size.toString()).contains(_packageSize.text);
           _unit = row.unit;
           _budget.text = row.maximumBudget.toString();
           _notes.text = row.notes;
@@ -135,13 +146,22 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
   }
 
   void _useTemplate(ConstructionItemTemplate template) {
-    final units = template.allowedUnits.isEmpty ? [template.baseUnit] : template.allowedUnits;
+    final units = template.allowedUnits.where((unit) =>
+        unit.toLowerCase() != template.packageType?.toLowerCase()).toList();
+    if (units.isEmpty) units.add(template.baseUnit);
+    final changed = _selectedTemplate?.id != template.id;
     setState(() {
       _selectedTemplate = template;
       _category = template.categoryId;
       _units = units;
       _unit = units.firstWhere((value) => value.toLowerCase() == template.baseUnit.toLowerCase(), orElse: () => units.first);
       _unitLoadError = null;
+      if (changed) {
+        _inputMode = template.effectiveBuyerInputModes.first;
+        _packageCount.clear();
+        _packageSize.text = template.allowedPackageSizes.length == 1 ? template.allowedPackageSizes.single.toString() : '';
+        _packageSizeIsOther = template.allowedPackageSizes.isEmpty;
+      }
     });
   }
 
@@ -307,10 +327,18 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
       _error = null;
     });
     try {
+      final packageMode = _inputMode == 'PACKAGE_COUNT';
+      final entered = num.parse((packageMode ? _packageCount : _quantity).text.trim());
+      final packageSize = packageMode ? num.tryParse(_packageSize.text.trim()) : null;
+      if (packageMode && (packageSize == null || packageSize <= 0)) {
+        setState(() => _error = 'Select or enter a package size before saving.');
+        return;
+      }
+      final canonicalQuantity = packageMode ? entered * packageSize! : entered;
       final draft = RequirementDraft(
         categoryId: _category!,
-        requiredQuantity: num.parse(_quantity.text.trim()),
-        unit: _unit!,
+        requiredQuantity: canonicalQuantity,
+        unit: _selectedTemplate?.baseUnit ?? _unit!,
         maximumBudget: num.parse(_budget.text.trim()),
         deadline: _deadline,
         latitude: _capturedLatitude!,
@@ -318,11 +346,21 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
         notes: _notes.text,
         constructionItemTemplateId: _selectedTemplate?.id,
         buyerPreferencesJson: _preferences.isEmpty ? null : jsonEncode(_preferences),
+        inputMode: _inputMode,
+        enteredQuantity: entered,
+        enteredUnit: packageMode ? (_selectedTemplate?.packageType ?? 'PACKAGE') : _unit,
+        preferredPackageSize: packageSize,
+        packageBaseUnit: packageMode ? _selectedTemplate?.baseUnit : null,
       );
       final row = _editing
           ? await widget.gateway.update(widget.requirementId!, draft)
           : await widget.gateway.create(draft);
       if (!mounted) return;
+      if (_editing) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Requirement updated.')),
+        );
+      }
       if (_editing && context.canPop()) {
         context.pop(true);
       } else {
@@ -410,14 +448,7 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
                         onChanged: _saving ? null : _onCategoryChanged,
                       ),
                     const SizedBox(height: 16),
-                    _field(
-                      _quantity,
-                      'Required quantity',
-                      'requirement-quantity',
-                      validator: (v) => _positive(v, 3, 15),
-                      numeric: true,
-                    ),
-                    _unitField(),
+                    _requirementQuantityInput(),
                     if (_selectedTemplate != null && _selectedTemplate!.parsedAttributes.where((field) => field.buyerPreference).isNotEmpty) ...[
                       const SizedBox(height: 4),
                       Text(text?.preferencesOptional ?? 'Preferences (optional)', style: Theme.of(context).textTheme.titleMedium),
@@ -432,7 +463,11 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
                                   isExpanded: true,
                                   decoration: InputDecoration(labelText: field.labelFor(Localizations.localeOf(context).languageCode), helperText: field.helper),
                                   hint: const Text('Any / No preference'),
-                                  items: field.options.map((option) => DropdownMenuItem(value: option, child: Text(option))).toList(),
+                                  items: [
+                                    if (field.allowAnyPreference)
+                                      const DropdownMenuItem<String>(value: null, child: Text('Any / No preference')),
+                                    ...field.options.map((option) => DropdownMenuItem(value: option, child: Text(option))),
+                                  ],
                                   onChanged: _saving ? null : (value) => setState(() { if (value == null) { _preferences.remove(field.id); } else { _preferences[field.id] = value; } }),
                                 )
                               : TextFormField(
@@ -527,6 +562,53 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
             ),
           ),
   );
+  }
+
+  Widget _requirementQuantityInput() {
+    final template = _selectedTemplate;
+    final modes = template?.effectiveBuyerInputModes ?? const ['BASE_QUANTITY'];
+    final packageMode = _inputMode == 'PACKAGE_COUNT';
+    final packageUnit = template?.packageType?.toLowerCase() ?? 'packages';
+    final baseUnit = template?.baseUnit ?? _unit ?? '';
+    final packageSize = num.tryParse(_packageSize.text.trim());
+    final count = num.tryParse(_packageCount.text.trim());
+    final equivalent = packageMode && packageSize != null && count != null ? count * packageSize : null;
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      if (modes.length > 1) ...[
+        const Text('How do you want to enter your requirement?', style: TextStyle(fontWeight: FontWeight.w600)),
+        const SizedBox(height: 8),
+        SegmentedButton<String>(
+          segments: modes.map((mode) => ButtonSegment(value: mode, label: Text(mode == 'PACKAGE_COUNT' ? 'By packages' : 'By quantity'))).toList(),
+          selected: {_inputMode},
+          onSelectionChanged: _saving ? null : (value) => setState(() => _inputMode = value.first),
+        ),
+        const SizedBox(height: 16),
+      ],
+      if (packageMode) ...[
+        _field(_packageCount, 'Number of $packageUnit', 'requirement-package-count', validator: (v) {
+          final error = _positive(v, 0, 15);
+          if (error != null) return error;
+          return num.parse(v!.trim()) % 1 == 0 ? null : 'Package count must be a whole number.';
+        }, numeric: true),
+        if (template != null && template.allowedPackageSizes.isNotEmpty)
+          Padding(padding: const EdgeInsets.only(bottom: 16), child: DropdownButtonFormField<String>(
+            key: const Key('requirement-package-size'), initialValue: template.allowedPackageSizes.map((x) => x.toString()).contains(_packageSize.text) ? _packageSize.text : null,
+            decoration: InputDecoration(labelText: 'Package size ($baseUnit each)'),
+            items: [...template.allowedPackageSizes.map((x) => DropdownMenuItem(value: x.toString(), child: Text('$x $baseUnit'))), const DropdownMenuItem(value: 'OTHER', child: Text('Other'))],
+            onChanged: (value) => setState(() {
+              _packageSizeIsOther = value == 'OTHER';
+              _packageSize.text = value == 'OTHER' ? '' : value ?? '';
+            }),
+            validator: (_) => _packageSize.text.trim().isEmpty ? 'Select or enter a package size.' : null,
+          )),
+        if (_packageSizeIsOther || template == null || template.allowedPackageSizes.isEmpty)
+          _field(_packageSize, 'Custom package size ($baseUnit)', 'requirement-package-size-other', validator: (v) => _positive(v, 3, 15), numeric: true),
+        if (equivalent != null) Padding(padding: const EdgeInsets.only(bottom: 16), child: Text('Equivalent requirement: $equivalent $baseUnit', key: const Key('requirement-equivalent'))),
+      ] else ...[
+        _field(_quantity, 'Required quantity', 'requirement-quantity', validator: (v) => _positive(v, 3, 15), numeric: true),
+        _unitField(),
+      ],
+    ]);
   }
 
   Widget _unitField() => Padding(

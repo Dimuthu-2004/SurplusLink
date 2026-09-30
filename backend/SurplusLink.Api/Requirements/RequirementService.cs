@@ -506,11 +506,30 @@ public sealed class RequirementService(
         var category = await db.Categories.SingleOrDefaultAsync(
             x => x.Id == effectiveCategoryId, ct)
             ?? throw new RequirementException(400, "Category does not exist.");
-        var allowedUnits = template?.AllowedUnits ?? category.AllowedUnits;
-        if (!MaterialUnits.Distinct(allowedUnits).Contains(MaterialUnits.Normalize(input.Unit)))
-            throw new RequirementException(400, "Select a valid unit for the chosen item.");
-        if (template is not null && !QuantitySemantics.TryConvert(input.RequiredQuantity, input.Unit, template.BaseUnit, out _))
-            throw new RequirementException(400, "The selected item requires a compatible base measurement.");
+        var enteredQuantity = input.EnteredQuantity ?? input.RequiredQuantity;
+        var enteredUnit = input.EnteredUnit ?? input.Unit;
+        var inputMode = input.InputMode ?? "BASE_QUANTITY";
+        var canonicalBaseUnit = template?.BaseUnit ?? input.PackageBaseUnit ?? input.Unit;
+        // BASE_QUANTITY is retained as the compatibility representation for
+        // historical/API clients. The template policy controls the buyer UI;
+        // explicit non-base modes must be declared by that template.
+        if (template is not null && !inputMode.Equals("BASE_QUANTITY", StringComparison.OrdinalIgnoreCase) &&
+            !QuantitySemantics.ResolveBuyerInputModes(template.BuyerInputModes, template.QuantityMode)
+                .Contains(inputMode, StringComparer.OrdinalIgnoreCase))
+            throw new RequirementException(400, "This item does not support that requirement entry method.");
+        if (!QuantitySemantics.TryNormalizeRequirement(enteredQuantity, enteredUnit, inputMode,
+                input.PreferredPackageSize, input.PackageBaseUnit, canonicalBaseUnit, out _))
+            throw new RequirementException(400, inputMode == "PACKAGE_COUNT"
+                ? "Package count requires a whole count, package size, and compatible base unit."
+                : "The selected item requires a compatible base measurement.");
+        // Only base/continuous inputs are measurement-unit choices. A physical
+        // package label is preserved as entered metadata, never compared with L/kg/m2.
+        if (!inputMode.Equals("PACKAGE_COUNT", StringComparison.OrdinalIgnoreCase))
+        {
+            var allowedUnits = template?.AllowedUnits ?? category.AllowedUnits;
+            if (!MaterialUnits.Distinct(allowedUnits).Contains(MaterialUnits.Normalize(enteredUnit)))
+                throw new RequirementException(400, "Select a valid unit for the chosen item.");
+        }
         return (category, template);
     }
 
@@ -540,16 +559,20 @@ public sealed class RequirementService(
         request.BuyerPreferencesJson = string.IsNullOrWhiteSpace(input.BuyerPreferencesJson)
             ? null
             : input.BuyerPreferencesJson.Trim();
-        if (template is not null && QuantitySemantics.TryConvert(input.RequiredQuantity, input.Unit, template.BaseUnit, out var baseQuantity))
-        {
-            request.RequiredQuantity = baseQuantity;
-            request.Unit = QuantitySemantics.CanonicalUnit(template.BaseUnit);
-        }
-        else
-        {
-            request.RequiredQuantity = input.RequiredQuantity;
-            request.Unit = QuantitySemantics.CanonicalUnit(input.Unit);
-        }
+        var enteredQuantity = input.EnteredQuantity ?? input.RequiredQuantity;
+        var enteredUnit = input.EnteredUnit ?? input.Unit;
+        var inputMode = input.InputMode ?? "BASE_QUANTITY";
+        var canonicalBaseUnit = template?.BaseUnit ?? input.PackageBaseUnit ?? input.Unit;
+        if (!QuantitySemantics.TryNormalizeRequirement(enteredQuantity, enteredUnit, inputMode,
+                input.PreferredPackageSize, input.PackageBaseUnit, canonicalBaseUnit, out var normalized))
+            throw new RequirementException(400, "Requirement quantity could not be normalized.");
+        request.RequiredQuantity = normalized.RequiredBaseQuantity;
+        request.Unit = normalized.BaseUnit;
+        request.InputMode = normalized.InputMode;
+        request.EnteredQuantity = normalized.EnteredQuantity;
+        request.EnteredUnit = normalized.EnteredUnit;
+        request.PreferredPackageSize = normalized.PreferredPackageSize;
+        request.PackageBaseUnit = normalized.PackageBaseUnit;
         request.MaximumBudget = input.MaximumBudget;
         request.Deadline = input.Deadline!.Value.UtcDateTime;
         request.Latitude = input.Latitude is decimal lat ? decimal.Round(lat, 6) : null;

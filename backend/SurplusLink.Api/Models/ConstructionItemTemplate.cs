@@ -22,6 +22,11 @@ public sealed class ConstructionItemTemplate : AuditableEntity
 
     public decimal[] AllowedPackageSizes { get; set; } = [];
 
+    // Explicit buyer-entry policy. Empty legacy rows are resolved by the
+    // quantity-mode defaults in QuantitySemantics; no historic template is
+    // reinterpreted or made seller-specific.
+    public string[] BuyerInputModes { get; set; } = [];
+
     public string AttributeSchema { get; set; } = "[]"; // JSON array of attribute field definitions
 
     public string PriceBasis { get; set; } = "PER_UNIT"; // PER_UNIT, PER_PACKAGE, PER_PIECE, PER_DAY

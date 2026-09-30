@@ -36,6 +36,8 @@ public sealed partial class MatchService(
             .Skip((query.Page - 1) * query.PageSize).Take(query.PageSize)
             .Include(x => x.Listing).ThenInclude(x => x.Category)
             .Include(x => x.Listing).ThenInclude(x => x.Seller)
+            .Include(x => x.Listing).ThenInclude(x => x.Photos)
+            .Include(x => x.Listing).ThenInclude(x => x.ConstructionItemTemplate)
             .Include(x => x.MaterialRequest).ToListAsync(ct);
         return new MatchPage(matches.Select(Response).ToArray(), total, Pages(total, query.PageSize),
             query.Page, query.PageSize, recommendation.RecommendedMatchId, recommendation.RecommendationReason);

@@ -12,6 +12,7 @@ final class TemplateAttributeField {
     this.helper,
     this.priority = 'OPTIONAL',
     this.buyerPreference = false,
+    this.allowAnyPreference = true,
     this.allowOther = false,
     this.labelI18n = const {},
   });
@@ -30,6 +31,7 @@ final class TemplateAttributeField {
       helper: json['helper'] as String?,
       priority: json['priority'] as String? ?? ((json['required'] as bool? ?? false) ? 'REQUIRED' : 'OPTIONAL'),
       buyerPreference: json['buyerPreference'] as bool? ?? false,
+      allowAnyPreference: json['allowAnyPreference'] as bool? ?? true,
       allowOther: json['allowOther'] as bool? ?? false,
       labelI18n: (json['labelI18n'] as Map<String, dynamic>? ?? const {})
           .map((key, value) => MapEntry(key, value.toString())),
@@ -45,7 +47,7 @@ final class TemplateAttributeField {
   final String? unit;
   final String? helper;
   final String priority;
-  final bool buyerPreference, allowOther;
+  final bool buyerPreference, allowAnyPreference, allowOther;
   final Map<String, String> labelI18n;
 
   bool get isRequired => priority == 'REQUIRED' || required;
@@ -64,6 +66,7 @@ final class ConstructionItemTemplate {
     this.packageType,
     this.allowedUnits = const [],
     this.allowedPackageSizes = const [],
+    this.buyerInputModes = const [],
     this.attributeSchema = '[]',
     this.priceBasis = 'PER_UNIT',
     this.isActive = true,
@@ -78,6 +81,8 @@ final class ConstructionItemTemplate {
 
     final rawUnits = json['allowedUnits'] as List<dynamic>? ?? const [];
     final units = rawUnits.map((e) => e.toString()).toList();
+    final inputModes = (json['buyerInputModes'] as List<dynamic>? ?? const [])
+        .map((e) => e.toString().toUpperCase()).toList();
 
     return ConstructionItemTemplate(
       id: json['id'] as String? ?? '',
@@ -90,6 +95,7 @@ final class ConstructionItemTemplate {
       packageType: json['packageType'] as String?,
       allowedUnits: units,
       allowedPackageSizes: sizes,
+      buyerInputModes: inputModes,
       attributeSchema: json['attributeSchema'] as String? ?? '[]',
       priceBasis: json['priceBasis'] as String? ?? 'PER_UNIT',
       isActive: json['isActive'] as bool? ?? true,
@@ -106,6 +112,7 @@ final class ConstructionItemTemplate {
   final String? packageType;
   final List<String> allowedUnits;
   final List<double> allowedPackageSizes;
+  final List<String> buyerInputModes;
   final String attributeSchema;
   final String priceBasis;
   final bool isActive;
@@ -113,6 +120,10 @@ final class ConstructionItemTemplate {
   bool get isPackage => quantityMode == 'PACKAGE';
   bool get isPiece => quantityMode == 'PIECE' || itemClass == 'TOOL' || itemClass == 'EQUIPMENT';
   bool get isContinuous => !isPackage && !isPiece;
+  List<String> get effectiveBuyerInputModes => buyerInputModes.isNotEmpty
+      ? buyerInputModes
+      : isPackage ? const ['BASE_QUANTITY', 'PACKAGE_COUNT']
+      : isPiece ? const ['PIECE_COUNT'] : const ['CONTINUOUS_QUANTITY'];
 
   List<TemplateAttributeField> get parsedAttributes {
     try {
