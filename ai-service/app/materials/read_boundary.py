@@ -43,6 +43,11 @@ class MaterialListingRecord:
     base_equivalent_available_quantity: Decimal | None = None
     maximum_contribution: Decimal | None = None
     full_coverage: bool | None = None
+    # Backend-authoritative normalized measurement.  `unit` is retained for
+    # legacy read boundaries, but agents must use base_unit for compatibility.
+    base_unit: str | None = None
+    minimum_sellable_increment: Decimal | None = None
+    decimal_precision: int | None = None
     template_id: str | None = None
     template_name: str | None = None
     specifications_json: str | None = None

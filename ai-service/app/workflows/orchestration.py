@@ -60,6 +60,9 @@ class ListingSnapshot(Contract):
     baseEquivalentAvailableQuantity: Measurement | None = None
     maximumContribution: Measurement | None = None
     fullCoverage: bool | None = None
+    baseUnit: str | None = None
+    minimumSellableIncrement: Measurement | None = None
+    decimalPrecision: int | None = None
 
 
 class WorkflowRequest(Contract):
@@ -153,7 +156,9 @@ class SnapshotTools:
             is_verified=x.status == "ACTIVE", available_until=x.availableUntil,
             quantity_mode=x.quantityMode or "LEGACY", package_type=x.packageType, package_size=x.packageSize,
             package_count_available=x.packageCountAvailable, base_equivalent_available_quantity=x.baseEquivalentAvailableQuantity,
-            maximum_contribution=x.maximumContribution, full_coverage=x.fullCoverage)
+            maximum_contribution=x.maximumContribution, full_coverage=x.fullCoverage,
+            base_unit=x.baseUnit or x.unit, minimum_sellable_increment=x.minimumSellableIncrement,
+            decimal_precision=x.decimalPrecision)
 
     def search_active_materials(self, criteria):
         return self._call("search_active_materials", {}, lambda: (
@@ -270,6 +275,8 @@ class WorkflowOrchestrator:
     async def _matching(self, state):
         fields = state["planner"].normalizedCriteria.model_dump(mode="json")
         criteria = {k: fields[k] for k in ("buyerUserId", "categoryId", "category", "requiredQuantity", "unit", "maximumBudget", "deadline")}
+        if fields.get("baseUnit"):
+            criteria["baseUnit"] = fields["baseUnit"]
         tools = SnapshotTools(state["request"].listings)
         result = await asyncio.to_thread(MaterialMatchingAgent(tools).match, criteria)
         return (dict(matching=result) if result.status == "ok" else dict(status="REJECTED", errorCode="NO_MATCHING_CANDIDATE"),
@@ -314,7 +321,7 @@ class WorkflowOrchestrator:
         criteria = state["planner"].normalizedCriteria
         value = ValidationInput(matchId=row.matchId, listingId=row.listingId, buyerId=criteria.buyerUserId,
             sellerId=row.sellerId, categoryMatches=row.categoryId == criteria.categoryId,
-            unitMatches=row.unit.casefold() == criteria.unit.casefold(), listingStatus=row.status,
+            unitMatches=(row.baseUnit or row.unit).casefold() == (criteria.baseUnit or criteria.unit).casefold(), listingStatus=row.status,
             availableUntil=row.availableUntil, deadline=criteria.deadline, quantity=criteria.requiredQuantity,
             availableQuantity=row.availableQuantity, unitPrice=row.unitPrice, maximumBudget=criteria.maximumBudget,
             distanceKm=route.distanceKm if route else None, durationMinutes=route.durationMinutes if route else None,

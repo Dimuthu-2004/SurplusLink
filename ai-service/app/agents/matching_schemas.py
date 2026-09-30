@@ -19,6 +19,7 @@ class MatchingRequest(BaseModel):
     category: str | None = Field(default=None, min_length=1, max_length=120)
     requiredQuantity: Decimal = Field(gt=0)
     unit: str = Field(min_length=1, max_length=32)
+    baseUnit: str | None = Field(default=None, min_length=1, max_length=32)
     maximumBudget: Decimal = Field(gt=0)
     deadline: datetime
 
@@ -53,6 +54,9 @@ class Candidate(BaseModel):
     baseEquivalentAvailableQuantity: Decimal | None = None
     maximumContribution: Decimal | None = None
     fullCoverage: bool | None = None
+    baseUnit: str | None = None
+    minimumSellableIncrement: Decimal | None = None
+    decimalPrecision: int | None = None
 
 
 class MatchingFailure(BaseModel):

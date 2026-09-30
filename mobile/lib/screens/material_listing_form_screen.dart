@@ -469,7 +469,10 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
         computedQuantity = ((size * count) * 10000).round() / 10000.0;
         computedPackageType = _selectedTemplate?.packageType ?? _packageType;
         final enteredPrice = double.tryParse(_priceController.text.trim()) ?? 0.0;
-        computedUnitPrice = size > 0 ? enteredPrice / size : enteredPrice;
+        // Package listings store the physical package price. Base-equivalent
+        // quantity is for compatibility only; a 4 L can is never priced as a
+        // fractional can during matching or reservation.
+        computedUnitPrice = enteredPrice;
       } else if (isPc) {
         effectiveQuantityMode = 'PIECE';
         final count = int.tryParse(_quantityController.text.trim()) ?? (int.tryParse(_packageCountController.text.trim()) ?? 1);

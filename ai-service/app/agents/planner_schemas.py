@@ -20,6 +20,7 @@ class RequirementFields(PlannerModel):
     category: str | None = Field(default=None, min_length=1, max_length=120)
     requiredQuantity: Decimal = Field(gt=0, max_digits=18, decimal_places=3, allow_inf_nan=False)
     unit: str = Field(min_length=1, max_length=32)
+    baseUnit: str | None = Field(default=None, min_length=1, max_length=32)
     maximumBudget: Decimal = Field(gt=0, max_digits=18, decimal_places=2, allow_inf_nan=False)
     deadline: AwareDatetime
     notes: str = Field(default="", max_length=2000)

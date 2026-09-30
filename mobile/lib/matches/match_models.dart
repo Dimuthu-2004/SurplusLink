@@ -80,12 +80,22 @@ class RecommendedMatch {
 
   bool get isRejected =>
       rejected == true || status == 'REJECTED' || rejectionReason != null;
-  double? get estimatedMaterialCost =>
-      (quantity != null && unitPrice != null) ? quantity! * unitPrice! : null;
+  double? get estimatedMaterialCost {
+    if (quantity == null || unitPrice == null) return null;
+    final packages = isPackaged ? packageCountFor(quantity!) : null;
+    return (packages ?? quantity!) * unitPrice!;
+  }
   bool get isSelectable => valid == true && status == 'ROUTED' && !isRejected;
   bool get isPackaged => quantityMode == 'PACKAGE' || quantityMode == 'PIECE';
   double get selectionStep => isPackaged ? (packageSize ?? 1) : (quantities.isDiscreteUnit(unit ?? '') ? 1 : .1);
-  int? packageCountFor(double baseQuantity) => isPackaged && packageSize != null ? (baseQuantity / packageSize!).round() : null;
+  int? packageCountFor(double baseQuantity) => isPackaged && packageSize != null
+      ? (baseQuantity / packageSize!).round()
+      : null;
+  bool isWholePackageQuantity(double value) => !isPackaged || packageSize == null ||
+      ((value / packageSize!) - (value / packageSize!).round()).abs() < 0.000001;
+  double packageQuantityFor(double requestedBaseQuantity) => isPackaged && packageSize != null
+      ? (requestedBaseQuantity / packageSize!).ceilToDouble() * packageSize!
+      : requestedBaseQuantity;
 
   bool get isPartial =>
       _isPartial ??

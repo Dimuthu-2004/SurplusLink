@@ -175,8 +175,8 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db, INotificationS
                     match.EstimatedTransportCost is null or < 0 ||
                     match.Listing.AvailableUntil <= DateTime.UtcNow || match.MaterialRequest.Deadline <= DateTime.UtcNow ||
                     match.DurationMinutes > (decimal)(match.MaterialRequest.Deadline - DateTime.UtcNow).TotalMinutes ||
-                    !string.Equals(match.Listing.Unit, match.MaterialRequest.Unit, StringComparison.OrdinalIgnoreCase) ||
-                    match.Listing.UnitPrice * match.MaterialRequest.RequiredQuantity + match.EstimatedTransportCost > match.MaterialRequest.MaximumBudget)
+                    !QuantitySemantics.IsCompatible(match.MaterialRequest, match.Listing) ||
+                    QuantitySemantics.MaterialCost(match.MaterialRequest, match.Listing) + match.EstimatedTransportCost > match.MaterialRequest.MaximumBudget)
                     throw new AgentWorkflowException(409, "The recommendation is no longer eligible. Request a revision.");
 
                 if (MarketplaceMatchPolicy.RejectionReason(match.MaterialRequest.BuyerId, match.Listing.SellerId) is not null)
@@ -290,7 +290,7 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db, INotificationS
                     if (listing.CategoryId != request.CategoryId)
                         throw new AgentWorkflowException(409, $"Listing '{listing.Title}' category does not match requirement.");
 
-                    if (!string.Equals(listing.Unit, request.Unit, StringComparison.OrdinalIgnoreCase))
+                    if (!QuantitySemantics.IsCompatible(request, listing))
                         throw new AgentWorkflowException(409, $"Listing '{listing.Title}' unit does not match requirement.");
 
                     if (MarketplaceMatchPolicy.RejectionReason(request.BuyerId, listing.SellerId) is not null)

@@ -86,7 +86,7 @@ export function TemplateDrivenMaterialForm({
   const [packageSize, setPackageSize] = useState<number>(initialData?.packageSize || 1);
   const [packageCount, setPackageCount] = useState<number>(initialData?.packageCount || 1);
   const [pricePerPackage, setPricePerPackage] = useState<number>(
-    initialData?.pricePerPackage || (initialData?.unitPrice ? initialData.unitPrice * (initialData.packageSize || 1) : 0)
+    initialData?.pricePerPackage || initialData?.unitPrice || 0
   );
 
   // For PIECE mode:
@@ -239,7 +239,9 @@ export function TemplateDrivenMaterialForm({
       finalUnit = selectedTemplate?.baseUnit || customUnit || 'unit';
       finalPackageType = selectedTemplate?.packageType || customPackageTypeName || 'package';
       finalPricePerPackage = pricePerPackage;
-      finalUnitPrice = pricePerPackage / finalPackageSize;
+      // `unitPrice` is the physical package price for PACKAGE mode.  Quantity
+      // remains base-equivalent solely for compatibility/matching.
+      finalUnitPrice = pricePerPackage;
     } else if (effectiveMode === 'PIECE') {
       if (pieceCount <= 0 || pricePerPiece <= 0) {
         reportFieldErrors({ ...(pieceCount <= 0 ? { quantity: t('quantityRequired') } : {}), ...(pricePerPiece <= 0 ? { unitPrice: t('priceRequired') } : {}) });
