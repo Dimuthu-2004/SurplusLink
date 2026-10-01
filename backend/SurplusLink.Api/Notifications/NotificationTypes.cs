@@ -14,4 +14,9 @@ public static class NotificationTypes
     public const string SelectionRejected = "SELECTION_REJECTED";
     public const string SelectionRevisionRequested = "SELECTION_REVISION_REQUESTED";
     public const string SelectionAvailabilityChanged = "SELECTION_AVAILABILITY_CHANGED";
+    public const string TransactionHandoverConfirmed = "TRANSACTION_HANDOVER_CONFIRMED";
+    public const string TransactionCompleted = "TRANSACTION_COMPLETED";
+    public const string TransactionFollowUpRequired = "TRANSACTION_FOLLOW_UP_REQUIRED";
+    public const string TransactionTimedOut = "TRANSACTION_TIMED_OUT";
+    public const string TransactionResolvedByManager = "TRANSACTION_RESOLVED_BY_MANAGER";
 }

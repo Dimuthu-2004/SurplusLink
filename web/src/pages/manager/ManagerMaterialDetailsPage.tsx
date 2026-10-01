@@ -1,6 +1,6 @@
 import { formatLkr } from '../../utils/currency';
 import { formatMaterialQuantity } from '../../features/materials/quantityFormat';
-import { environment } from '../../config/environment';
+import { handleImageError, resolveImageUrl } from '../../utils/imageUrl';
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import {
@@ -96,12 +96,13 @@ export function ManagerMaterialDetailsPage({
           <Detail label="Seller phone" value={listing.seller?.phoneNumber || 'Not provided'} />
           <Detail label="Condition" value={listing.condition} />
           <Detail label="Item" value={listing.constructionItemTemplateName || (listing.isCustomPendingReview ? 'Custom item (manager review)' : listing.title)} />
-          <Detail label="Physical stock" value={stockSummary(listing)} />
+          <Detail label="Total stock" value={stockSummary(listing, 'total')} />
+          <Detail label="Reserved" value={stockSummary(listing, 'reserved')} />
+          <Detail label="Available stock" value={stockSummary(listing, 'available')} />
           {listing.quantityMode === 'PACKAGE' || listing.quantityMode === 'PIECE' ? <>
             <Detail label="Package size" value={listing.packageSize ? `${formatMaterialQuantity(listing.packageSize, listing.baseUnit || listing.unit)} ${listing.baseUnit || listing.unit} / ${listing.packageType?.toLowerCase() || 'package'}` : 'Not recorded'} />
             <Detail label="Base-equivalent quantity" value={`${formatMaterialQuantity(listing.quantity, listing.baseUnit || listing.unit)} ${listing.baseUnit || listing.unit}`} />
-          </> : <Detail label="Quantity" value={`${formatMaterialQuantity(listing.quantity, listing.unit)} ${listing.unit}`} />}
-          <Detail label="Reserved" value={`${formatMaterialQuantity(listing.reservedQuantity, listing.unit)} ${listing.unit}`} />
+          </> : null}
           <Detail label="Price" value={`${formatPrice(listing.unitPrice)} / ${listing.quantityMode === 'PACKAGE' || listing.quantityMode === 'PIECE' ? (listing.packageType?.toLowerCase() || 'item') : listing.unit}`} />
           <Detail label="Available until" value={formatDate(listing.availableUntil)} />
           <Detail label="Created" value={formatDate(listing.createdAtUtc)} />
@@ -111,7 +112,7 @@ export function ManagerMaterialDetailsPage({
         {specificationRows(listing.specificationsJson).length > 0 && <dl className="detail-grid">{specificationRows(listing.specificationsJson).map(([label, value]) => <Detail key={label} label={label} value={value} />)}</dl>}
         {listing.photos.length > 0 && (
           <div className="photo-grid" aria-label="Listing photos">
-            {listing.photos.map((photo, index) => <button className="listing-photo-button" type="button" key={photo.id} onClick={() => setPhotoIndex(index)}><img src={new URL(photo.photoUrl, environment.apiBaseUrl).toString()} alt={`View ${listing.title} photo ${index + 1}`} /></button>)}
+            {listing.photos.map((photo, index) => <button className="listing-photo-button" type="button" key={photo.id} onClick={() => setPhotoIndex(index)}><img src={resolveImageUrl(photo.photoUrl)} onError={handleImageError} alt={`View ${listing.title} photo ${index + 1}`} /></button>)}
           </div>
         )}
         {canVerify && (
@@ -151,16 +152,16 @@ function ListingPhotoViewer({ listing, index, onClose, onChange }: { listing: Ma
     <div className="listing-lightbox-content" onMouseDown={event => event.stopPropagation()}>
       <button className="listing-lightbox-close" type="button" onClick={onClose} aria-label="Close photo viewer">Close</button>
       {listing.photos.length > 1 && <button className="listing-lightbox-nav previous" type="button" onClick={() => onChange((index - 1 + listing.photos.length) % listing.photos.length)} aria-label="Previous photo">Previous</button>}
-      <img src={new URL(photo.photoUrl, environment.apiBaseUrl).toString()} alt={`${listing.title} photo ${index + 1}`} />
+      <img src={resolveImageUrl(photo.photoUrl)} onError={handleImageError} alt={`${listing.title} photo ${index + 1}`} />
       {listing.photos.length > 1 && <button className="listing-lightbox-nav next" type="button" onClick={() => onChange((index + 1) % listing.photos.length)} aria-label="Next photo">Next</button>}
       <p>{index + 1} of {listing.photos.length}</p>
     </div>
   </div>;
 }
 
-function stockSummary(listing: MaterialListing): string {
-  if (listing.quantityMode === 'PACKAGE' || listing.quantityMode === 'PIECE') return `${(listing.packageCount ?? 0) - (listing.reservedPackageCount ?? 0)} ${listing.packageType?.toLowerCase() || 'items'} available`;
-  return `${formatMaterialQuantity(listing.quantity - listing.reservedQuantity, listing.unit)} ${listing.unit} available`;
+function stockSummary(listing: MaterialListing, kind: 'total' | 'reserved' | 'available'): string {
+  if (listing.quantityMode === 'PACKAGE' || listing.quantityMode === 'PIECE') { const total = listing.packageCount ?? 0; const reserved = listing.reservedPackageCount ?? 0; return `${kind === 'total' ? total : kind === 'reserved' ? reserved : total - reserved} ${listing.packageType?.toLowerCase() || 'items'}`; }
+  return `${formatMaterialQuantity(kind === 'total' ? listing.quantity : kind === 'reserved' ? listing.reservedQuantity : (listing.availableQuantity ?? listing.quantity - listing.reservedQuantity), listing.unit)} ${listing.unit}`;
 }
 
 function specificationRows(value?: string | null): [string, string][] {

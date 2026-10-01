@@ -877,7 +877,8 @@ public sealed class MaterialInventoryService(
         listing.ConstructionItemTemplateId,
         listing.ConstructionItemTemplate?.Name,
         listing.SpecificationsJson,
-        listing.IsCustomPendingReview);
+        listing.IsCustomPendingReview,
+        Math.Max(0, listing.Quantity - listing.ReservedQuantity));
 
     private static MaterialCategoryResponse ToResponse(Category category) =>
         new(category.Id, category.Name, category.CreatedAtUtc, category.UpdatedAtUtc, MaterialUnits.Distinct(category.AllowedUnits));

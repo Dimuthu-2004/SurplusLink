@@ -11,10 +11,15 @@ public enum OfferStatus
 public enum TransactionStatus
 {
     PENDING_APPROVAL,
+    // APPROVED is the existing persisted waiting-for-seller state. Keeping the
+    // name avoids a breaking change for current clients and historic records.
     APPROVED,
     REJECTED,
     COMPLETED,
-    HANDED_OVER
+    // HANDED_OVER is the existing persisted waiting-for-buyer state.
+    HANDED_OVER,
+    NOT_COMPLETED,
+    MANAGER_REVIEW_REQUIRED
 }
 
 public sealed class Offer : AuditableEntity
@@ -47,7 +52,16 @@ public sealed class Transaction : AuditableEntity
     public decimal TotalValue { get; set; }
     public decimal ReservedQuantity { get; set; }
     public TransactionStatus Status { get; set; }
+    public DateTime? ManagerApprovedAtUtc { get; set; }
+    public DateTime? ConfirmationDeadlineUtc { get; set; }
+    public DateTime? SellerHandoverConfirmedAtUtc { get; set; }
+    public DateTime? BuyerReceivedConfirmedAtUtc { get; set; }
     public DateTime? CompletedAtUtc { get; set; }
+    public Guid? ResolvedByManagerId { get; set; }
+    public DateTime? ResolvedAtUtc { get; set; }
+    public string? ResolutionNote { get; set; }
+    public string? ResolutionReasonCode { get; set; }
+    public DateTime? FollowUpNotifiedAtUtc { get; set; }
     public uint Version { get; set; }
     public Offer Offer { get; set; } = null!;
     public User Buyer { get; set; } = null!;

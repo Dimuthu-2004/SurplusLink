@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using SurplusLink.Api.Data;
 using SurplusLink.Api.Materials;
 using SurplusLink.Api.Models;
@@ -6,7 +7,8 @@ using SurplusLink.Api.Notifications;
 
 namespace SurplusLink.Api.Workflows;
 
-public sealed class AgentWorkflowService(SurplusLinkDbContext db, INotificationService? notifications = null)
+public sealed class AgentWorkflowService(SurplusLinkDbContext db, INotificationService? notifications = null,
+    IOptions<SurplusLink.Api.Transactions.TransactionConfirmationOptions>? confirmations = null)
 {
     public async Task<(IReadOnlyList<AgentWorkflowListItem> Items, int Total)> ListAsync(WorkflowQuery input, CancellationToken ct)
     {
@@ -347,6 +349,7 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db, INotificationS
                             Id = Guid.NewGuid(),
                             ListingId = listing.Id,
                             MaterialRequestId = request.Id,
+                            TransactionId = txRow.Id,
                             Quantity = allocatedQty,
                             PackageCount = txRow.PackageCount,
                             Status = ReservationStatus.ACTIVE
@@ -385,6 +388,20 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db, INotificationS
         await UpdateParticipationAsync(workflow, managerId,
             decision == ApprovalDecision.APPROVED ? OfferStatus.ACCEPTED : OfferStatus.REJECTED,
             decision == ApprovalDecision.APPROVED ? TransactionStatus.APPROVED : TransactionStatus.REJECTED, ct);
+        if (decision == ApprovalDecision.APPROVED)
+        {
+            var approvedAt = DateTime.UtcNow;
+            // The deadline is set from server configuration by the transaction
+            // service worker/options, never from a buyer requirement deadline.
+            var windowDays = confirmations?.Value.WindowDays ?? 30;
+            foreach (var row in db.ChangeTracker.Entries<Transaction>().Where(x => x.State == EntityState.Modified && x.Entity.Status == TransactionStatus.APPROVED))
+            {
+                row.Entity.ManagerApprovedAtUtc = approvedAt;
+                row.Entity.ConfirmationDeadlineUtc = approvedAt.AddDays(windowDays);
+                db.AuditLogs.Add(new AuditLog { Id = Guid.NewGuid(), ActorUserId = managerId,
+                    EntityType = nameof(Transaction), EntityId = row.Entity.Id, Action = "TRANSACTION_APPROVED_STOCK_RESERVED" });
+            }
+        }
 
         workflow.Decision = cleanNote;
         if (workflow.MaterialRequestId is Guid outcomeRequestId)
@@ -443,7 +460,7 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db, INotificationS
                 allocation.SellerId,
                 NotificationTypes.StockReservedForBuyer,
                 "Stock reserved for a buyer",
-                $"{allocation.Material}: {allocation.Quantity} {allocation.Unit} was reserved for a buyer.",
+                $"{allocation.Material}: {allocation.Quantity} {allocation.Unit} was reserved. Confirm Handed Over after giving the items to the buyer.",
                 NotificationContext.SELLER,
                 NotificationPriority.ACTION_REQUIRED,
                 nameof(Listing),

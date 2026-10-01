@@ -12,5 +12,7 @@ public sealed class AuditLog : AuditableEntity
 
     public string Action { get; set; } = string.Empty;
 
+    public string? Note { get; set; }
+
     public User? ActorUser { get; set; }
 }

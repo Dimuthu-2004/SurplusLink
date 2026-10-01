@@ -98,7 +98,8 @@ public sealed record MaterialListingResponse(
     Guid? ConstructionItemTemplateId = null,
     string? ConstructionItemTemplateName = null,
     string? SpecificationsJson = null,
-    bool IsCustomPendingReview = false);
+    bool IsCustomPendingReview = false,
+    decimal? AvailableQuantity = null);
 
 public sealed class MaterialCategoryRequest
 {

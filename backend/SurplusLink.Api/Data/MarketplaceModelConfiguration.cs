@@ -345,6 +345,8 @@ public static class MarketplaceModelConfiguration
             entity.HasIndex(reservation => reservation.ListingId).HasDatabaseName("IX_Reservations_ListingId");
             entity.HasIndex(reservation => reservation.MaterialRequestId)
                 .HasDatabaseName("IX_Reservations_MaterialRequestId");
+            entity.HasIndex(reservation => reservation.TransactionId)
+                .HasDatabaseName("IX_Reservations_TransactionId");
             entity.HasOne(reservation => reservation.Listing)
                 .WithMany()
                 .HasForeignKey(reservation => reservation.ListingId)
@@ -435,6 +437,7 @@ public static class MarketplaceModelConfiguration
             entity.HasKey(audit => audit.Id).HasName("PK_AuditLogs");
             entity.Property(audit => audit.EntityType).HasMaxLength(120).IsRequired();
             entity.Property(audit => audit.Action).HasMaxLength(120).IsRequired();
+            entity.Property(audit => audit.Note).HasMaxLength(500);
             entity.HasIndex(audit => new { audit.EntityType, audit.EntityId, audit.CreatedAtUtc })
                 .HasDatabaseName("IX_AuditLogs_EntityType_EntityId_CreatedAtUtc");
             entity.HasOne(audit => audit.ActorUser)
@@ -485,11 +488,14 @@ public static class MarketplaceModelConfiguration
             entity.Property(transaction => transaction.PackageCount);
             entity.Property(transaction => transaction.TotalValue).HasPrecision(18, 2);
             entity.Property(transaction => transaction.ReservedQuantity).HasPrecision(18, 3);
+            entity.Property(transaction => transaction.ResolutionNote).HasMaxLength(500);
+            entity.Property(transaction => transaction.ResolutionReasonCode).HasMaxLength(80);
             entity.Property(transaction => transaction.Version).IsRowVersion();
             entity.HasIndex(transaction => new { transaction.Status, transaction.CreatedAtUtc }).HasDatabaseName("IX_Transactions_Status_CreatedAtUtc");
             entity.HasIndex(transaction => transaction.BuyerId).HasDatabaseName("IX_Transactions_BuyerId");
             entity.HasIndex(transaction => transaction.SellerId).HasDatabaseName("IX_Transactions_SellerId");
             entity.HasIndex(transaction => transaction.ApprovalWorkflowId).HasDatabaseName("IX_Transactions_ApprovalWorkflowId");
+            entity.HasIndex(transaction => new { transaction.Status, transaction.ConfirmationDeadlineUtc }).HasDatabaseName("IX_Transactions_Status_ConfirmationDeadlineUtc");
             entity.HasOne(transaction => transaction.Offer).WithMany().HasForeignKey(transaction => transaction.OfferId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(transaction => transaction.Buyer).WithMany().HasForeignKey(transaction => transaction.BuyerId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(transaction => transaction.Seller).WithMany().HasForeignKey(transaction => transaction.SellerId).OnDelete(DeleteBehavior.Restrict);

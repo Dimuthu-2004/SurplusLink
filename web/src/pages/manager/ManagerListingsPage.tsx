@@ -203,7 +203,7 @@ export function ManagerListingsPage({
           <div className="table-scroll">
             <table>
               <thead>
-                <tr><th>Title</th><th>Category</th><th>Status</th><th>Quantity</th><th>Unit price</th><th>Available until</th><th /></tr>
+                <tr><th>Title</th><th>Category</th><th>Status</th><th>Available stock</th><th>Unit price</th><th>Available until</th><th /></tr>
               </thead>
               <tbody>
                 {result.items.map((listing) => (

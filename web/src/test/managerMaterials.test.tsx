@@ -4,6 +4,8 @@ import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { ManagerCategoriesPage } from '../pages/manager/ManagerCategoriesPage';
 import { ManagerListingsPage } from '../pages/manager/ManagerListingsPage';
+import { ManagerMaterialDetailsPage } from '../pages/manager/ManagerMaterialDetailsPage';
+import { Routes, Route } from 'react-router-dom';
 import type {
   InventoryAnalytics,
   ManagerMaterialsApi,
@@ -34,6 +36,18 @@ const listing: MaterialListing = {
 };
 
 describe('manager Material UI', () => {
+  it('renders total, reserved and available stock without a duplicate quantity card', async () => {
+    const api = fakeApi();
+    api.getListing.mockResolvedValue({ ...listing, quantity: 100, reservedQuantity: 25, availableQuantity: 75 });
+    render(<MemoryRouter initialEntries={['/app/manager/materials/' + listing.id]}><Routes><Route path="/app/manager/materials/:listingId" element={<ManagerMaterialDetailsPage api={api} />} /></Routes></MemoryRouter>);
+    expect(await screen.findByText('Total stock')).toBeInTheDocument();
+    expect(screen.getByText('Reserved')).toBeInTheDocument();
+    expect(screen.getByText('Available stock')).toBeInTheDocument();
+    expect(screen.getByText('100 pieces')).toBeInTheDocument();
+    expect(screen.getByText('25 pieces')).toBeInTheDocument();
+    expect(screen.getByText('75 pieces')).toBeInTheDocument();
+    expect(screen.queryByText('Quantity')).not.toBeInTheDocument();
+  });
   it('shows server duplicate and in-use category messages without removing the category', async () => {
     const api = fakeApi();
     vi.mocked(api.getCategories).mockResolvedValue([{ id: 'c1', name: 'Tiles', allowedUnits: ['pcs'], createdAtUtc: '', updatedAtUtc: '' }]);
@@ -150,6 +164,7 @@ function page(items: MaterialListing[], pageNumber: number, totalPages: number):
 
 function fakeApi(): ManagerMaterialsApi & {
   listListings: ReturnType<typeof vi.fn>;
+  getListing: ReturnType<typeof vi.fn>;
   createCategory: ReturnType<typeof vi.fn>;
 } {
   const analytics: InventoryAnalytics = {
@@ -172,6 +187,7 @@ function fakeApi(): ManagerMaterialsApi & {
     getAnalytics: vi.fn().mockResolvedValue(analytics),
   } as unknown as ManagerMaterialsApi & {
     listListings: ReturnType<typeof vi.fn>;
+    getListing: ReturnType<typeof vi.fn>;
     createCategory: ReturnType<typeof vi.fn>;
   };
 }

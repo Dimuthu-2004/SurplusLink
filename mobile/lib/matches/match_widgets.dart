@@ -119,9 +119,11 @@ class MatchListCard extends StatelessWidget {
     final isFailed = isRejected || isRouteFailed;
 
     // Coordinates are routing data, not a buyer-facing address.
-    final locationLabel = match.sellerAddress != null && match.sellerAddress!.trim().isNotEmpty
-        ? match.sellerAddress!.trim()
-        : (match.latitude != null && match.longitude != null ? 'Location available' : null);
+    final locationLabel = match.displayLocation != null && match.displayLocation!.trim().isNotEmpty
+        ? match.displayLocation!.trim()
+        : (match.sellerAddress != null && match.sellerAddress!.trim().isNotEmpty
+            ? match.sellerAddress!.trim()
+            : (match.latitude != null && match.longitude != null ? 'Location available' : null));
 
     // Distance: max 1 decimal, e.g. "27.5 km away"
     final distanceLabel = match.distance != null
