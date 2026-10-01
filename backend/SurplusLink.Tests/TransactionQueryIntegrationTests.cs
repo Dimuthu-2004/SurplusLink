@@ -116,8 +116,9 @@ public sealed class TransactionQueryIntegrationTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Forbidden, (await manager.PostAsync($"/api/transactions/{seeded.Pending.Id}/complete", null)).StatusCode);
         using var seller = fixture.Client(app, fixture.Seller, "SELLER");
         Assert.Equal(HttpStatusCode.OK, (await seller.PostAsync($"/api/transactions/{seeded.Pending.Id}/handover", null)).StatusCode);
-        var completed = await buyer.PostAsync($"/api/transactions/{seeded.Pending.Id}/confirm-receipt", null);
+        using var completed = await buyer.PostAsync($"/api/transactions/{seeded.Pending.Id}/confirm-receipt", null);
         Assert.Equal(HttpStatusCode.OK, completed.StatusCode);
+        Assert.Equal(0, (await completed.Content.ReadFromJsonAsync<TransactionResponse>())!.ReservedQuantity);
 
         var history = await manager.GetFromJsonAsync<TransactionHistoryPage>(
             $"/api/transactions/{seeded.Pending.Id}/history?pageSize=10");
@@ -127,7 +128,6 @@ public sealed class TransactionQueryIntegrationTests : IAsyncLifetime
         var summary = await manager.GetFromJsonAsync<TransactionAnalyticsSummary>("/api/transactions/analytics/summary");
         Assert.True(summary!.CompletionCount >= 1);
         Assert.True(summary.CompletedValue >= seeded.Pending.TotalValue);
-        Assert.True(summary.ReservedQuantity >= seeded.Pending.Quantity);
     }
 
     [PostgresFact]

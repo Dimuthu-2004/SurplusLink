@@ -332,8 +332,8 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db, INotificationS
                     var listing = match.Listing;
                     var allocatedQty = txRow.Quantity;
 
-                    var existing = await db.Reservations.AnyAsync(x => x.ListingId == listing.Id &&
-                        x.MaterialRequestId == request.Id && x.Status != ReservationStatus.RELEASED &&
+                    var existing = await db.Reservations.AnyAsync(x => x.TransactionId == txRow.Id &&
+                        x.Status != ReservationStatus.RELEASED &&
                         x.Status != ReservationStatus.CANCELLED, ct);
 
                     if (!existing)
