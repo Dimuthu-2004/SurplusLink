@@ -21,6 +21,7 @@ import 'package:mobile/materials/material_models.dart';
 import 'package:mobile/materials/construction_item_template_models.dart';
 import 'package:mobile/widgets/construction_item_picker.dart';
 import 'package:mobile/widgets/location_picker.dart';
+import 'package:mobile/widgets/submission_animation_overlays.dart';
 
 class MaterialListingFormScreen extends StatefulWidget {
   const MaterialListingFormScreen({
@@ -188,9 +189,15 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
         } catch (_) {}
       }
       if (foundTemplate != null && foundTemplate.name.toLowerCase().contains('tile')) {
-        if (loadedSpecs['widthMm'] != null) _tileWidthController.text = loadedSpecs['widthMm'].toString();
-        if (loadedSpecs['heightMm'] != null) _tileHeightController.text = loadedSpecs['heightMm'].toString();
-        if (loadedSpecs['piecesPerBox'] != null) _tilesPerBoxController.text = loadedSpecs['piecesPerBox'].toString();
+        if (loadedSpecs['widthMm'] != null) {
+          _tileWidthController.text = loadedSpecs['widthMm'].toString();
+        }
+        if (loadedSpecs['heightMm'] != null) {
+          _tileHeightController.text = loadedSpecs['heightMm'].toString();
+        }
+        if (loadedSpecs['piecesPerBox'] != null) {
+          _tilesPerBoxController.text = loadedSpecs['piecesPerBox'].toString();
+        }
       }
       setState(() {
         _selectedTemplate = foundTemplate;
@@ -563,12 +570,35 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
           ? await widget.gateway.update(draftId, draft)
           : await widget.gateway.create(draft);
       _savedDraftId = saved.id;
-      if (submit) await widget.gateway.publish(saved.id);
+      final published = submit ? await widget.gateway.publish(saved.id) : null;
+      if (published != null && published.status != 'PENDING_VERIFICATION') {
+        if (mounted) {
+          setState(() {
+            _error = 'Your listing could not be submitted for manager review.';
+          });
+        }
+        return;
+      }
       if (mounted) {
-        if (widget.isEditing && context.canPop()) {
-          context.pop(true);
+        if (submit) {
+          await showSubmittedAnimationOverlay(
+            context,
+            title: widget.isEditing
+                ? _text.listingResubmitted
+                : _text.listingSubmitted,
+            message: widget.isEditing
+                ? _text.listingResubmittedMessage
+                : _text.listingSubmittedMessage,
+          );
+          if (!mounted) return;
+          context.go('/materials');
         } else {
-          context.go('/materials/${saved.id}');
+          _showMessage(_text.draftSaved);
+          if (widget.isEditing && context.canPop()) {
+            context.pop(true);
+          } else {
+            context.go('/materials/${saved.id}');
+          }
         }
       }
     } on ApiException catch (error) {

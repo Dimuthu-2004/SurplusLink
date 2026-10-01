@@ -26,4 +26,19 @@
   "wholeNumberRequired": "බිංදුවට වඩා වැඩි පූර්ණ සංඛ්‍යාවක් ඇතුළත් කරන්න.",
   "futureDateRequired": "ඉදිරි දිනයක් තෝරන්න.",
   "anyPreference": "ඕනෑම / විශේෂ කැමැත්තක් නැත"
+  ,"draftSaved": "කෙටුම්පත සුරකින ලදී"
+  ,"listingSubmitted": "ලැයිස්තුගත කිරීම ඉදිරිපත් කරන ලදී"
+  ,"listingSubmittedMessage": "ඔබගේ ද්‍රව්‍යය කළමනාකරු සමාලෝචනයට යොමු කරන ලදී."
+  ,"listingResubmitted": "ලැයිස්තුගත කිරීම නැවත ඉදිරිපත් කරන ලදී"
+  ,"listingResubmittedMessage": "ඔබගේ යාවත්කාලීන ලැයිස්තුගත කිරීම කළමනාකරු සමාලෝචනයට යොමු කරන ලදී."
+  ,"requirementSubmitted": "අවශ්‍යතාව ඉදිරිපත් කරන ලදී"
+  ,"requirementSubmittedMessage": "ඔබගේ අවශ්‍යතාව ගැළපීම් සඳහා සූදානම්ය."
+  ,"selectionSubmitted": "තේරීම ඉදිරිපත් කරන ලදී"
+  ,"selectionSubmittedMessage": "ඔබ තෝරාගත් විකුණුම්කරුවන් කළමනාකරු අනුමැතිය සඳහා යොමු කරන ලදී."
+  ,"findingSuitableMatches": "සුදුසු ගැළපීම් සොයමින්..."
+  ,"matchingWorkflowMessage": "අපගේ ගැළපීම් කාර්ය ප්‍රවාහය පවතින විකුණුම්කරුවන් පරීක්ෂා කරයි."
+  ,"stillWorkingOnMatches": "ඔබගේ ගැළපීම් තවමත් සකසමින්..."
+  ,"matchingCouldNotComplete": "ගැළපීම් සම්පූර්ණ කළ නොහැකි විය."
+  ,"retryMatching": "ගැළපීම නැවත උත්සාහ කරන්න"
+  ,"workflowRunning": "ගැළපීම ක්‍රියාත්මක වේ. තත්ත්වය ස්වයංක්‍රීයව යාවත්කාලීන වේ."
 }

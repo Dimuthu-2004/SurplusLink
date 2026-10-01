@@ -316,7 +316,9 @@ class _OfferThumbnail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final raw = offer.listingPhotoUrl;
-    if (raw == null || raw.isEmpty) return SizedBox(width: size, height: size, child: const DecoratedBox(decoration: BoxDecoration(color: Color(0xffeef2f0)), child: Icon(Icons.inventory_2_outlined)));
+    if (raw == null || raw.isEmpty) {
+      return SizedBox(width: size, height: size, child: const DecoratedBox(decoration: BoxDecoration(color: Color(0xffeef2f0)), child: Icon(Icons.inventory_2_outlined)));
+    }
     final parsed = Uri.tryParse(raw);
     final url = parsed != null && parsed.hasScheme ? raw : AppConfig.apiBaseUri.resolve(raw).toString();
     return ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(url, width: size, height: size, fit: BoxFit.cover, errorBuilder: (_, _, _) => SizedBox(width: size, height: size, child: const Icon(Icons.broken_image_outlined))));
@@ -457,9 +459,6 @@ class _OfferTransactionDetailsState extends State<OfferTransactionDetails> {
               _DetailLine(label: 'Status', value: offerStatusLabel(row.status)),
               _DetailLine(label: 'Reserved quantity', value: row.reservedQuantity.toStringAsFixed(2)),
               _DetailLine(label: 'Total value', value: 'LKR ${row.totalValue.toStringAsFixed(2)}'),
-              if (row.confirmationDeadline != null) _DetailLine(label: 'Confirmation deadline', value: row.confirmationDeadline!.toLocal().toString()),
-              _DetailLine(label: 'Seller handover', value: row.sellerHandoverConfirmedAt == null ? 'Waiting for Seller to confirm handover.' : 'Handed over on ${row.sellerHandoverConfirmedAt!.toLocal()}'),
-              _DetailLine(label: 'Buyer receipt', value: row.buyerReceivedConfirmedAt == null ? (row.sellerHandoverConfirmedAt == null ? 'Not available yet' : 'Waiting for Buyer to confirm receipt.') : 'Received on ${row.buyerReceivedConfirmedAt!.toLocal()}'),
             ],
           ),
           if (!row.contactsVisible)
@@ -471,22 +470,23 @@ class _OfferTransactionDetailsState extends State<OfferTransactionDetails> {
             if (contact.phoneNumber case final phone? when phone.trim().isNotEmpty)
               FilledButton.icon(
                 icon: const Icon(Icons.phone),
-                label: Text(row!.buyerId == widget.user.id ? 'Call Seller' : 'Call Buyer'),
+                label: Text(row.buyerId == widget.user.id ? 'Call Seller' : 'Call Buyer'),
                 onPressed: () => launchUrl(Uri(scheme: 'tel', path: phone)),
               ),
           ],
           if (row.canHandover(widget.user))
             FilledButton(
               onPressed: busy ? null : () => act(true),
-              child: const Text('Handed Over'),
+              child: const Text('Material Handed Over'),
             ),
           if (row.canConfirmReceipt(widget.user)) ...[
+            const Text('Have you received the materials?'),
             FilledButton(
               onPressed: busy ? null : () => act(false),
-              child: const Text('Received'),
+              child: const Text('Yes, Received'),
             ),
           ],
-          if (row.status == 'APPROVED' && row.buyerId == widget.user.id && row.sellerHandoverConfirmedAt == null)
+          if (row.status == 'APPROVED' && row.buyerId == widget.user.id)
             const Text('Waiting for the seller to hand over the materials.'),
           if (row.status == 'HANDED_OVER' && row.sellerId == widget.user.id)
             const Text('Waiting for the buyer to confirm receipt.'),

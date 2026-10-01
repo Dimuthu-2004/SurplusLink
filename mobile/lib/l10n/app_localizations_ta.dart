@@ -88,4 +88,57 @@ class AppLocalizationsTa extends AppLocalizations {
 
   @override
   String get anyPreference => 'ஏதேனும் / விருப்பம் இல்லை';
+
+  @override
+  String get draftSaved => 'வரைவு சேமிக்கப்பட்டது';
+
+  @override
+  String get listingSubmitted => 'பட்டியல் சமர்ப்பிக்கப்பட்டது';
+
+  @override
+  String get listingSubmittedMessage =>
+      'உங்கள் பொருள் மேலாளர் மதிப்பாய்வுக்கு அனுப்பப்பட்டது.';
+
+  @override
+  String get listingResubmitted => 'பட்டியல் மீண்டும் சமர்ப்பிக்கப்பட்டது';
+
+  @override
+  String get listingResubmittedMessage =>
+      'உங்கள் புதுப்பிக்கப்பட்ட பட்டியல் மேலாளர் மதிப்பாய்வுக்கு அனுப்பப்பட்டது.';
+
+  @override
+  String get requirementSubmitted => 'தேவை சமர்ப்பிக்கப்பட்டது';
+
+  @override
+  String get requirementSubmittedMessage =>
+      'உங்கள் தேவை பொருத்தத்திற்குத் தயாராக உள்ளது.';
+
+  @override
+  String get selectionSubmitted => 'தேர்வு சமர்ப்பிக்கப்பட்டது';
+
+  @override
+  String get selectionSubmittedMessage =>
+      'நீங்கள் தேர்ந்தெடுத்த விற்பனையாளர்கள் மேலாளர் ஒப்புதலுக்கு அனுப்பப்பட்டனர்.';
+
+  @override
+  String get findingSuitableMatches =>
+      'பொருத்தமான பொருத்தங்களைக் கண்டறிகிறது...';
+
+  @override
+  String get matchingWorkflowMessage =>
+      'எங்கள் பொருத்தப் பணிப்பாய்வு கிடைக்கும் விற்பனையாளர்களைச் சரிபார்க்கிறது.';
+
+  @override
+  String get stillWorkingOnMatches =>
+      'உங்கள் பொருத்தங்களில் இன்னும் பணிபுரிகிறது...';
+
+  @override
+  String get matchingCouldNotComplete => 'பொருத்தத்தை முடிக்க முடியவில்லை.';
+
+  @override
+  String get retryMatching => 'பொருத்தத்தை மீண்டும் முயற்சிக்கவும்';
+
+  @override
+  String get workflowRunning =>
+      'பொருத்தம் செயல்பாட்டில் உள்ளது. நிலை தானாகப் புதுப்பிக்கப்படும்.';
 }

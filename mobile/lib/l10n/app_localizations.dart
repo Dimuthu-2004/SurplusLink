@@ -255,6 +255,96 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Any / No preference'**
   String get anyPreference;
+
+  /// No description provided for @draftSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Draft saved'**
+  String get draftSaved;
+
+  /// No description provided for @listingSubmitted.
+  ///
+  /// In en, this message translates to:
+  /// **'Listing submitted'**
+  String get listingSubmitted;
+
+  /// No description provided for @listingSubmittedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Your material was sent for manager review.'**
+  String get listingSubmittedMessage;
+
+  /// No description provided for @listingResubmitted.
+  ///
+  /// In en, this message translates to:
+  /// **'Listing resubmitted'**
+  String get listingResubmitted;
+
+  /// No description provided for @listingResubmittedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Your updated listing was sent for manager review.'**
+  String get listingResubmittedMessage;
+
+  /// No description provided for @requirementSubmitted.
+  ///
+  /// In en, this message translates to:
+  /// **'Requirement submitted'**
+  String get requirementSubmitted;
+
+  /// No description provided for @requirementSubmittedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Your requirement is ready for matching.'**
+  String get requirementSubmittedMessage;
+
+  /// No description provided for @selectionSubmitted.
+  ///
+  /// In en, this message translates to:
+  /// **'Selection submitted'**
+  String get selectionSubmitted;
+
+  /// No description provided for @selectionSubmittedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Your selected sellers were sent for manager approval.'**
+  String get selectionSubmittedMessage;
+
+  /// No description provided for @findingSuitableMatches.
+  ///
+  /// In en, this message translates to:
+  /// **'Finding suitable matches...'**
+  String get findingSuitableMatches;
+
+  /// No description provided for @matchingWorkflowMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Our matching workflow is checking available sellers.'**
+  String get matchingWorkflowMessage;
+
+  /// No description provided for @stillWorkingOnMatches.
+  ///
+  /// In en, this message translates to:
+  /// **'Still working on your matches...'**
+  String get stillWorkingOnMatches;
+
+  /// No description provided for @matchingCouldNotComplete.
+  ///
+  /// In en, this message translates to:
+  /// **'Matching could not be completed.'**
+  String get matchingCouldNotComplete;
+
+  /// No description provided for @retryMatching.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry Matching'**
+  String get retryMatching;
+
+  /// No description provided for @workflowRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'Matching is running. Status updates automatically.'**
+  String get workflowRunning;
 }
 
 class _AppLocalizationsDelegate

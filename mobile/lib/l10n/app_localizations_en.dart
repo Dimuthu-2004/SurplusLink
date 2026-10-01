@@ -87,4 +87,55 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get anyPreference => 'Any / No preference';
+
+  @override
+  String get draftSaved => 'Draft saved';
+
+  @override
+  String get listingSubmitted => 'Listing submitted';
+
+  @override
+  String get listingSubmittedMessage =>
+      'Your material was sent for manager review.';
+
+  @override
+  String get listingResubmitted => 'Listing resubmitted';
+
+  @override
+  String get listingResubmittedMessage =>
+      'Your updated listing was sent for manager review.';
+
+  @override
+  String get requirementSubmitted => 'Requirement submitted';
+
+  @override
+  String get requirementSubmittedMessage =>
+      'Your requirement is ready for matching.';
+
+  @override
+  String get selectionSubmitted => 'Selection submitted';
+
+  @override
+  String get selectionSubmittedMessage =>
+      'Your selected sellers were sent for manager approval.';
+
+  @override
+  String get findingSuitableMatches => 'Finding suitable matches...';
+
+  @override
+  String get matchingWorkflowMessage =>
+      'Our matching workflow is checking available sellers.';
+
+  @override
+  String get stillWorkingOnMatches => 'Still working on your matches...';
+
+  @override
+  String get matchingCouldNotComplete => 'Matching could not be completed.';
+
+  @override
+  String get retryMatching => 'Retry Matching';
+
+  @override
+  String get workflowRunning =>
+      'Matching is running. Status updates automatically.';
 }

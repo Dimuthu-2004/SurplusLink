@@ -26,4 +26,19 @@
   "wholeNumberRequired": "Enter a whole number greater than zero.",
   "futureDateRequired": "Choose a future date.",
   "anyPreference": "Any / No preference"
+  ,"draftSaved": "Draft saved"
+  ,"listingSubmitted": "Listing submitted"
+  ,"listingSubmittedMessage": "Your material was sent for manager review."
+  ,"listingResubmitted": "Listing resubmitted"
+  ,"listingResubmittedMessage": "Your updated listing was sent for manager review."
+  ,"requirementSubmitted": "Requirement submitted"
+  ,"requirementSubmittedMessage": "Your requirement is ready for matching."
+  ,"selectionSubmitted": "Selection submitted"
+  ,"selectionSubmittedMessage": "Your selected sellers were sent for manager approval."
+  ,"findingSuitableMatches": "Finding suitable matches..."
+  ,"matchingWorkflowMessage": "Our matching workflow is checking available sellers."
+  ,"stillWorkingOnMatches": "Still working on your matches..."
+  ,"matchingCouldNotComplete": "Matching could not be completed."
+  ,"retryMatching": "Retry Matching"
+  ,"workflowRunning": "Matching is running. Status updates automatically."
 }
