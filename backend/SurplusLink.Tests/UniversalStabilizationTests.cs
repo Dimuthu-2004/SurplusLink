@@ -42,6 +42,17 @@ public class UniversalStabilizationTests
         Assert.True(ItemRelevance.Evaluate(legacyCement, new Listing { Title = "Cement" }).Eligible);
         Assert.False(ItemRelevance.Evaluate(legacyCement, new Listing { ConstructionItemTemplateId = compressor.Id }).Eligible);
         Assert.True(ItemRelevance.Evaluate(legacyCement, new Listing { Title = "Cement - Portland" }).Eligible);
+        var dynamicTemplateId = Guid.NewGuid();
+        var dynamicRequest = new BuyerRequest
+        {
+            ConstructionItemTemplateId = dynamicTemplateId,
+            Title = "Runtime catalog item requirement"
+        };
+        Assert.True(ItemRelevance.Evaluate(dynamicRequest, new Listing
+        {
+            ConstructionItemTemplateId = dynamicTemplateId,
+            Title = "Runtime catalog item"
+        }).Eligible);
         Assert.False(ItemRelevance.Evaluate(new BuyerRequest(), new Listing()).Eligible);
     }
 

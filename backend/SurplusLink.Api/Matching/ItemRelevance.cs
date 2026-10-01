@@ -15,6 +15,10 @@ public static class ItemRelevance
     private static readonly ConstructionItemTemplate[] Catalog = ConstructionItemTemplateCatalogSeed.GetTemplates();
     public static ItemRelevanceResult Evaluate(BuyerRequest request, Listing listing)
     {
+        if (request.ConstructionItemTemplateId is { } requestedId && listing.ConstructionItemTemplateId is { } offeredId)
+            return requestedId == offeredId
+                ? new("SAME_ITEM", 1, "EXACT_TEMPLATE", [requestedId.ToString()])
+                : new("INCOMPATIBLE", 1, "DIFFERENT_TEMPLATE", []);
         var template = request.ConstructionItemTemplate ?? Catalog.FirstOrDefault(x => x.Id == request.ConstructionItemTemplateId);
         template ??= request.ConstructionItemTemplateId is null ? FindExactTemplate(request.Title) : null;
         if (template is not null && listing.ConstructionItemTemplateId is { } offered)
