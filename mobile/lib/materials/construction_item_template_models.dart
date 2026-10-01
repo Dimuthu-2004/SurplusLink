@@ -12,6 +12,7 @@ final class TemplateAttributeField {
     this.helper,
     this.priority = 'OPTIONAL',
     this.buyerPreference = false,
+    this.matchBehavior = 'SOFT_PREFERENCE',
     this.allowAnyPreference = true,
     this.allowOther = false,
     this.labelI18n = const {},
@@ -34,6 +35,7 @@ final class TemplateAttributeField {
       helper: json['helper'] as String?,
       priority: json['priority'] as String? ?? ((json['required'] as bool? ?? false) ? 'REQUIRED' : 'OPTIONAL'),
       buyerPreference: json['buyerPreference'] as bool? ?? false,
+      matchBehavior: json['matchBehavior'] as String? ?? 'SOFT_PREFERENCE',
       allowAnyPreference: json['allowAnyPreference'] as bool? ?? true,
       allowOther: json['allowOther'] as bool? ?? false,
       labelI18n: (json['labelI18n'] as Map<String, dynamic>? ?? const {})
@@ -54,6 +56,7 @@ final class TemplateAttributeField {
   final String? helper;
   final String priority;
   final bool buyerPreference, allowAnyPreference, allowOther;
+  final String matchBehavior;
   final Map<String, String> labelI18n;
   final String? packageSizeSource;
   final String? sourceField;

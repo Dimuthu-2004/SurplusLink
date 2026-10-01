@@ -176,10 +176,11 @@ public sealed class MaterialInventoryService(
         await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         try
         {
+            var wasRejected = listing.Status == ListingStatus.REJECTED;
             listing.CategoryId = effectiveCategoryId;
             ApplyListingRequest(listing, request, template);
             listing.Photos.Clear();
-            AddAudit(sellerId, listing.Id, "LISTING_UPDATED");
+            AddAudit(sellerId, listing.Id, wasRejected ? "LISTING_EDITED_AFTER_REJECTION" : "LISTING_UPDATED");
             await dbContext.SaveChangesAsync(cancellationToken);
 
             // Listings use PostgreSQL xmin optimistic concurrency. EF keeps the original
@@ -239,8 +240,9 @@ public sealed class MaterialInventoryService(
             throw new MaterialOperationException(MaterialOperationError.Validation, "AvailableUntil must be in the future.", "availableUntil", "DATE_MUST_BE_FUTURE");
         }
 
+        var resubmission = listing.Status == ListingStatus.REJECTED;
         listing.Status = ListingStatus.PENDING_VERIFICATION;
-        AddAudit(sellerId, listing.Id, "LISTING_SUBMITTED_FOR_VERIFICATION");
+        AddAudit(sellerId, listing.Id, resubmission ? "LISTING_RESUBMITTED_FOR_VERIFICATION" : "LISTING_SUBMITTED_FOR_VERIFICATION");
         await dbContext.SaveChangesAsync(cancellationToken);
         if (notifications is not null)
         {

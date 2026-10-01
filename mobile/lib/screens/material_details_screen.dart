@@ -292,7 +292,7 @@ class _MaterialDetailsScreenState extends State<MaterialDetailsScreen> {
                     ListTile(
                       contentPadding: EdgeInsets.zero,
                       leading: const Icon(Icons.history),
-                      title: Text(entry.action.replaceAll('_', ' ')),
+                      title: Text(_historyLabel(entry.action)),
                       subtitle: Text(
                         entry.createdAtUtc.toString().substring(0, 16),
                       ),
@@ -301,6 +301,16 @@ class _MaterialDetailsScreenState extends State<MaterialDetailsScreen> {
             ),
     );
   }
+
+  String _historyLabel(String action) => const {
+    'LISTING_CREATED': 'Draft saved',
+    'LISTING_UPDATED': 'Listing edited',
+    'LISTING_EDITED_AFTER_REJECTION': 'Edited after rejection',
+    'LISTING_SUBMITTED_FOR_VERIFICATION': 'Submitted for verification',
+    'LISTING_RESUBMITTED_FOR_VERIFICATION': 'Resubmitted for verification',
+    'LISTING_VERIFIED': 'Approved',
+    'LISTING_REJECTED': 'Rejected',
+  }[action] ?? action.replaceAll('_', ' ');
 }
 
 class _DetailsTable extends StatelessWidget {

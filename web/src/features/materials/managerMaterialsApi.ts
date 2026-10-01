@@ -24,6 +24,9 @@ export interface MaterialListing {
   createdAtUtc: string;
   updatedAtUtc: string;
   photos: ListingPhoto[];
+  constructionItemTemplateName?: string | null;
+  specificationsJson?: string | null;
+  isCustomPendingReview?: boolean;
 }
 
 export interface ListingPhoto {

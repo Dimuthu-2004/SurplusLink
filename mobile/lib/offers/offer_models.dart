@@ -44,6 +44,16 @@ class Offer {
     required this.totalValue,
     required this.status,
     required this.createdAt,
+    this.buyerName,
+    this.sellerName,
+    this.sellerBusinessName,
+    this.materialName,
+    this.requirementTitle,
+    this.unit,
+    this.listingPhotoUrl,
+    this.packageType,
+    this.packageSize,
+    this.packageCount,
   });
   factory Offer.fromJson(Map<String, dynamic> j) => Offer(
     id: j['id'] as String,
@@ -53,10 +63,23 @@ class Offer {
     totalValue: (j['totalValue'] as num).toDouble(),
     status: j['status'] as String,
     createdAt: DateTime.parse(j['createdAt'] as String),
+    buyerName: j['buyerName'] as String?, sellerName: j['sellerName'] as String?,
+    sellerBusinessName: j['sellerBusinessName'] as String?, materialName: j['materialName'] as String?,
+    requirementTitle: j['requirementTitle'] as String?, unit: j['unit'] as String?,
+    listingPhotoUrl: j['listingPhotoUrl'] as String?, packageType: j['packageType'] as String?,
+    packageSize: (j['packageSize'] as num?)?.toDouble(), packageCount: (j['packageCount'] as num?)?.toInt(),
   );
   final String id, buyerId, sellerId, status;
   final double quantity, totalValue;
   final DateTime createdAt;
+  final String? buyerName, sellerName, sellerBusinessName, materialName, requirementTitle, unit, listingPhotoUrl, packageType;
+  final double? packageSize;
+  final int? packageCount;
+  String titleFor(AppUser user) => buyerId == user.id ? (materialName ?? requirementTitle ?? 'Material offer') : (requirementTitle ?? materialName ?? 'Material requirement');
+  String counterpartyFor(AppUser user) => buyerId == user.id ? (sellerBusinessName ?? sellerName ?? 'Seller') : (buyerName ?? 'Buyer');
+  String get quantitySummary => packageType != null && packageSize != null
+      ? '${packageCount ?? (quantity / packageSize!).round()} ${packageType!.toLowerCase()} × $packageSize ${unit ?? ''}'
+      : '$quantity ${unit ?? ''}';
 }
 
 class Transaction {

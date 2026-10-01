@@ -49,7 +49,7 @@ public sealed partial class MatchService
     {
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         var request = await LockOpenRequirement(id, actor, manager, ct);
-        var matches = await db.Matches.Include(x => x.Listing).Where(x => x.MaterialRequestId == id &&
+        var matches = await db.Matches.Include(x => x.Listing).ThenInclude(x => x.ConstructionItemTemplate).Where(x => x.MaterialRequestId == id &&
             x.Status != MatchStatus.REJECTED).ToListAsync(ct);
         foreach (var match in matches)
         {
@@ -80,7 +80,7 @@ public sealed partial class MatchService
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         var request = await LockOpenRequirement(requestId, actor, manager, ct);
         var match = await MutableMatch(id, ct);
-        var listing = await db.Listings.AsNoTracking().SingleAsync(x => x.Id == match.ListingId, ct);
+        var listing = await db.Listings.AsNoTracking().Include(x => x.ConstructionItemTemplate).SingleAsync(x => x.Id == match.ListingId, ct);
         var reason = EligibilityReason(request, listing);
         if (reason is not null)
         {
@@ -145,6 +145,10 @@ public sealed partial class MatchService
         ?? (listing.Status != ListingStatus.ACTIVE ? "LISTING_NOT_ACTIVE" : null)
         ?? (listing.AvailableUntil <= DateTime.UtcNow ? "LISTING_EXPIRED" : null)
         ?? (listing.CategoryId != request.CategoryId ? "CATEGORY_MISMATCH" : null)
+        // Category is only a coarse discovery filter.  Identity must be known
+        // before a later unit/quantity failure can be reported.
+        ?? (!ItemRelevance.Evaluate(request, listing).Eligible ? "ITEM_MISMATCH" : null)
+        ?? (PreferenceCompatibility.Evaluate(request, listing).HasHardMismatch ? "REQUIRED_SPECIFICATION_MISMATCH" : null)
         ?? QuantitySemantics.IncompatibilityReason(request, listing)
         ?? (QuantitySemantics.FromListing(listing).AvailableBaseQuantity <= 0 ? "INSUFFICIENT_QUANTITY" : null)
         ?? (QuantitySemantics.MaterialCost(request, listing) > request.MaximumBudget ? "BUDGET_EXCEEDED" : null);
@@ -162,10 +166,7 @@ public sealed partial class MatchService
             x.Listing.AvailableUntil, x.MaterialRequest.Deadline, available,
             x.MaterialRequest.MaximumBudget, x.MaterialRequest.Status.ToString(),
             x.Listing.Seller.FullName, x.Listing.Seller.BusinessName, x.Listing.Condition.ToString(),
-            // A seller's account address is not necessarily the listing origin.  The
-            // current listing schema has no separately persisted display address, so
-            // only expose its authoritative coordinates here.
-            x.Listing.Latitude, x.Listing.Longitude, null,
+            x.Listing.Latitude, x.Listing.Longitude, LocationDisplay.Concise(x.Listing.Seller.Address),
             x.Id == x.MaterialRequest.RecommendedMatchId,
             x.MaterialRequest.RecommendedMatchId,
             x.MaterialRequest.RecommendationReason ?? (x.Id == x.MaterialRequest.RecommendedMatchId
@@ -178,6 +179,10 @@ public sealed partial class MatchService
             x.Listing.Seller.BusinessName ?? x.Listing.Seller.FullName ?? "Verified seller",
             new MatchListingContext(x.Listing.Description, x.Listing.ConstructionItemTemplate?.Name,
                 x.Listing.SpecificationsJson, x.Listing.Photos.OrderBy(photo => photo.SortOrder)
-                    .Select(photo => new ListingPhotoResponse(photo.Id, photo.PhotoUrl, photo.SortOrder)).ToArray()));
+                    .Select(photo => new ListingPhotoResponse(photo.Id, photo.PhotoUrl, photo.SortOrder)).ToArray()),
+            ToPreferenceResponse(PreferenceCompatibility.Evaluate(x.MaterialRequest, x.Listing)));
     }
+
+    private static PreferenceCompatibilityResponse? ToPreferenceResponse(PreferenceCompatibilityResult result) =>
+        result.ConsideredCount == 0 ? null : new(result.Status, result.MatchedCount, result.ConsideredCount, result.Mismatches);
 }

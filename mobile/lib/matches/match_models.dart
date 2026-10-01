@@ -38,6 +38,32 @@ class MatchListingContext {
   );
 }
 
+class PreferenceMismatch {
+  const PreferenceMismatch({required this.label, required this.requestedValue, this.sellerValue, required this.behavior});
+  factory PreferenceMismatch.fromJson(Map<String, dynamic> json) => PreferenceMismatch(
+    label: json['label'] as String? ?? 'Specification',
+    requestedValue: json['requestedValue']?.toString() ?? '',
+    sellerValue: json['sellerValue']?.toString(),
+    behavior: json['behavior'] as String? ?? 'SOFT_PREFERENCE',
+  );
+  final String label, requestedValue, behavior;
+  final String? sellerValue;
+}
+
+class PreferenceCompatibility {
+  const PreferenceCompatibility({required this.status, required this.matchedCount, required this.consideredCount, this.mismatches = const []});
+  factory PreferenceCompatibility.fromJson(Map<String, dynamic> json) => PreferenceCompatibility(
+    status: json['status'] as String? ?? 'NOT_SELECTED',
+    matchedCount: (json['matchedCount'] as num?)?.toInt() ?? 0,
+    consideredCount: (json['consideredCount'] as num?)?.toInt() ?? 0,
+    mismatches: (json['mismatches'] as List? ?? const []).whereType<Map>().map((x) => PreferenceMismatch.fromJson(Map<String, dynamic>.from(x))).toList(),
+  );
+  final String status;
+  final int matchedCount, consideredCount;
+  final List<PreferenceMismatch> mismatches;
+  bool get hasMismatch => mismatches.isNotEmpty;
+}
+
 class RecommendedMatch {
   const RecommendedMatch({
     required this.id,
@@ -76,6 +102,7 @@ class RecommendedMatch {
     this.packageSize,
     this.packageCountAvailable,
     this.listingContext,
+    this.preferenceCompatibility,
     bool? isPartial,
     // ignore: prefer_initializing_formals
   }) : _isPartial = isPartial;
@@ -89,6 +116,7 @@ class RecommendedMatch {
   final double? packageSize;
   final int? packageCountAvailable;
   final MatchListingContext? listingContext;
+  final PreferenceCompatibility? preferenceCompatibility;
   final String? rejectionReason;
   final DateTime createdAt;
   final DateTime? availableUntil, requiredBy;
@@ -185,6 +213,7 @@ class RecommendedMatch {
         packageSize: _number(json, 'packageSize', optional: true),
         packageCountAvailable: _number(json, 'packageCountAvailable', optional: true)?.toInt(),
         listingContext: json['listingContext'] is Map ? MatchListingContext.fromJson(Map<String, dynamic>.from(json['listingContext'] as Map)) : null,
+        preferenceCompatibility: json['preferenceCompatibility'] is Map ? PreferenceCompatibility.fromJson(Map<String, dynamic>.from(json['preferenceCompatibility'] as Map)) : null,
       );
 }
 

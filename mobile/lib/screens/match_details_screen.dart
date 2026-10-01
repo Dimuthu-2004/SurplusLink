@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:mobile/config/app_config.dart';
 import 'package:mobile/materials/quantity_format.dart' as quantities;
 import 'package:mobile/matches/match_formatters.dart';
 import 'package:mobile/matches/match_gateway.dart';
@@ -229,12 +231,19 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
                     if (match.listingContext!.photos.isNotEmpty) SizedBox(
                       height: 112,
                       child: ListView(scrollDirection: Axis.horizontal, children: match.listingContext!.photos
-                        .map((url) => Padding(padding: const EdgeInsets.only(right: 8), child: ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(url, width: 140, fit: BoxFit.cover))))
+                        .map((url) => Padding(padding: const EdgeInsets.only(right: 8), child: InkWell(
+                          onTap: () => _showPhotoViewer(match.listingContext!.photos, url),
+                          child: ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(_mediaUrl(url), width: 140, fit: BoxFit.cover,
+                            errorBuilder: (_, _, _) => const SizedBox(width: 140, child: Center(child: Icon(Icons.broken_image_outlined))),
+                          )),
+                        )))
                         .toList()),
                     ),
                     if (match.listingContext!.specificationsJson?.trim().isNotEmpty == true)
-                      _detail('Specifications', match.listingContext!.specificationsJson!),
+                      _specifications(match.listingContext!.specificationsJson!),
                   ]),
+                if (match.preferenceCompatibility?.hasMismatch == true)
+                  _preferenceWarning(match.preferenceCompatibility!),
                 _card('Delivery / Logistics', [
                   _detail(
                     'Seller location / address',
@@ -427,6 +436,46 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
       ),
     ),
   );
+
+  String _mediaUrl(String value) {
+    final uri = Uri.tryParse(value);
+    if (uri != null && uri.hasScheme && (uri.scheme == 'http' || uri.scheme == 'https')) return value;
+    return AppConfig.apiBaseUri.resolve(value).toString();
+  }
+
+  Widget _specifications(String source) {
+    try {
+      final data = jsonDecode(source);
+      if (data is Map) return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('Specifications', style: TextStyle(fontWeight: FontWeight.w600)),
+        ...data.entries.where((e) => e.value != null && e.value.toString().trim().isNotEmpty).map((e) => _detail(_label(e.key.toString()), e.value.toString())),
+      ]);
+    } catch (_) {}
+    return const SizedBox.shrink();
+  }
+
+  String _label(String key) => key.replaceAllMapped(RegExp(r'([a-z])([A-Z])'), (m) => '${m[1]} ${m[2]}').replaceFirst(key.isEmpty ? '' : key[0], key.isEmpty ? '' : key[0].toUpperCase());
+
+  Widget _preferenceWarning(PreferenceCompatibility preference) => Container(
+    margin: const EdgeInsets.only(top: 12), padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(color: const Color(0xfffff4e5), borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xfff59e0b))),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const Text('Preference mismatch', style: TextStyle(fontWeight: FontWeight.bold)),
+      const SizedBox(height: 4),
+      ...preference.mismatches.map((m) => Text('${m.label}: requested ${m.requestedValue}; seller ${m.sellerValue?.isNotEmpty == true ? 'has ${m.sellerValue}' : 'did not provide this information'}')),
+    ]),
+  );
+
+  void _showPhotoViewer(List<String> photos, String selected) {
+    final initial = photos.indexOf(selected);
+    showDialog<void>(context: context, builder: (context) => Dialog.fullscreen(child: Scaffold(
+      appBar: AppBar(title: const Text('Listing photos')),
+      body: PageView.builder(controller: PageController(initialPage: initial < 0 ? 0 : initial), itemCount: photos.length,
+        itemBuilder: (_, index) => InteractiveViewer(child: Center(child: Image.network(_mediaUrl(photos[index]), fit: BoxFit.contain,
+          errorBuilder: (_, _, _) => const Icon(Icons.broken_image_outlined, size: 48),
+        )))),
+    )));
+  }
 
   Widget _card(String title, List<Widget> children) => Card(
     margin: const EdgeInsets.only(bottom: 12),

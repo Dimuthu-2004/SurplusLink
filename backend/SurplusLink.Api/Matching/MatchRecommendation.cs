@@ -32,7 +32,7 @@ internal static class MatchRecommendation
     internal static async Task<BuyerRequest> RefreshAsync(SurplusLinkDbContext db, Guid requirementId, CancellationToken ct)
     {
         var request = await db.BuyerRequests.SingleAsync(x => x.Id == requirementId, ct);
-        var matches = await db.Matches.Include(x => x.Listing)
+        var matches = await db.Matches.Include(x => x.Listing).ThenInclude(x => x.ConstructionItemTemplate)
             .Where(x => x.MaterialRequestId == requirementId).ToListAsync(ct);
         var now = DateTime.UtcNow;
         request.RecommendedMatchId = Choose(request, matches, now)?.Id;

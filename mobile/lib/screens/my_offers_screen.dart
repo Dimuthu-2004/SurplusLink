@@ -1,4 +1,5 @@
 import 'package:mobile/marketplace/marketplace_mode.dart';
+import 'package:mobile/config/app_config.dart';
 import 'package:mobile/marketplace/marketplace_offer_view.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile/core/api_exception.dart';
@@ -161,12 +162,13 @@ class _MyOffersScreenState extends State<MyOffersScreen> {
           ...offerRows.map(
             (offer) => Card(
               child: ListTile(
-                title: Text('${offerStatusLabel(offer.status)} offer'),
+                leading: _OfferThumbnail(offer: offer),
+                title: Text(offer.titleFor(widget.user)),
                 subtitle: Text(
-                  '${offer.buyerId == widget.user.id ? 'Buyer' : 'Seller'} participation\nValue LKR ${offer.totalValue.toStringAsFixed(2)}',
+                  '${offer.buyerId == widget.user.id ? 'Seller' : 'Buyer'}: ${offer.counterpartyFor(widget.user)}\n${offer.quantitySummary} • LKR ${offer.totalValue.toStringAsFixed(2)}',
                 ),
                 isThreeLine: true,
-                trailing: Text('${offer.quantity}'),
+                trailing: Chip(label: Text(offerStatusLabel(offer.status))),
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -289,14 +291,12 @@ class OfferDetailsScreen extends StatelessWidget {
     body: ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        Text(
-          offerStatusLabel(offer.status),
-          style: Theme.of(context).textTheme.headlineSmall,
-        ),
-        Text(
-          'Your participation: ${offer.buyerId == user.id ? 'Buyer' : 'Seller'}',
-        ),
-        Text('Quantity: ${offer.quantity}'),
+        _OfferThumbnail(offer: offer, size: 220),
+        const SizedBox(height: 12),
+        Text(offer.titleFor(user), style: Theme.of(context).textTheme.headlineSmall),
+        Text('${offer.buyerId == user.id ? 'Seller' : 'Buyer'}: ${offer.counterpartyFor(user)}'),
+        Chip(label: Text(offerStatusLabel(offer.status))),
+        Text('Quantity: ${offer.quantitySummary}'),
         Text('Material value: LKR ${offer.totalValue.toStringAsFixed(2)}'),
         Text('Created: ${offer.createdAt.toLocal()}'),
         OfferTransactionDetails(
@@ -307,6 +307,20 @@ class OfferDetailsScreen extends StatelessWidget {
       ],
     ),
   );
+}
+
+class _OfferThumbnail extends StatelessWidget {
+  const _OfferThumbnail({required this.offer, this.size = 52});
+  final Offer offer;
+  final double size;
+  @override
+  Widget build(BuildContext context) {
+    final raw = offer.listingPhotoUrl;
+    if (raw == null || raw.isEmpty) return SizedBox(width: size, height: size, child: const DecoratedBox(decoration: BoxDecoration(color: Color(0xffeef2f0)), child: Icon(Icons.inventory_2_outlined)));
+    final parsed = Uri.tryParse(raw);
+    final url = parsed != null && parsed.hasScheme ? raw : AppConfig.apiBaseUri.resolve(raw).toString();
+    return ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(url, width: size, height: size, fit: BoxFit.cover, errorBuilder: (_, _, _) => SizedBox(width: size, height: size, child: const Icon(Icons.broken_image_outlined))));
+  }
 }
 
 class TransactionDetailsScreen extends StatelessWidget {
@@ -452,16 +466,10 @@ class _OfferTransactionDetailsState extends State<OfferTransactionDetails> {
             if (contact.fullName != null) Text(contact.fullName!),
             Text(contact.email),
             if (contact.phoneNumber case final phone? when phone.trim().isNotEmpty)
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(phone),
-                  IconButton(
-                    tooltip: 'Call seller',
-                    icon: const Icon(Icons.phone),
-                    onPressed: () => launchUrl(Uri(scheme: 'tel', path: phone)),
-                  ),
-                ],
+              FilledButton.icon(
+                icon: const Icon(Icons.phone),
+                label: Text(row!.buyerId == widget.user.id ? 'Call Seller' : 'Call Buyer'),
+                onPressed: () => launchUrl(Uri(scheme: 'tel', path: phone)),
               ),
           ],
           if (row.canHandover(widget.user))
