@@ -385,6 +385,7 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db, INotificationS
             }
         }
 
+        Audit(workflow.Id, managerId, $"WORKFLOW_{decision}");
         await UpdateParticipationAsync(workflow, managerId,
             decision == ApprovalDecision.APPROVED ? OfferStatus.ACCEPTED : OfferStatus.REJECTED,
             decision == ApprovalDecision.APPROVED ? TransactionStatus.APPROVED : TransactionStatus.REJECTED, ct);
@@ -412,7 +413,6 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db, INotificationS
             Id = Guid.NewGuid(), AgentWorkflowId = workflow.Id, DecidedByUserId = managerId, Decision = decision,
             Note = cleanNote, DecidedAtUtc = DateTime.UtcNow
         });
-        Audit(workflow.Id, managerId, $"WORKFLOW_{decision}");
         if (decision == ApprovalDecision.APPROVED)
         {
             await NotifyApprovalAsync(workflow, ct);
