@@ -121,7 +121,7 @@ public sealed class TransactionQueryIntegrationTests : IAsyncLifetime
 
         var history = await manager.GetFromJsonAsync<TransactionHistoryPage>(
             $"/api/transactions/{seeded.Pending.Id}/history?pageSize=10");
-        Assert.Equal(new[] { "TRANSACTION_COMPLETED", "TRANSACTION_HANDED_OVER", "WORKFLOW_APPROVED" },
+        Assert.Equal(new[] { "BUYER_RECEIPT_CONFIRMED_TRANSACTION_COMPLETED", "SELLER_HANDOVER_CONFIRMED", "TRANSACTION_APPROVED_STOCK_RESERVED", "WORKFLOW_APPROVED" },
             history!.Items.Select(x => x.Action).OrderBy(x => x));
 
         var summary = await manager.GetFromJsonAsync<TransactionAnalyticsSummary>("/api/transactions/analytics/summary");
@@ -175,7 +175,9 @@ public sealed class TransactionQueryIntegrationTests : IAsyncLifetime
             Assert.Equal(fixture.Buyer + "@requirements.test", approved!.BuyerContact!.Email);
             Assert.Equal(fixture.Seller + "@requirements.test", approved.SellerContact!.Email);
         }
-        Assert.Null((await manager.GetFromJsonAsync<TransactionResponse>(path))!.BuyerContact);
+        var managerApproved = await manager.GetFromJsonAsync<TransactionResponse>(path);
+        Assert.Equal(fixture.Buyer + "@requirements.test", managerApproved!.BuyerContact!.Email);
+        Assert.Equal(fixture.Seller + "@requirements.test", managerApproved.SellerContact!.Email);
         Assert.Equal(HttpStatusCode.Conflict, (await buyer.PostAsync(path + "/confirm-receipt", null)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await seller.PostAsync(path + "/handover", null)).StatusCode);
         await AssertState(TransactionStatus.HANDED_OVER, BuyerRequestStatus.APPROVED, ReservationStatus.ACTIVE, AgentWorkflowStatus.APPROVED);
@@ -184,7 +186,7 @@ public sealed class TransactionQueryIntegrationTests : IAsyncLifetime
         await AssertState(TransactionStatus.COMPLETED, BuyerRequestStatus.COMPLETED, ReservationStatus.CONFIRMED, AgentWorkflowStatus.COMPLETED);
         Assert.Equal(HttpStatusCode.Conflict, (await buyer.PostAsync(path + "/confirm-receipt", null)).StatusCode);
         var history = await buyer.GetFromJsonAsync<TransactionHistoryPage>(path + "/history");
-        Assert.Equal(new[] { "WORKFLOW_APPROVED", "TRANSACTION_HANDED_OVER", "TRANSACTION_COMPLETED" }, history!.Items.Select(x => x.Action));
+        Assert.Equal(new[] { "WORKFLOW_APPROVED", "TRANSACTION_APPROVED_STOCK_RESERVED", "SELLER_HANDOVER_CONFIRMED", "BUYER_RECEIPT_CONFIRMED_TRANSACTION_COMPLETED" }, history!.Items.Select(x => x.Action));
 
         async Task AssertState(TransactionStatus status, BuyerRequestStatus requestStatus, ReservationStatus reservationStatus, AgentWorkflowStatus workflowStatus)
         {
