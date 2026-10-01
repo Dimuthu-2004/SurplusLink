@@ -11,7 +11,7 @@ from app.materials.read_boundary import ActiveMaterialCriteria, MaterialListingR
 
 
 NOW = datetime(2026, 9, 15, tzinfo=timezone.utc)
-DEADLINE = datetime(2026, 10, 1, tzinfo=timezone.utc)
+DEADLINE = datetime(2099, 10, 1, tzinfo=timezone.utc)
 
 
 class FakeActiveMaterialsBoundary:
@@ -137,6 +137,7 @@ def request() -> dict[str, object]:
     return {
         "buyerUserId": "00000000-0000-0000-0000-000000000001",
         "categoryId": "steel-category",
+        "constructionItemTemplateId": "00000000-0000-0000-0000-000000000204",
         "requiredQuantity": "5",
         "unit": "kg",
         "maximumBudget": "100",
@@ -151,11 +152,12 @@ def listing(
     unit_price: str,
     status: str = "ACTIVE",
     verified: bool = True,
-    available_until: datetime = datetime(2026, 12, 1, tzinfo=timezone.utc),
+    available_until: datetime = datetime(2099, 12, 1, tzinfo=timezone.utc),
 ) -> MaterialListingRecord:
     return MaterialListingRecord(
         seller_id=UUID("00000000-0000-0000-0000-000000000002"),
         listing_id=listing_id,
+        template_id="00000000-0000-0000-0000-000000000204",
         category_id="steel-category",
         category="Steel",
         available_quantity=Decimal(quantity),

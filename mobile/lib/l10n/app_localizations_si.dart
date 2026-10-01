@@ -44,4 +44,48 @@ class AppLocalizationsSi extends AppLocalizations {
 
   @override
   String get validationSummary => 'සලකුණු කළ ක්ෂේත්‍ර නිවැරදි කරන්න.';
+
+  @override
+  String get submitListing => 'ලැයිස්තුගත කිරීම යවන්න';
+
+  @override
+  String get packageType => 'ඇසුරුම් වර්ගය';
+
+  @override
+  String get packages => 'ඇසුරුම්';
+
+  @override
+  String get customPackageName => 'ඇසුරුමේ නම';
+
+  @override
+  String get baseMeasurement => 'මිනුම් ඒකකය';
+
+  @override
+  String get piecesUnits => 'කැබලි / ඒකක';
+
+  @override
+  String get bulkQuantity => 'තොග ප්‍රමාණය';
+
+  @override
+  String get howSold => 'මෙම භාණ්ඩය විකුණන්නේ කෙසේද?';
+
+  @override
+  String get requiredField => 'මෙම විස්තරය අවශ්‍යයි.';
+
+  @override
+  String get packageSizeRequired =>
+      'එක් ඇසුරුමක ඇති ප්‍රමාණය තෝරන්න හෝ ඇතුළත් කරන්න.';
+
+  @override
+  String get invalidMeasurement => 'වලංගු මිනුම් ඒකකයක් තෝරන්න.';
+
+  @override
+  String get wholeNumberRequired =>
+      'බිංදුවට වඩා වැඩි පූර්ණ සංඛ්‍යාවක් ඇතුළත් කරන්න.';
+
+  @override
+  String get futureDateRequired => 'ඉදිරි දිනයක් තෝරන්න.';
+
+  @override
+  String get anyPreference => 'ඕනෑම / විශේෂ කැමැත්තක් නැත';
 }

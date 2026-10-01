@@ -32,7 +32,8 @@ public sealed record WorkflowListingSnapshot(Guid MatchId, Guid ListingId, Guid 
     string? QuantityMode = null, string? PackageType = null, decimal? PackageSize = null,
     int? PackageCountAvailable = null, decimal? BaseEquivalentAvailableQuantity = null,
     decimal? MaximumContribution = null, bool? FullCoverage = null,
-    string? BaseUnit = null, decimal? MinimumSellableIncrement = null, int? DecimalPrecision = null);
+    string? BaseUnit = null, decimal? MinimumSellableIncrement = null, int? DecimalPrecision = null, Guid? ConstructionItemTemplateId = null, string? ItemName = null,
+    string? Description = null, string? SpecificationsJson = null, string? ItemRelevanceClassification = null);
 public sealed record WorkflowRunRequest(Guid WorkflowId, object BuyerRequest, IReadOnlyList<WorkflowListingSnapshot> Listings,
     string? Objective = null);
 public sealed record WorkflowValidation(bool Valid, bool RequiresApproval, Guid? RecommendedMatchId,
@@ -107,7 +108,7 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
             ORDER BY "StartedAtUtc", "Id" LIMIT 1 FOR UPDATE SKIP LOCKED
             """).ToListAsync(stop)).SingleOrDefault();
         if (workflow is null) return false;
-        var request = await db.BuyerRequests.SingleAsync(x => x.Id == workflow.MaterialRequestId, stop);
+        var request = await db.BuyerRequests.Include(x => x.ConstructionItemTemplate).SingleAsync(x => x.Id == workflow.MaterialRequestId, stop);
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(stop);
         budget.CancelAfter(TimeSpan.FromSeconds(settings.Value.TimeoutSeconds));
         WorkflowRunResult? completedResult = null;
@@ -180,7 +181,8 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
     {
         // Keep rejected candidates visible, with eligible stock first. Self-owned
         // stock remains excluded before the candidate cap.
-        var listings = (await db.Listings.AsNoTracking().Where(x => x.CategoryId == request.CategoryId &&
+        var listings = (await db.Listings.AsNoTracking().Include(x => x.ConstructionItemTemplate).Where(x => x.CategoryId == request.CategoryId &&
+            (request.ConstructionItemTemplateId == null || x.ConstructionItemTemplateId == null || x.ConstructionItemTemplateId == request.ConstructionItemTemplateId) &&
             x.SellerId != request.BuyerId).OrderBy(x => x.UnitPrice).ThenBy(x => x.Id).ToListAsync(ct))
             // The worker persists rejected rows too.  This keeps the buyer's
             // candidate history intact while allowing valid base-unit matches
@@ -218,9 +220,11 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
                 QuantitySemantics.TryRequiredBaseQuantity(request, listing, out var requestedBase)
                     ? Math.Min(quantity.AvailableBaseQuantity, requestedBase) : 0,
                 QuantitySemantics.TryRequiredBaseQuantity(request, listing, out requestedBase) && quantity.AvailableBaseQuantity >= requestedBase,
-                quantity.BaseUnit, quantity.MinimumSellableIncrement, quantity.DecimalPrecision));
+                quantity.BaseUnit, quantity.MinimumSellableIncrement, quantity.DecimalPrecision, listing.ConstructionItemTemplateId,
+                listing.Title, listing.Description, listing.SpecificationsJson, ItemRelevance.Evaluate(request, listing).Classification));
         }
         return new(workflow.Id, new { id = request.Id, buyerId = request.BuyerId, categoryId = request.CategoryId,
+            constructionItemTemplateId = request.ConstructionItemTemplateId, itemName = request.ConstructionItemTemplate?.Name ?? request.Title,
             requiredQuantity = request.RequiredQuantity, unit = request.Unit, baseUnit = request.Unit,
             normalizedBaseUnit = request.Unit, normalizedRequiredQuantity = request.RequiredQuantity,
             inputMode = request.InputMode, enteredQuantity = request.EnteredQuantity,
@@ -264,8 +268,15 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
             ? decimal.Ceiling(requiredQuantity / packageSize.Value) * unitPrice
             : requiredQuantity * unitPrice;
 
-    internal static bool SnapshotCompatible(BuyerRequest request, WorkflowListingSnapshot listing) =>
-        QuantitySemantics.TryConvert(request.RequiredQuantity, request.Unit, listing.BaseUnit ?? listing.Unit, out _);
+    internal static bool SnapshotCompatible(BuyerRequest request, WorkflowListingSnapshot listing)
+    {
+        var identityMatches = request.ConstructionItemTemplateId is { } requestedTemplateId
+            ? listing.ConstructionItemTemplateId == requestedTemplateId ||
+              listing.ConstructionItemTemplateId is null && listing.ItemRelevanceClassification == "SAME_ITEM"
+            : listing.ItemRelevanceClassification == "SAME_ITEM";
+        return identityMatches &&
+            QuantitySemantics.TryConvert(request.RequiredQuantity, request.Unit, listing.BaseUnit ?? listing.Unit, out _);
+    }
 
     internal static decimal MaterialCost(BuyerRequest request, WorkflowListingSnapshot listing) =>
         QuantitySemantics.TryConvert(request.RequiredQuantity, request.Unit, listing.BaseUnit ?? listing.Unit, out var requiredBase)

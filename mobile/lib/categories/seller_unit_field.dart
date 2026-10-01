@@ -10,12 +10,16 @@ class SellerUnitField extends StatefulWidget {
     required this.onChanged,
     this.initialUnit,
     this.enabled = true,
+    this.validationMessage,
+    this.onValidationCorrected,
     super.key,
   });
   final String? categoryId, initialUnit;
   final Future<List<String>> Function(String) load;
   final ValueChanged<String?> onChanged;
   final bool enabled;
+  final String? validationMessage;
+  final VoidCallback? onValidationCorrected;
   @override
   State<SellerUnitField> createState() => _SellerUnitFieldState();
 }
@@ -89,8 +93,12 @@ class _SellerUnitFieldState extends State<SellerUnitField> {
         units: _units,
         enabled: widget.enabled && !_loading && _error == null && _units.isNotEmpty,
         hint: widget.categoryId == null ? 'Choose a category first' : 'Type to find a unit',
-        onChanged: (value) { _selected = value; widget.onChanged(value); },
-        validator: (_) => widget.categoryId == null ? null : _loading ? 'Wait for units to load.' : _error != null ? 'Retry loading units.' : _selected == null ? 'Choose an allowed unit.' : null,
+        onChanged: (value) {
+          _selected = value;
+          widget.onChanged(value);
+          if (value != null) widget.onValidationCorrected?.call();
+        },
+        validator: (_) => widget.validationMessage ?? (widget.categoryId == null ? null : _loading ? 'Wait for units to load.' : _error != null ? 'Retry loading units.' : _selected == null ? 'Choose an allowed unit.' : null),
       ),
       if (widget.categoryId != null && !_loading && _error == null && _units.isEmpty)
         const Text('No units assigned to this category. Ask a manager to assign units.'),

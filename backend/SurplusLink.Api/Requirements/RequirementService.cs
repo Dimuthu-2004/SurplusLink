@@ -232,6 +232,11 @@ public sealed class RequirementService(
             throw new RequirementException(409, "A reservation already protects this requirement.");
 
         var matchIds = allocations.Select(x => x.MatchId).Distinct().ToList();
+        // Same deterministic lock order as manager reservation; refresh stock at submission.
+        var listingIds = await db.Matches.Where(x => matchIds.Contains(x.Id) && x.MaterialRequestId == id)
+            .Select(x => x.ListingId).Distinct().OrderBy(x => x).ToListAsync(ct);
+        foreach (var listingId in listingIds)
+            await db.Database.ExecuteSqlInterpolatedAsync($"SELECT 1 FROM \"Listings\" WHERE \"Id\" = {listingId} FOR UPDATE", ct);
         var matches = await db.Matches
             .Include(x => x.Listing).ThenInclude(x => x.Seller)
             .Where(x => matchIds.Contains(x.Id) && x.MaterialRequestId == id)
@@ -275,7 +280,7 @@ public sealed class RequirementService(
             }
             else if (MaterialUnits.IsDiscrete(request.Unit) && decimal.Truncate(allocation.Quantity) != allocation.Quantity)
                 throw new RequirementException(400, $"Selected quantity for '{request.Unit}' must be a whole number.");
-            var availableStock = match.Listing.Quantity - match.Listing.ReservedQuantity;
+            var availableStock = QuantitySemantics.FromListing(match.Listing).AvailableBaseQuantity;
 
             if (selectedBase > availableStock)
                 throw new RequirementException(409, $"Selected quantity ({allocation.Quantity}) exceeds available stock ({availableStock}) for listing '{match.Listing.Title}'.");
@@ -360,11 +365,10 @@ public sealed class RequirementService(
         if (totalSelected <= 0)
             throw new RequirementException(400, "Total selected quantity must be greater than zero.");
         var packageOverage = totalSelected > request.RequiredQuantity;
-        if (packageOverage && (normalizedAllocations.Any(x => x.PackageCount is null) ||
-            normalizedAllocations.Any(x => totalSelected - x.BaseQuantity >= request.RequiredQuantity)))
+        if (!QuantitySemantics.IsMinimalFulfillment(request.RequiredQuantity,
+            normalizedAllocations.Select(x => (x.BaseQuantity,
+                x.PackageCount.HasValue ? (decimal?)(x.BaseQuantity / x.PackageCount.Value) : null))))
             throw new RequirementException(400, "Selected packages include unnecessary quantity beyond the requirement.");
-        if (packageOverage && totalSelected - request.RequiredQuantity >= normalizedAllocations.Where(x => x.PackageCount is not null).Max(x => x.BaseQuantity))
-            throw new RequirementException(400, "Package overage is not unavoidable.");
 
         if (totalMaterialCost + totalTransportCost > request.MaximumBudget)
             throw new RequirementException(409, "Total cost exceeds the requirement maximum budget.");

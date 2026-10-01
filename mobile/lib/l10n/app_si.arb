@@ -11,5 +11,19 @@
   "category": "කාණ්ඩය",
   "preferencesOptional": "කැමැත්තන් (විකල්ප)",
   "saveDraft": "කෙටුම්පත සුරකින්න",
-  "validationSummary": "සලකුණු කළ ක්ෂේත්‍ර නිවැරදි කරන්න."
+  "validationSummary": "සලකුණු කළ ක්ෂේත්‍ර නිවැරදි කරන්න.",
+  "submitListing": "ලැයිස්තුගත කිරීම යවන්න",
+  "packageType": "ඇසුරුම් වර්ගය",
+  "packages": "ඇසුරුම්",
+  "customPackageName": "ඇසුරුමේ නම",
+  "baseMeasurement": "මිනුම් ඒකකය",
+  "piecesUnits": "කැබලි / ඒකක",
+  "bulkQuantity": "තොග ප්‍රමාණය",
+  "howSold": "මෙම භාණ්ඩය විකුණන්නේ කෙසේද?",
+  "requiredField": "මෙම විස්තරය අවශ්‍යයි.",
+  "packageSizeRequired": "එක් ඇසුරුමක ඇති ප්‍රමාණය තෝරන්න හෝ ඇතුළත් කරන්න.",
+  "invalidMeasurement": "වලංගු මිනුම් ඒකකයක් තෝරන්න.",
+  "wholeNumberRequired": "බිංදුවට වඩා වැඩි පූර්ණ සංඛ්‍යාවක් ඇතුළත් කරන්න.",
+  "futureDateRequired": "ඉදිරි දිනයක් තෝරන්න.",
+  "anyPreference": "ඕනෑම / විශේෂ කැමැත්තක් නැත"
 }

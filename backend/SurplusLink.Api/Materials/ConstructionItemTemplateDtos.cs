@@ -18,12 +18,13 @@ public sealed record ConstructionItemTemplateResponse(
     string PriceBasis,
     bool IsActive,
     DateTime CreatedAtUtc,
-    DateTime UpdatedAtUtc);
+    DateTime UpdatedAtUtc, IReadOnlyList<string>? Aliases = null);
 
 public class CreateConstructionItemTemplateRequest
 {
     [Required, MaxLength(160)]
     public string Name { get; init; } = string.Empty;
+    public string[] Aliases { get; init; } = [];
 
     [Required]
     public Guid CategoryId { get; init; }

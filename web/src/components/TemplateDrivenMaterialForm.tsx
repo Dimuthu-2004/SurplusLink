@@ -65,7 +65,7 @@ export function TemplateDrivenMaterialForm({
   // Common listing fields
   const [title, setTitle] = useState(initialData?.title || '');
   const [categoryId, setCategoryId] = useState(initialData?.categoryId || '');
-  const [condition, setCondition] = useState(initialData?.condition || 'BRAND_NEW');
+  const [condition, setCondition] = useState(initialData?.condition || 'NEW');
   const [description, setDescription] = useState(initialData?.description || '');
   const [location, setLocation] = useState(initialData?.location || 'Colombo');
 
@@ -104,7 +104,8 @@ export function TemplateDrivenMaterialForm({
   const [customUnit, setCustomUnit] = useState('unit');
 
   // Tile dimensions calculator state (Section 4 & 9)
-  const isTileTemplate = Boolean(selectedTemplate?.name.toLowerCase().includes('tile'));
+  const packageSource = selectedTemplate ? (JSON.parse(selectedTemplate.attributeSchema || '[]') as AttributeFieldDefinition[]).find(f => f.packageSizeSource && f.packageSizeSource !== 'QUANTITY_FIELD') : undefined;
+  const isTileTemplate = packageSource?.packageSizeSource === 'CALCULATED';
   const [tileWidth, setTileWidth] = useState<number>(600);
   const [tileHeight, setTileHeight] = useState<number>(600);
   const [tilesPerBox, setTilesPerBox] = useState<number>(4);
@@ -114,7 +115,7 @@ export function TemplateDrivenMaterialForm({
     setTileHeight(h);
     setTilesPerBox(pcs);
     if (w > 0 && h > 0 && pcs > 0) {
-      const cov = Math.round(((w * h * pcs) / 1000000) * 100) / 100;
+      const cov = (w * h * pcs) / 1000000;
       setPackageSize(cov);
       setSpecs((prev) => ({
         ...prev,
@@ -148,10 +149,15 @@ export function TemplateDrivenMaterialForm({
     setIsCustomSelected(false);
     setTitle(template.name);
     setCategoryId(template.categoryId);
+    const sizeSource = (JSON.parse(template.attributeSchema || '[]') as AttributeFieldDefinition[]).find(f => f.packageSizeSource);
+    setSpecs(sizeSource?.packageSizeSource === 'CALCULATED'
+      ? { widthMm: tileWidth, heightMm: tileHeight, piecesPerBox: tilesPerBox,
+          coveragePerBoxSqm: tileWidth * tileHeight * tilesPerBox / 1000000 } : {});
 
     // Default package size if package mode
     if (template.quantityMode === 'PACKAGE') {
-      const defaultSize = template.allowedPackageSizes?.[0] || 1;
+      const source = (JSON.parse(template.attributeSchema || "[]") as AttributeFieldDefinition[]).find(f => f.packageSizeSource);
+      const defaultSize = source?.packageSizeSource === "SPECIFICATION_FIELD" ? 0 : template.allowedPackageSizes?.[0] || 1;
       setPackageSize(defaultSize);
     }
     if (template.allowedUnits?.length > 0) {
@@ -233,11 +239,12 @@ export function TemplateDrivenMaterialForm({
         reportFieldErrors({ pricePerPackage: t('priceRequired') });
         return;
       }
-      finalPackageCount = Math.floor(packageCount);
+      if (!Number.isInteger(packageCount)) { reportFieldErrors({ packageCount: "Enter a whole number of packages." }); return; }
+      finalPackageCount = packageCount;
       finalPackageSize = packageSize;
       finalQuantity = finalPackageCount * finalPackageSize;
       finalUnit = selectedTemplate?.baseUnit || customUnit || 'unit';
-      finalPackageType = selectedTemplate?.packageType || customPackageTypeName || 'package';
+      finalPackageType = (selectedTemplate?.packageType || customPackageTypeName || 'OTHER').toUpperCase();
       finalPricePerPackage = pricePerPackage;
       // `unitPrice` is the physical package price for PACKAGE mode.  Quantity
       // remains base-equivalent solely for compatibility/matching.
@@ -361,8 +368,8 @@ export function TemplateDrivenMaterialForm({
                 onChange={(e) => setCondition(e.target.value)}
                 data-testid="select-listing-condition"
               >
-                <option value="BRAND_NEW">Brand New / Unused</option>
-                <option value="LIKE_NEW">Like New</option>
+                <option value="NEW">Brand New / Unused</option>
+                <option value="EXCELLENT">Like New</option>
                 <option value="GOOD">Good / Operational</option>
                 <option value="FAIR">Fair / Functional</option>
               </select>
@@ -440,7 +447,7 @@ export function TemplateDrivenMaterialForm({
                 </div>
               )}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
-                {attributeFields.filter((field) => field.sellerField !== false).map((field) => {
+                {attributeFields.filter((field) => field.sellerField !== false && field.packageSizeSource !== 'CALCULATED' && !(isTileTemplate && ['dimensionsMm', 'widthMm', 'heightMm', 'piecesPerBox'].includes(field.id))).map((field) => {
                   const label = localized(field.labelI18n, language, field.label);
                   return (
                   <div key={field.id} className="catalog-field">
@@ -454,7 +461,10 @@ export function TemplateDrivenMaterialForm({
                         id={`spec-field-${field.id}`}
                         required={field.required}
                         value={specs[field.id] || ''}
-                        onChange={(e) => setSpecs({ ...specs, [field.id]: e.target.value })}
+                        onChange={(e) => {
+                          setSpecs({ ...specs, [field.id]: e.target.value });
+                          if (field.packageSizeSource === 'SPECIFICATION_FIELD') setPackageSize(parseFloat(e.target.value) || 0);
+                        }}
                         data-testid={`spec-field-${field.id}`}
                       >
                         <option value="">Select {label}</option>
@@ -482,7 +492,10 @@ export function TemplateDrivenMaterialForm({
                         required={field.required}
                         placeholder={field.placeholder || `e.g. ${label}`}
                         value={specs[field.id] ?? ''}
-                        onChange={(e) => setSpecs({ ...specs, [field.id]: e.target.value })}
+                        onChange={(e) => {
+                          setSpecs({ ...specs, [field.id]: e.target.value });
+                          if (field.packageSizeSource === 'SPECIFICATION_FIELD') setPackageSize(parseFloat(e.target.value) || 0);
+                        }}
                         data-testid={`spec-field-${field.id}`}
                       />
                     )}
@@ -607,7 +620,7 @@ export function TemplateDrivenMaterialForm({
 
             {effectiveMode === 'PACKAGE' && (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
-                <div className="catalog-field">
+                {!packageSource && <div className="catalog-field">
                   <label>
                     Container / Package Size ({selectedTemplate?.baseUnit || customUnit || 'units'}) *
                   </label>
@@ -635,7 +648,7 @@ export function TemplateDrivenMaterialForm({
                       data-testid="package-size-input"
                     />
                   )}
-                </div>
+                </div>}
 
                 <div className="catalog-field">
                   <label>

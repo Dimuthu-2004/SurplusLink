@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import os
 from datetime import datetime, timezone
-from decimal import Decimal
+from decimal import Decimal, ROUND_CEILING
 from time import perf_counter
 from typing import Any, Literal, TypedDict
 from uuid import UUID
@@ -63,6 +63,11 @@ class ListingSnapshot(Contract):
     baseUnit: str | None = None
     minimumSellableIncrement: Measurement | None = None
     decimalPrecision: int | None = None
+    constructionItemTemplateId: str | None = None
+    itemName: str | None = None
+    description: str | None = None
+    specificationsJson: str | None = None
+    itemRelevanceClassification: str | None = None
 
 
 class WorkflowRequest(Contract):
@@ -158,7 +163,8 @@ class SnapshotTools:
             package_count_available=x.packageCountAvailable, base_equivalent_available_quantity=x.baseEquivalentAvailableQuantity,
             maximum_contribution=x.maximumContribution, full_coverage=x.fullCoverage,
             base_unit=x.baseUnit or x.unit, minimum_sellable_increment=x.minimumSellableIncrement,
-            decimal_precision=x.decimalPrecision)
+            decimal_precision=x.decimalPrecision, template_id=x.constructionItemTemplateId,
+            title=x.itemName or "", description=x.description or "", specifications_json=x.specificationsJson)
 
     def search_active_materials(self, criteria):
         return self._call("search_active_materials", {}, lambda: (
@@ -277,6 +283,8 @@ class WorkflowOrchestrator:
         criteria = {k: fields[k] for k in ("buyerUserId", "categoryId", "category", "requiredQuantity", "unit", "maximumBudget", "deadline")}
         if fields.get("baseUnit"):
             criteria["baseUnit"] = fields["baseUnit"]
+        stored = state["request"].buyerRequest
+        criteria.update(constructionItemTemplateId=stored.get("constructionItemTemplateId"), itemName=stored.get("itemName"))
         tools = SnapshotTools(state["request"].listings)
         result = await asyncio.to_thread(MaterialMatchingAgent(tools).match, criteria)
         return (dict(matching=result) if result.status == "ok" else dict(status="REJECTED", errorCode="NO_MATCHING_CANDIDATE"),
@@ -319,10 +327,12 @@ class WorkflowOrchestrator:
         row = next(x for x in state["request"].listings if str(x.listingId) == candidate.listingId)
         route = next((x for x in state["logistics"].candidates if x.listingId == row.listingId), None)
         criteria = state["planner"].normalizedCriteria
+        priced_quantity = ((criteria.requiredQuantity / row.packageSize).to_integral_value(rounding=ROUND_CEILING)
+            if row.quantityMode in {"PACKAGE", "PIECE"} and row.packageSize else criteria.requiredQuantity)
         value = ValidationInput(matchId=row.matchId, listingId=row.listingId, buyerId=criteria.buyerUserId,
             sellerId=row.sellerId, categoryMatches=row.categoryId == criteria.categoryId,
             unitMatches=(row.baseUnit or row.unit).casefold() == (criteria.baseUnit or criteria.unit).casefold(), listingStatus=row.status,
-            availableUntil=row.availableUntil, deadline=criteria.deadline, quantity=criteria.requiredQuantity,
+            availableUntil=row.availableUntil, deadline=criteria.deadline, quantity=priced_quantity,
             availableQuantity=row.availableQuantity, unitPrice=row.unitPrice, maximumBudget=criteria.maximumBudget,
             distanceKm=route.distanceKm if route else None, durationMinutes=route.durationMinutes if route else None,
             transportCost=route.estimatedTransportCost if route else None, deliveryFeasible=route.deliveryFeasible if route else None)
@@ -333,7 +343,7 @@ class WorkflowOrchestrator:
             result.update(status="FAILED", errorCode="VALIDATION_TOOLS_FAILED")
         output = validation.model_dump(mode="json")
         if validation.valid:
-            breakdown = score_breakdown(row.condition, row.unitPrice * criteria.requiredQuantity,
+            breakdown = score_breakdown(row.condition, row.unitPrice * priced_quantity,
                                         criteria.maximumBudget, value.distanceKm, value.transportCost)
             output["scoreBreakdown"] = breakdown
             result["recommendation"] = Recommendation(matchId=row.matchId, listingId=row.listingId,

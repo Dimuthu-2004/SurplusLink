@@ -15,6 +15,9 @@ final class TemplateAttributeField {
     this.allowAnyPreference = true,
     this.allowOther = false,
     this.labelI18n = const {},
+    this.packageSizeSource,
+    this.sourceField,
+    this.calculation,
   });
 
   factory TemplateAttributeField.fromJson(Map<String, dynamic> json) {
@@ -35,6 +38,9 @@ final class TemplateAttributeField {
       allowOther: json['allowOther'] as bool? ?? false,
       labelI18n: (json['labelI18n'] as Map<String, dynamic>? ?? const {})
           .map((key, value) => MapEntry(key, value.toString())),
+      packageSizeSource: json['packageSizeSource'] as String?,
+      sourceField: json['sourceField'] as String?,
+      calculation: json['calculation'] as String?,
     );
   }
 
@@ -49,8 +55,11 @@ final class TemplateAttributeField {
   final String priority;
   final bool buyerPreference, allowAnyPreference, allowOther;
   final Map<String, String> labelI18n;
+  final String? packageSizeSource;
+  final String? sourceField;
+  final String? calculation;
 
-  bool get isRequired => priority == 'REQUIRED' || required;
+  bool get isRequired => priority == 'REQUIRED' || priority == 'CORE_REQUIRED' || required;
   String labelFor(String languageCode) => labelI18n[languageCode] ?? labelI18n['en'] ?? label;
 }
 
@@ -118,6 +127,13 @@ final class ConstructionItemTemplate {
   final bool isActive;
 
   bool get isPackage => quantityMode == 'PACKAGE';
+  TemplateAttributeField? get packageSizeField {
+    for (final field in parsedAttributes) {
+      if (field.packageSizeSource != null) return field;
+    }
+    return null;
+  }
+  bool get hasCalculatedCoverage => packageSizeField?.packageSizeSource == 'CALCULATED';
   bool get isPiece => quantityMode == 'PIECE' || itemClass == 'TOOL' || itemClass == 'EQUIPMENT';
   bool get isContinuous => !isPackage && !isPiece;
   List<String> get effectiveBuyerInputModes => buyerInputModes.isNotEmpty

@@ -57,4 +57,4 @@ public sealed class Listing : AuditableEntity
 }
 
 public enum QuantityMode { LEGACY, PACKAGE, PIECE, CONTINUOUS }
-public enum PackageType { CAN, BAG, BOX, CARTRIDGE, ROLL, SHEET, ROD, PIPE, PACK, PIECE, OTHER }
+public enum PackageType { CAN, BAG, BOX, CARTRIDGE, ROLL, SHEET, ROD, PIPE, PACK, PIECE, OTHER, BOTTLE, BUNDLE, SACK, CARTON }

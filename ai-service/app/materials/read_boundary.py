@@ -48,6 +48,8 @@ class MaterialListingRecord:
     base_unit: str | None = None
     minimum_sellable_increment: Decimal | None = None
     decimal_precision: int | None = None
+    title: str = ""
+    description: str = ""
     template_id: str | None = None
     template_name: str | None = None
     specifications_json: str | None = None

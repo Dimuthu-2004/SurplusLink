@@ -187,6 +187,7 @@ public sealed class ConstructionItemTemplatesController(SurplusLinkDbContext dbC
         {
             Id = Guid.NewGuid(),
             Name = request.Name.Trim(),
+            Aliases = request.Aliases,
             CategoryId = request.CategoryId,
             Category = category,
             ItemClass = request.ItemClass.Trim().ToUpperInvariant(),
@@ -232,6 +233,7 @@ public sealed class ConstructionItemTemplatesController(SurplusLinkDbContext dbC
         }
 
         template.Name = request.Name.Trim();
+        template.Aliases = request.Aliases;
         template.CategoryId = request.CategoryId;
         template.Category = category;
         template.ItemClass = request.ItemClass.Trim().ToUpperInvariant();
@@ -290,5 +292,5 @@ public sealed class ConstructionItemTemplatesController(SurplusLinkDbContext dbC
             template.PriceBasis,
             template.IsActive,
             template.CreatedAtUtc,
-            template.UpdatedAtUtc);
+            template.UpdatedAtUtc, template.Aliases);
 }

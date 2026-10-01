@@ -16,6 +16,15 @@ class PlannerModel(BaseModel):
 
 
 class RequirementFields(PlannerModel):
+    constructionItemTemplateId: str | None = None
+    itemName: str | None = None
+    normalizedBaseUnit: str | None = None
+    normalizedRequiredQuantity: Decimal | None = None
+    inputMode: str | None = None
+    enteredQuantity: Decimal | None = None
+    enteredUnit: str | None = None
+    preferredPackageSize: Decimal | None = None
+    packageBaseUnit: str | None = None
     categoryId: UUID | None = None
     category: str | None = Field(default=None, min_length=1, max_length=120)
     requiredQuantity: Decimal = Field(gt=0, max_digits=18, decimal_places=3, allow_inf_nan=False)

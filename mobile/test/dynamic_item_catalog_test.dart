@@ -42,7 +42,7 @@ final mockTemplates = [
     baseUnit: 'sqm',
     packageType: 'box',
     allowedUnits: ['sqm'],
-    attributeSchema: '[{"id":"dimensionsMm","label":"Dimensions","type":"string","required":true},{"id":"finish","label":"Finish","type":"select","options":["Gloss","Matt","Polished"]}]',
+    attributeSchema: '[{"id":"coveragePerBoxSqm","label":"Coverage per box","type":"number","packageSizeSource":"CALCULATED"},{"id":"dimensionsMm","label":"Dimensions","type":"string","required":true},{"id":"finish","label":"Finish","type":"select","options":["Gloss","Matt","Polished"]}]',
   ),
 ];
 
@@ -183,8 +183,8 @@ void main() {
     expect(draft.quantityMode, 'PACKAGE');
     expect(draft.packageSize, 4.0);
     expect(draft.packageCount, 5);
-    expect(draft.packageType, 'can');
-    expect(draft.unitPrice, 1125.0); // 4500 / 4
+    expect(draft.packageType, 'CAN');
+    expect(draft.unitPrice, 4500.0); // physical package price
     expect(draft.constructionItemTemplateId, 'paint-id');
     expect(draft.isCustomPendingReview, isFalse);
     expect(jsonDecode(draft.specificationsJson!)['colour'], 'Snow White');
@@ -341,7 +341,7 @@ void main() {
     expect(draft.quantity, 14.4);
     expect(draft.packageCount, 10);
     expect(draft.packageSize, 1.44);
-    expect(draft.packageType, 'box');
+    expect(draft.packageType, 'BOX');
     expect(draft.quantityMode, 'PACKAGE');
     expect(draft.isCustomPendingReview, isFalse);
     final specs = jsonDecode(draft.specificationsJson!);

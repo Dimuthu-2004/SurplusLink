@@ -1,6 +1,8 @@
 import 'package:mobile/widgets/dashboard_back_button.dart';
 
 import 'dart:convert';
+import 'package:mobile/l10n/app_localizations.dart';
+import 'package:mobile/l10n/app_localizations_en.dart';
 import 'dart:typed_data';
 
 import 'package:mobile/categories/category_dropdown.dart';
@@ -49,7 +51,6 @@ class MaterialListingFormScreen extends StatefulWidget {
 
 class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _packageCountFieldKey = GlobalKey();
   final _packageCountFocus = FocusNode();
   List<MaterialCategory> _categories = [];
   List<ConstructionItemTemplate> _templates = [];
@@ -65,7 +66,36 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
   final _packageSizeController = TextEditingController();
   final _packageCountController = TextEditingController();
   String _quantityMode = 'CONTINUOUS';
-  String _packageType = 'can';
+  String _packageType = 'OTHER';
+  String? _savedDraftId;
+  final Map<String, String> _fieldErrors = {};
+  final Map<String, String> _rejectedValues = {};
+  AppLocalizations get _text => AppLocalizations.of(context) ?? AppLocalizationsEn();
+  String? _fieldError(String field, Object? value) {
+    if (_rejectedValues[field] != value.toString()) {
+      _fieldErrors.remove(field);
+      _rejectedValues.remove(field);
+    }
+    return switch (_fieldErrors[field]) {
+      'REQUIRED' => _text.requiredField,
+      'PACKAGE_SIZE_REQUIRED' => _text.packageSizeRequired,
+      'UNIT_INVALID' => _text.invalidMeasurement,
+      'WHOLE_NUMBER_REQUIRED' => _text.wholeNumberRequired,
+      'DATE_MUST_BE_FUTURE' => _text.futureDateRequired,
+      final message => message,
+    };
+  }
+  Object? _fieldValue(String field) => switch (field) {
+    'title' => _titleController.text,
+    'description' => _descriptionController.text,
+    'quantity' => _quantityController.text,
+    'packageSize' => _packageSizeController.text,
+    'packageCount' => _packageCountController.text,
+    'unitPrice' => _priceController.text,
+    'unit' => _unit,
+    _ => _specs[field.replaceFirst('specifications.', '')],
+  };
+
   String? _unit;
   final _priceController = TextEditingController();
   final _addressController = TextEditingController();
@@ -176,7 +206,7 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
         _unit = listing.unit;
         _quantityMode = listing.quantityMode == 'LEGACY' ? 'CONTINUOUS' : listing.quantityMode;
         _customSaleType = _quantityMode == 'CONTINUOUS' ? 'CONTINUOUS' : (_quantityMode == 'PACKAGE' ? 'PACKAGE' : 'PIECE');
-        _packageType = listing.packageType ?? 'can';
+        _packageType = listing.packageType ?? 'OTHER';
         _packageSizeController.text = listing.packageSize?.toString() ?? '';
         _packageCountController.text = listing.packageCount?.toString() ?? '';
         _priceController.text = listing.unitPrice.toString();
@@ -355,7 +385,7 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
       _unit = template.baseUnit;
       _specs.clear();
 
-      final isTile = template.name.toLowerCase().contains('tile');
+      final isTile = template.hasCalculatedCoverage;
       if (isTile) {
         _tileWidthController.text = '600';
         _tileHeightController.text = '600';
@@ -365,7 +395,7 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
 
       if (template.isPackage) {
         _quantityMode = 'PACKAGE';
-        _packageType = template.packageType ?? (isTile ? 'box' : 'can');
+        _packageType = template.packageType ?? 'OTHER';
         if (!isTile) {
           if (template.allowedPackageSizes.isNotEmpty) {
             _packageSizeController.text = template.allowedPackageSizes.first.toString();
@@ -395,7 +425,7 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
     final h = double.tryParse(_tileHeightController.text.trim()) ?? 0;
     final pcs = int.tryParse(_tilesPerBoxController.text.trim()) ?? 0;
     if (w > 0 && h > 0 && pcs > 0) {
-      final cov = ((w * h * pcs) / 1000000.0 * 100).round() / 100.0;
+      final cov = (w * h * pcs) / 1000000.0;
       _packageSizeController.text = cov.toString();
       _specs['widthMm'] = w;
       _specs['heightMm'] = h;
@@ -407,18 +437,32 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
     }
   }
 
+  void _updateSpecification(TemplateAttributeField field, dynamic value) {
+    setState(() {
+      _specs[field.id] = value;
+      if (field.packageSizeSource == 'SPECIFICATION_FIELD') {
+        final amount = RegExp(r'^\s*(\d+(?:\.\d+)?)').firstMatch(value.toString())?.group(1);
+        _packageSizeController.text = amount ?? '';
+        final count = int.tryParse(_packageCountController.text) ?? 0;
+        _quantityController.text = ((double.tryParse(amount ?? '') ?? 0) * count).toString();
+      }
+    });
+  }
+
   void _onSelectCustom() {
     setState(() {
       _selectedTemplate = null;
       _isCustom = true;
       _customSaleType = 'PIECE';
       _quantityMode = 'PIECE';
+      _unit = 'piece';
+      _packageType = 'OTHER';
       _specs.clear();
       _category ??= _categories.isNotEmpty ? _categories.first.id : null;
     });
   }
 
-  Future<void> _save() async {
+  Future<void> _save({bool submit = false}) async {
     setState(() {
       _hasAttemptedSubmit = true;
       _error = null;
@@ -467,7 +511,7 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
         computedPackageSize = size;
         computedPackageCount = count;
         computedQuantity = ((size * count) * 10000).round() / 10000.0;
-        computedPackageType = _selectedTemplate?.packageType ?? _packageType;
+        computedPackageType = (_selectedTemplate?.packageType ?? _packageType).toUpperCase();
         final enteredPrice = double.tryParse(_priceController.text.trim()) ?? 0.0;
         // Package listings store the physical package price. Base-equivalent
         // quantity is for compatibility only; a 4 L can is never priced as a
@@ -495,9 +539,9 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
         title: _titleController.text,
         description: _descriptionController.text,
         quantity: computedQuantity,
-        unit: _unit ?? _selectedTemplate?.baseUnit ?? 'unit',
+        unit: isPc ? 'piece' : (_unit ?? _selectedTemplate?.baseUnit ?? 'unit'),
         quantityMode: effectiveQuantityMode,
-        baseUnit: _unit ?? _selectedTemplate?.baseUnit,
+        baseUnit: isPc ? 'piece' : (_unit ?? _selectedTemplate?.baseUnit),
         packageType: computedPackageType,
         packageSize: computedPackageSize,
         packageCount: computedPackageCount,
@@ -514,9 +558,12 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
           ..._selectedPhotos.map((photo) => photo.uploadedUrl!),
         ],
       );
-      final saved = widget.isEditing
-          ? await widget.gateway.update(widget.listingId!, draft)
+      final draftId = widget.listingId ?? _savedDraftId;
+      final saved = draftId != null
+          ? await widget.gateway.update(draftId, draft)
           : await widget.gateway.create(draft);
+      _savedDraftId = saved.id;
+      if (submit) await widget.gateway.publish(saved.id);
       if (mounted) {
         if (widget.isEditing && context.canPop()) {
           context.pop(true);
@@ -525,7 +572,18 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
         }
       }
     } on ApiException catch (error) {
-      if (mounted) setState(() => _error = error.message);
+      if (mounted) {
+        setState(() {
+          _error = error.message;
+          for (final entry in (error.validationErrors ?? <String, List<String>>{}).entries) {
+            final raw = entry.key.replaceFirst(r'$.', '');
+            final field = raw.isEmpty ? raw : raw[0].toLowerCase() + raw.substring(1);
+            _fieldErrors[field] = entry.value.join(' ');
+            _rejectedValues[field] = _fieldValue(field).toString();
+          }
+        });
+        _scrollToFirstInvalidField();
+      }
     } on Object {
       if (mounted) setState(() => _error = 'Unable to save the material.');
     } finally {
@@ -534,31 +592,33 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
   }
 
   void _scrollToFirstInvalidField() {
-    // Flutter's Form has already painted the field-level error.  Move the
-    // seller directly to a concrete invalid input instead of showing an
-    // unanchored summary message.
-    final isPackage = _selectedTemplate?.isPackage == true ||
-        (_isCustom && _customSaleType == 'PACKAGE') || _quantityMode == 'PACKAGE';
-    if (isPackage && _wholePackageCount(_packageCountController.text) != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        final fieldContext = _packageCountFieldKey.currentContext;
-        if (fieldContext != null) Scrollable.ensureVisible(fieldContext, duration: const Duration(milliseconds: 260), alignment: .25);
-        _packageCountFocus.requestFocus();
-      });
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final invalid = _formKey.currentState?.validateGranularly();
+      if (invalid == null || invalid.isEmpty) return;
+      final field = invalid.first;
+      Scrollable.ensureVisible(field.context, duration: const Duration(milliseconds: 260), alignment: .25);
+      FocusScope.of(field.context).requestFocus();
+    });
   }
 
   void _showMessage(String message) =>
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(message)));
 
+  String get _packageLabel {
+    final value = (_selectedTemplate?.packageType ?? _packageType).toLowerCase();
+    return value == 'other' ? (_specs['packageName']?.toString().trim().isNotEmpty == true ? _specs['packageName'].toString().trim() : 'package') : value;
+  }
+  String get _packagePlural => _packageLabel == 'box' ? 'boxes' : '${_packageLabel}s';
+
   String _packageTotalSummary() {
     final size = double.tryParse(_packageSizeController.text.trim());
     final count = int.tryParse(_packageCountController.text.trim());
     if (size == null || count == null) return 'Total sellable stock: —';
     final unitLabel = _unit ?? _selectedTemplate?.baseUnit ?? '';
-    final pkgLabel = _selectedTemplate?.packageType ?? _packageType;
-    final isTile = _selectedTemplate?.name.toLowerCase().contains('tile') == true;
+    final pkgLabel = _packageLabel;
+    final isTile = _selectedTemplate?.hasCalculatedCoverage == true;
     final pkgPlural = pkgLabel.toLowerCase() == 'box' ? 'boxes' : '${pkgLabel}s';
     final countDesc = count == 1 ? '1 $pkgLabel' : '$count $pkgPlural';
     final totalQuantity = size * count;
@@ -610,6 +670,22 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
       leading: const DashboardBackButton(fallback: '/materials'),
       title: Text(widget.isEditing ? 'Edit Material' : 'Add Material'),
     ),
+    bottomNavigationBar: _isLoading || _loadFailed || _categories.isEmpty ? null : SafeArea(
+      minimum: const EdgeInsets.all(12),
+      child: Row(children: [
+        Expanded(child: OutlinedButton(
+          key: const Key('save-material'),
+          onPressed: _isSaving || _mediaBusy || _locating ? null : () => _save(),
+          child: Text(_text.saveDraft),
+        )),
+        const SizedBox(width: 12),
+        Expanded(child: FilledButton(
+          key: const Key('submit-material'),
+          onPressed: _isSaving || _mediaBusy || _locating ? null : () => _save(submit: true),
+          child: Text(_text.submitListing),
+        )),
+      ]),
+    ),
     body: _isLoading
         ? const Center(child: CircularProgressIndicator())
         : _loadFailed || _categories.isEmpty
@@ -635,6 +711,7 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
         : SafeArea(
             child: Form(
               key: _formKey,
+              onChanged: () => setState(() {}),
               autovalidateMode: _hasAttemptedSubmit
                   ? AutovalidateMode.onUserInteraction
                   : AutovalidateMode.disabled,
@@ -733,6 +810,7 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                     if (_isCustom) ...[
                       TextFormField(
                         key: const Key('material-title'),
+                                forceErrorText: _fieldError('title', _titleController.text),
                         controller: _titleController,
                         maxLength: 200,
                         decoration: const InputDecoration(
@@ -750,32 +828,58 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                             ? null
                             : (value) => setState(() {
                                 _category = value;
-                                _unit = null;
+                                _unit = _customSaleType == 'PIECE' ? 'piece' : 'kg';
                               }),
                       ),
                       const SizedBox(height: 12),
-                      const Text('How is this item sold?', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                      Text(_text.howSold, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
                       const SizedBox(height: 6),
                       SegmentedButton<String>(
                         key: const Key('custom-sale-type-toggle'),
-                        segments: const [
-                          ButtonSegment(value: 'PIECE', label: Text('Pieces / Units')),
-                          ButtonSegment(value: 'PACKAGE', label: Text('Packages / Bags')),
-                          ButtonSegment(value: 'CONTINUOUS', label: Text('Bulk Quantity')),
+                        segments: [
+                          ButtonSegment(value: 'PIECE', label: Text(_text.piecesUnits)),
+                          ButtonSegment(value: 'PACKAGE', label: Text(_text.packages)),
+                          ButtonSegment(value: 'CONTINUOUS', label: Text(_text.bulkQuantity)),
                         ],
                         selected: {_customSaleType},
                         onSelectionChanged: (val) {
                           setState(() {
                             _customSaleType = val.first;
                             _quantityMode = val.first;
+                            _unit = val.first == 'PIECE' ? 'piece' : 'kg';
                           });
                         },
                       ),
                       const SizedBox(height: 12),
+                      if (_customSaleType == 'PACKAGE') ...[
+                        DropdownButtonFormField<String>(
+                          key: const Key('custom-package-type'),
+                          initialValue: _packageType.toUpperCase(),
+                          decoration: InputDecoration(labelText: '${_text.packageType} *'),
+                          items: const ['BAG', 'BOX', 'CAN', 'BOTTLE', 'CARTRIDGE', 'ROLL', 'BUNDLE', 'PACK', 'SACK', 'CARTON', 'OTHER']
+                              .map((v) => DropdownMenuItem(value: v, child: Text(v.toLowerCase()))).toList(),
+                          onChanged: (v) => setState(() => _packageType = v ?? 'OTHER'),
+                        ),
+                        if (_packageType == 'OTHER') TextFormField(
+                          initialValue: _specs['packageName'] as String?,
+                          decoration: InputDecoration(labelText: '${_text.customPackageName} *'),
+                          onChanged: (v) => _specs['packageName'] = v,
+                          validator: (v) => _requiredLength(v, 'Package name', 40),
+                        ),
+                        DropdownButtonFormField<String>(
+                          key: const Key('custom-base-unit'),
+                          initialValue: _unit ?? 'kg',
+                          decoration: InputDecoration(labelText: '${_text.baseMeasurement} *'),
+                          items: const ['kg', 'g', 'L', 'ml', 'm', 'sqm', 'm3', 'piece']
+                              .map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(),
+                          onChanged: (v) => setState(() => _unit = v),
+                        ),
+                      ],
                     ] else ...[
                       // Catalog Item: Category is auto-derived, seller customizes title if needed
                       TextFormField(
                         key: const Key('material-title'),
+                                forceErrorText: _fieldError('title', _titleController.text),
                         controller: _titleController,
                         maxLength: 200,
                         decoration: const InputDecoration(labelText: 'Title / Model *'),
@@ -786,6 +890,7 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
 
                     TextFormField(
                       key: const Key('material-description'),
+                                forceErrorText: _fieldError('description', _descriptionController.text),
                       controller: _descriptionController,
                       minLines: 3,
                       maxLines: 6,
@@ -796,7 +901,7 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                     const SizedBox(height: 12),
 
                     // Dynamic Specifications: Tile Form or Standard Attributes
-                    if (_selectedTemplate != null && _selectedTemplate!.name.toLowerCase().contains('tile')) ...[
+                    if (_selectedTemplate != null && _selectedTemplate!.hasCalculatedCoverage) ...[
                       Card(
                         elevation: 0,
                         color: Colors.blueGrey.shade50,
@@ -855,7 +960,7 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                                   helperText: 'How many individual tiles are inside one unopened box?',
                                 ),
                                 onChanged: (_) => setState(_recalcTileCoverage),
-                                validator: (v) => _positiveNumber(v, 'Tiles per box'),
+                                validator: _wholePackageCount,
                               ),
                               const SizedBox(height: 10),
                               Container(
@@ -884,24 +989,26 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                                   if (field.type == 'select' && field.options.isNotEmpty)
                                     DropdownButtonFormField<String>(
                                       key: Key('spec-field-${field.id}'),
+                                    forceErrorText: _fieldError('specifications.${field.id}', _specs[field.id]),
                                       initialValue: _specs[field.id] as String?,
                                       decoration: InputDecoration(
                                         labelText: '${field.label}${field.required ? " *" : ""}',
                                         helperText: _getFieldHelperText(field.id, field.unit),
                                       ),
                                       items: field.options.map((opt) => DropdownMenuItem(value: opt, child: Text(opt))).toList(),
-                                      onChanged: _isSaving ? null : (v) => setState(() => _specs[field.id] = v),
+                                      onChanged: _isSaving ? null : (v) => _updateSpecification(field, v),
                                       validator: (v) => field.required && (v == null || v.isEmpty) ? '${field.label} is required.' : null,
                                     )
                                   else
                                     TextFormField(
                                       key: Key('spec-field-${field.id}'),
+                                    forceErrorText: _fieldError('specifications.${field.id}', _specs[field.id]),
                                       initialValue: _specs[field.id]?.toString(),
                                       decoration: InputDecoration(
                                         labelText: '${field.label}${field.required ? " *" : ""}',
                                         helperText: _getFieldHelperText(field.id, field.unit),
                                       ),
-                                      onChanged: (v) => _specs[field.id] = v,
+                                      onChanged: (v) => _updateSpecification(field, v),
                                       validator: (v) => field.required && (v == null || v.trim().isEmpty) ? '${field.label} is required.' : null,
                                     ),
                                   const SizedBox(height: 8),
@@ -931,36 +1038,39 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                                 if (field.type == 'select' && field.options.isNotEmpty)
                                   DropdownButtonFormField<String>(
                                     key: Key('spec-field-${field.id}'),
+                                    forceErrorText: _fieldError('specifications.${field.id}', _specs[field.id]),
                                     initialValue: _specs[field.id] as String?,
                                     decoration: InputDecoration(
                                       labelText: '${field.label}${field.required ? " *" : ""}',
                                       helperText: _getFieldHelperText(field.id, field.unit),
                                     ),
                                     items: field.options.map((opt) => DropdownMenuItem(value: opt, child: Text(opt))).toList(),
-                                    onChanged: _isSaving ? null : (v) => setState(() => _specs[field.id] = v),
+                                    onChanged: _isSaving ? null : (v) => _updateSpecification(field, v),
                                     validator: (v) => field.required && (v == null || v.isEmpty) ? '${field.label} is required.' : null,
                                   )
                                 else if (field.type == 'number')
                                   TextFormField(
                                     key: Key('spec-field-${field.id}'),
+                                    forceErrorText: _fieldError('specifications.${field.id}', _specs[field.id]),
                                     initialValue: _specs[field.id]?.toString(),
                                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                                     decoration: InputDecoration(
                                       labelText: '${field.label}${field.required ? " *" : ""}${field.unit != null ? " (${field.unit})" : ""}',
                                       helperText: _getFieldHelperText(field.id, field.unit),
                                     ),
-                                    onChanged: (v) => _specs[field.id] = double.tryParse(v) ?? v,
+                                    onChanged: (v) => _updateSpecification(field, double.tryParse(v) ?? v),
                                     validator: (v) => field.required && (v == null || v.trim().isEmpty) ? '${field.label} is required.' : null,
                                   )
                                 else
                                   TextFormField(
                                     key: Key('spec-field-${field.id}'),
+                                    forceErrorText: _fieldError('specifications.${field.id}', _specs[field.id]),
                                     initialValue: _specs[field.id]?.toString(),
                                     decoration: InputDecoration(
                                       labelText: '${field.label}${field.required ? " *" : ""}',
                                       helperText: _getFieldHelperText(field.id, field.unit),
                                     ),
-                                    onChanged: (v) => _specs[field.id] = v,
+                                    onChanged: (v) => _updateSpecification(field, v),
                                     validator: (v) => field.required && (v == null || v.trim().isEmpty) ? '${field.label} is required.' : null,
                                   ),
                                 const SizedBox(height: 8),
@@ -988,13 +1098,14 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                             const SizedBox(height: 10),
 
                             if (_selectedTemplate?.isPackage == true || (_isCustom && _customSaleType == 'PACKAGE') || _quantityMode == 'PACKAGE') ...[
-                              TextFormField(
+                              if (_selectedTemplate?.packageSizeField == null) TextFormField(
                                 key: const Key('material-package-size'),
+                                forceErrorText: _fieldError('packageSize', _packageSizeController.text),
                                 controller: _packageSizeController,
                                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                                 decoration: InputDecoration(
-                                  labelText: 'Amount in each ${_selectedTemplate?.packageType ?? _packageType} (${_unit ?? _selectedTemplate?.baseUnit ?? "unit"}) *',
-                                  helperText: _selectedTemplate?.name == 'Paint' ? 'Example: 4 L can' : 'Amount contained in one unopened package',
+                                  labelText: 'Amount in each $_packageLabel (${_unit ?? _selectedTemplate?.baseUnit ?? "unit"}) *',
+                                  helperText: 'Amount contained in one unopened package',
                                 ),
                                 onChanged: (_) {
                                   final size = double.tryParse(_packageSizeController.text.trim()) ?? 0;
@@ -1005,12 +1116,13 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                               ),
                               const SizedBox(height: 10),
                               TextFormField(
-                                key: _packageCountFieldKey,
+                                key: const Key('material-package-count'),
+                                forceErrorText: _fieldError('packageCount', _packageCountController.text),
                                 controller: _packageCountController,
                                 focusNode: _packageCountFocus,
                                 keyboardType: TextInputType.number,
                                 decoration: InputDecoration(
-                                  labelText: 'Number of ${_selectedTemplate?.packageType != null ? (_selectedTemplate!.packageType!.toLowerCase() == 'box' ? 'boxes' : "${_selectedTemplate!.packageType}s") : (_packageType.toLowerCase() == 'box' ? 'boxes' : "${_packageType}s")} available *',
+                                  labelText: 'Number of $_packagePlural available *',
                                   helperText: 'Whole number of packages in stock',
                                 ),
                                 onChanged: (_) {
@@ -1023,10 +1135,11 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                               const SizedBox(height: 10),
                               TextFormField(
                                 key: const Key('material-unit-price'),
+                                forceErrorText: _fieldError('unitPrice', _priceController.text),
                                 controller: _priceController,
                                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                                 decoration: InputDecoration(
-                                  labelText: 'Price per ${_selectedTemplate?.packageType ?? _packageType} (LKR) *',
+                                  labelText: 'Price per $_packageLabel (LKR) *',
                                   helperText: 'Price for one complete package',
                                 ),
                                 validator: (v) => _positiveNumber(v, 'Price'),
@@ -1039,17 +1152,19 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                             ] else if (_selectedTemplate?.isPiece == true || (_isCustom && _customSaleType == 'PIECE') || _quantityMode == 'PIECE') ...[
                               TextFormField(
                                 key: const Key('material-quantity'),
+                                forceErrorText: _fieldError('quantity', _quantityController.text),
                                 controller: _quantityController,
                                 keyboardType: TextInputType.number,
                                 decoration: const InputDecoration(
                                   labelText: 'Number of units / items *',
                                   helperText: 'Quantity of individual pieces or equipment units',
                                 ),
-                                validator: (v) => _positiveNumber(v, 'Number of units'),
+                                validator: _wholePackageCount,
                               ),
                               const SizedBox(height: 10),
                               TextFormField(
                                 key: const Key('material-unit-price'),
+                                forceErrorText: _fieldError('unitPrice', _priceController.text),
                                 controller: _priceController,
                                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                                 decoration: const InputDecoration(
@@ -1066,6 +1181,7 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                             ] else ...[
                               TextFormField(
                                 key: const Key('material-quantity'),
+                                forceErrorText: _fieldError('quantity', _quantityController.text),
                                 controller: _quantityController,
                                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                                 decoration: const InputDecoration(
@@ -1079,13 +1195,14 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                                 key: const Key('material-unit'),
                                 categoryId: _category,
                                 initialUnit: _unit,
-                                load: widget.gateway.categoryUnits,
+                                load: (_) async => const ['kg', 'g', 'tonne', 'L', 'ml', 'm', 'sqm', 'm3'],
                                 enabled: !_isSaving,
                                 onChanged: (value) => setState(() => _unit = value),
                               ),
                               const SizedBox(height: 10),
                               TextFormField(
                                 key: const Key('material-unit-price'),
+                                forceErrorText: _fieldError('unitPrice', _priceController.text),
                                 controller: _priceController,
                                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                                 decoration: InputDecoration(
@@ -1272,22 +1389,6 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                       ),
                     ),
                   const SizedBox(height: 20),
-                  FilledButton.icon(
-                    key: const Key('save-material'),
-                    onPressed: _isSaving || _mediaBusy || _locating
-                        ? null
-                        : _save,
-                    icon: _isSaving
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.save),
-                    label: Text(
-                      widget.isEditing ? 'Save draft changes' : 'Save draft',
-                    ),
-                  ),
                 ],
                 ],
               ),

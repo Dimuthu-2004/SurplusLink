@@ -6,6 +6,7 @@ from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+from app.agents.item_relevance import ItemRelevanceResult
 
 
 class MatchingRequest(BaseModel):
@@ -15,6 +16,9 @@ class MatchingRequest(BaseModel):
 
     buyerUserId: UUID = Field(description="Server-derived stored requirement owner; never user input.")
 
+    constructionItemTemplateId: str | None = None
+    itemName: str | None = None
+    aliases: list[str] = Field(default_factory=list)
     categoryId: str | None = Field(default=None, min_length=1, max_length=120)
     category: str | None = Field(default=None, min_length=1, max_length=120)
     requiredQuantity: Decimal = Field(gt=0)
@@ -76,7 +80,7 @@ class MatchingFailure(BaseModel):
 class CandidateExclusion(BaseModel):
     model_config = ConfigDict(extra="forbid")
     listingId: str
-    code: Literal["SELF_MATCH_NOT_ALLOWED"] = "SELF_MATCH_NOT_ALLOWED"
+    code: Literal["SELF_MATCH_NOT_ALLOWED", "ITEM_MISMATCH"] = "SELF_MATCH_NOT_ALLOWED"
 
 
 class MatchingResponse(BaseModel):
@@ -88,3 +92,4 @@ class MatchingResponse(BaseModel):
     candidates: list[Candidate] = Field(default_factory=list)
     failure: MatchingFailure | None = None
     exclusions: list[CandidateExclusion] = Field(default_factory=list)
+    itemRelevance: dict[str, ItemRelevanceResult] = Field(default_factory=dict)

@@ -11,5 +11,19 @@
   "category": "Category",
   "preferencesOptional": "Preferences (optional)",
   "saveDraft": "Save draft",
-  "validationSummary": "Please correct the highlighted fields."
+  "validationSummary": "Please correct the highlighted fields.",
+  "submitListing": "Submit Listing",
+  "packageType": "Package type",
+  "packages": "Packages",
+  "customPackageName": "Custom package name",
+  "baseMeasurement": "Base measurement",
+  "piecesUnits": "Pieces / Units",
+  "bulkQuantity": "Bulk Quantity",
+  "howSold": "How is this item sold?",
+  "requiredField": "This field is required.",
+  "packageSizeRequired": "Choose or enter the amount contained in one package.",
+  "invalidMeasurement": "Choose a valid measurement unit.",
+  "wholeNumberRequired": "Enter a whole number greater than zero.",
+  "futureDateRequired": "Choose a future date.",
+  "anyPreference": "Any / No preference"
 }

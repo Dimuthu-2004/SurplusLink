@@ -8,6 +8,7 @@ from langgraph.graph import END, START, StateGraph
 from pydantic import ValidationError
 
 from app.agents.match_scoring import condition_rank
+from app.agents.item_relevance import ItemRelevanceAgent
 from app.agents.matching_schemas import (
     Candidate,
     CandidateExclusion,
@@ -125,6 +126,7 @@ class MaterialMatchingAgent:
         requested_at = self._clock()
         candidates: list[Candidate] = []
         exclusions: list[CandidateExclusion] = []
+        relevance_results = {}
 
         for search_result in state.get("search_results", []):
             if search_result.seller_id == request.buyerUserId:
@@ -140,7 +142,14 @@ class MaterialMatchingAgent:
             if detail is not None and detail.seller_id == request.buyerUserId:
                 exclusions.append(CandidateExclusion(listingId=detail.listing_id))
                 continue
-            if detail is None or not self._fits(detail, request):
+            if detail is None:
+                continue
+            relevance = ItemRelevanceAgent().evaluate(request, detail)
+            relevance_results[detail.listing_id] = relevance
+            if not relevance.eligible:
+                exclusions.append(CandidateExclusion(listingId=detail.listing_id, code="ITEM_MISMATCH"))
+                continue
+            if not self._fits(detail, request):
                 continue
             candidates.append(self._candidate(detail, request))
 
@@ -154,7 +163,7 @@ class MaterialMatchingAgent:
                     "NO_CANDIDATE",
                     "No active, verified, non-expired listing matches the requested material.",
                     exclusions,
-                )
+                ).model_copy(update={"itemRelevance": relevance_results})
             }
 
         return {
@@ -162,6 +171,7 @@ class MaterialMatchingAgent:
                 status="ok",
                 candidates=candidates,
                 exclusions=exclusions,
+                itemRelevance=relevance_results,
             )
         }
 

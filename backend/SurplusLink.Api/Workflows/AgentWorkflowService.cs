@@ -252,10 +252,13 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db, INotificationS
                     throw new AgentWorkflowException(409, "The material request is not open for reservation.");
                 if (request.Deadline <= DateTime.UtcNow)
                     throw new AgentWorkflowException(409, "The material request has expired.");
-                var selectedBaseTotal = pendingTransactions.Sum(x => x.Quantity);
-                if (selectedBaseTotal > request.RequiredQuantity &&
-                    (pendingTransactions.Any(x => x.PackageCount is null) ||
-                     pendingTransactions.Any(x => selectedBaseTotal - x.Quantity >= request.RequiredQuantity)))
+                var normalized = pendingTransactions.Select(x => {
+                    if (!QuantitySemantics.TryConvert(x.Quantity, QuantitySemantics.ListingBaseUnit(x.Offer.MaterialMatch.Listing),
+                            request.Unit, out var amount))
+                        throw new AgentWorkflowException(409, "Selected allocation has an incompatible measurement.");
+                    return (amount, x.PackageCount is > 0 ? (decimal?)(amount / x.PackageCount.Value) : null);
+                }).ToArray();
+                if (!QuantitySemantics.IsMinimalFulfillment(request.RequiredQuantity, normalized))
                     throw new AgentWorkflowException(409, "Selected allocations include unnecessary quantity beyond the requested quantity.");
 
                 // Validate every transaction allocation

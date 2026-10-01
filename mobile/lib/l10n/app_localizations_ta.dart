@@ -44,4 +44,48 @@ class AppLocalizationsTa extends AppLocalizations {
 
   @override
   String get validationSummary => 'குறிக்கப்பட்ட புலங்களைச் சரிசெய்யவும்.';
+
+  @override
+  String get submitListing => 'பட்டியலைச் சமர்ப்பிக்கவும்';
+
+  @override
+  String get packageType => 'பொதி வகை';
+
+  @override
+  String get packages => 'பொதிகள்';
+
+  @override
+  String get customPackageName => 'தனிப்பயன் பொதி பெயர்';
+
+  @override
+  String get baseMeasurement => 'அளவீட்டு அலகு';
+
+  @override
+  String get piecesUnits => 'துண்டுகள் / அலகுகள்';
+
+  @override
+  String get bulkQuantity => 'மொத்த அளவு';
+
+  @override
+  String get howSold => 'இந்தப் பொருள் எவ்வாறு விற்கப்படுகிறது?';
+
+  @override
+  String get requiredField => 'இந்த விவரம் தேவை.';
+
+  @override
+  String get packageSizeRequired =>
+      'ஒரு பொதியிலுள்ள அளவைத் தேர்ந்தெடுக்கவும் அல்லது உள்ளிடவும்.';
+
+  @override
+  String get invalidMeasurement => 'சரியான அளவீட்டு அலகைத் தேர்ந்தெடுக்கவும்.';
+
+  @override
+  String get wholeNumberRequired =>
+      'பூச்சியத்தை விடப் பெரிய முழு எண்ணை உள்ளிடவும்.';
+
+  @override
+  String get futureDateRequired => 'வரவிருக்கும் தேதியைத் தேர்ந்தெடுக்கவும்.';
+
+  @override
+  String get anyPreference => 'ஏதேனும் / விருப்பம் இல்லை';
 }
