@@ -2,6 +2,7 @@
 using System.Net.Http.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using SurplusLink.Api.Data;
 using SurplusLink.Api.Matching;
 using SurplusLink.Api.Materials;
 using SurplusLink.Api.Models;
@@ -19,6 +20,7 @@ public sealed class MatchingReevaluationTests(RequirementsDatabase fixture) : IC
         using var db = fixture.Context();
         var category = (await db.Categories.FirstAsync()).Id;
         var request = new BuyerRequest { Id = Guid.NewGuid(), BuyerId = fixture.Buyer, CategoryId = category,
+            Title = "Scoring regression",
             RequiredQuantity = 10, MaximumBudget = 2000, Unit = "kg", Deadline = DateTime.UtcNow.AddDays(2),
             Status = BuyerRequestStatus.MATCH_FOUND };
         MaterialMatch Candidate(MaterialCondition condition) => new()
@@ -84,12 +86,10 @@ public sealed class MatchingReevaluationTests(RequirementsDatabase fixture) : IC
             using var seller = fixture.Client(app, fixture.Seller, "SELLER");
             using var buyer = fixture.Client(app, fixture.Buyer);
             using var manager = fixture.Client(app, fixture.Manager, "MANAGER");
-            var categoryResponse = await manager.PostAsJsonAsync("/api/material-categories", new { name = "Tiles " + Guid.NewGuid(), allowedUnits = new[] { "pcs" } });
-            categoryResponse.EnsureSuccessStatusCode();
-            var category = (await categoryResponse.Content.ReadFromJsonAsync<MaterialCategoryResponse>())!;
+            var template = ConstructionItemTemplateCatalogSeed.GetTemplates().Single(x => x.Name == "Tiles");
             var created = await seller.PostAsJsonAsync("/api/materials", new {
-                categoryId = category.Id, title = "Tiles", description = "Integration stock", quantity = 500,
-                unit = "pcs", unitPrice = 800, condition = "GOOD", availableUntil = DateTime.UtcNow.AddDays(30),
+                categoryId = template.CategoryId, title = "Tiles", description = "Integration stock", quantity = 500,
+                unit = template.BaseUnit, unitPrice = 800, condition = "GOOD", availableUntil = DateTime.UtcNow.AddDays(30),
                 latitude = 6.8m, longitude = 79.9m
             });
             created.EnsureSuccessStatusCode();
@@ -97,7 +97,8 @@ public sealed class MatchingReevaluationTests(RequirementsDatabase fixture) : IC
             (await seller.PatchAsync($"/api/materials/{listing.Id}/publish", null)).EnsureSuccessStatusCode();
             if (verifyFirst) (await manager.PatchAsJsonAsync($"/api/materials/{listing.Id}/verify", new { approved = true })).EnsureSuccessStatusCode();
             var saved = await buyer.PostAsJsonAsync("/api/requirements", new {
-                categoryId = category.Id, requiredQuantity = 400, unit = "pcs", maximumBudget = 400000,
+                categoryId = template.CategoryId, constructionItemTemplateId = template.Id,
+                requiredQuantity = 400, unit = template.BaseUnit, maximumBudget = 400000,
                 deadline = DateTime.UtcNow.AddDays(6), latitude = 6.9m, longitude = 79.8m
             });
             saved.EnsureSuccessStatusCode();
@@ -156,7 +157,7 @@ public sealed class MatchingReevaluationTests(RequirementsDatabase fixture) : IC
         using var db = fixture.Context();
         var category = Guid.Parse("00000000-0000-0000-0000-000000000101");
         var request = new BuyerRequest { Id = Guid.NewGuid(), BuyerId = fixture.Buyer, CategoryId = category,
-            RequiredQuantity = 400, MaximumBudget = 400000, Unit = "pcs", Deadline = DateTime.UtcNow.AddDays(6), Status = BuyerRequestStatus.OPEN };
+            Title = "Tiles", RequiredQuantity = 400, MaximumBudget = 400000, Unit = "pcs", Deadline = DateTime.UtcNow.AddDays(6), Status = BuyerRequestStatus.OPEN };
         var listing = new Listing { Id = Guid.NewGuid(), SellerId = fixture.Seller, CategoryId = category, Title = "Tiles",
             Quantity = 500, Unit = "pcs", UnitPrice = 800, Status = ListingStatus.ACTIVE, AvailableUntil = DateTime.UtcNow.AddDays(30) };
         db.AddRange(request, listing); await db.SaveChangesAsync();
@@ -194,7 +195,7 @@ public sealed class MatchingReevaluationTests(RequirementsDatabase fixture) : IC
         {
             var category = Guid.Parse("00000000-0000-0000-0000-000000000101");
             var request = new BuyerRequest { Id = Guid.NewGuid(), BuyerId = fixture.Buyer, CategoryId = category,
-                RequiredQuantity = 1, MaximumBudget = 1000, Unit = "pcs", Deadline = DateTime.UtcNow.AddDays(6), Status = BuyerRequestStatus.OPEN };
+                Title = "Tiles", RequiredQuantity = 1, MaximumBudget = 1000, Unit = "pcs", Deadline = DateTime.UtcNow.AddDays(6), Status = BuyerRequestStatus.OPEN };
             var listing = new Listing { Id = Guid.NewGuid(), SellerId = fixture.Seller, CategoryId = category, Title = "Tiles",
                 Quantity = 500, Unit = "pcs", UnitPrice = 800, Status = ListingStatus.ACTIVE, AvailableUntil = DateTime.UtcNow.AddDays(30) };
             seed.AddRange(request, listing); await seed.SaveChangesAsync(); requestId = request.Id; listingId = listing.Id;

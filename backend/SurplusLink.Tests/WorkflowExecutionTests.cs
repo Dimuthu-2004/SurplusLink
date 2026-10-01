@@ -302,7 +302,7 @@ public sealed class WorkflowPersistenceTests(RequirementsDatabase fixture) : ICl
         using var db = fixture.Context();
         var category = new Category { Id = Guid.NewGuid(), Name = "Workflow demo " + Guid.NewGuid() };
         var request = new BuyerRequest { Id = Guid.NewGuid(), BuyerId = fixture.Buyer, CategoryId = category.Id,
-            Title = "Demo requirement", RequiredQuantity = 10, MaximumBudget = 2000, Unit = "kg", Latitude = 6.9m,
+            Title = "Demo material", RequiredQuantity = 10, MaximumBudget = 2000, Unit = "kg", Latitude = 6.9m,
             Longitude = 79.8m, Deadline = DateTime.UtcNow.AddDays(7), Status = BuyerRequestStatus.OPEN };
         db.AddRange(category, request, new Listing { Id = Guid.NewGuid(), SellerId = fixture.Seller, CategoryId = category.Id,
             Title = "Demo material", Quantity = 20, UnitPrice = 100, Unit = "kg", Condition = MaterialCondition.GOOD,

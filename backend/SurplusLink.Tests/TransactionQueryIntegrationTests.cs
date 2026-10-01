@@ -231,13 +231,13 @@ public sealed class TransactionQueryIntegrationTests : IAsyncLifetime
         var category = await db.Categories.FirstAsync();
         var request = new BuyerRequest
         {
-            Id = Guid.NewGuid(), BuyerId = fixture.Buyer, CategoryId = category.Id, Title = "Transaction request",
+            Id = Guid.NewGuid(), BuyerId = fixture.Buyer, CategoryId = category.Id, Title = "Cement",
             RequiredQuantity = 3, MaximumBudget = 1000, Unit = "kg", Deadline = DateTime.UtcNow.AddDays(5),
             Status = BuyerRequestStatus.MATCH_FOUND
         };
         var listing = new Listing
         {
-            Id = Guid.NewGuid(), SellerId = fixture.Seller, CategoryId = category.Id, Title = "Transaction listing",
+            Id = Guid.NewGuid(), SellerId = fixture.Seller, CategoryId = category.Id, Title = "Cement",
             Quantity = 20, Unit = "kg", UnitPrice = 10, AvailableUntil = DateTime.UtcNow.AddDays(5),
             Status = ListingStatus.ACTIVE, Condition = MaterialCondition.GOOD
         };
