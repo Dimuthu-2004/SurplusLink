@@ -340,14 +340,12 @@ public sealed class TransactionService(SurplusLinkDbContext db, INotificationSer
     private async Task CompleteRequirementIfAllCompletedAsync(Transaction transaction, Guid actor, CancellationToken ct)
     {
         var request = transaction.Offer.MaterialMatch.MaterialRequest;
-        // The completion status is still tracked at this point. Flush it inside
-        // the caller's database transaction before projecting statuses from
-        // PostgreSQL, otherwise the current row still reads as APPROVED.
-        await db.SaveChangesAsync(ct);
-        await LockBuyerRequestAsync(request.Id, ct);
-        var states = await db.Transactions.Where(x => x.Offer.MaterialMatch.MaterialRequestId == request.Id)
+        // The current transaction has not been persisted until the caller
+        // saves after this helper returns, so inspect only persisted siblings.
+        var siblingStates = await db.Transactions
+            .Where(x => x.Offer.MaterialMatch.MaterialRequestId == request.Id && x.Id != transaction.Id)
             .Select(x => x.Status).ToListAsync(ct);
-        if (states.Count == 0 || states.Any(x => x != TransactionStatus.COMPLETED)) return;
+        if (siblingStates.Any(x => x != TransactionStatus.COMPLETED)) return;
         request.Status = BuyerRequestStatus.COMPLETED;
         var workflows = await db.AgentWorkflows.Where(x => x.MaterialRequestId == request.Id && x.Status == AgentWorkflowStatus.APPROVED).ToListAsync(ct);
         foreach (var workflow in workflows)
@@ -397,9 +395,6 @@ public sealed class TransactionService(SurplusLinkDbContext db, INotificationSer
 
     private Task<int> LockListingAsync(Guid id, CancellationToken ct) =>
         db.Database.ExecuteSqlInterpolatedAsync($"SELECT 1 FROM \"Listings\" WHERE \"Id\" = {id} FOR UPDATE", ct);
-
-    private Task<int> LockBuyerRequestAsync(Guid id, CancellationToken ct) =>
-        db.Database.ExecuteSqlInterpolatedAsync($"SELECT 1 FROM \"BuyerRequests\" WHERE \"Id\" = {id} FOR UPDATE", ct);
 
     private static string Reference(Transaction transaction) => "TX-" + transaction.Id.ToString("N")[..8].ToUpperInvariant();
     private static string Reference(Guid id) => "TX-" + id.ToString("N")[..8].ToUpperInvariant();
