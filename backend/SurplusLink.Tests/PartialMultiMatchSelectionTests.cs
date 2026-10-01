@@ -313,7 +313,7 @@ public sealed class PartialMultiMatchSelectionTests
             true, false, null, DateTime.UtcNow, 30m, "Tiles", "Finishes", sellerA,
             50m, "pcs", 10m, DateTime.UtcNow.AddDays(10), DateTime.UtcNow.AddDays(5),
             20m, 1000m, "OPEN", "Seller A", "A Corp", "GOOD", null, null, null,
-            false, null, null,
+            null, false, null, null,
             IsPartial: true);
 
         Assert.True(partialResponse.IsPartial);
@@ -325,7 +325,7 @@ public sealed class PartialMultiMatchSelectionTests
             true, false, null, DateTime.UtcNow, 30m, "Tiles", "Finishes", sellerA,
             50m, "pcs", 10m, DateTime.UtcNow.AddDays(10), DateTime.UtcNow.AddDays(5),
             100m, 1000m, "OPEN", "Seller A", "A Corp", "GOOD", null, null, null,
-            false, null, null,
+            null, false, null, null,
             IsPartial: false);
 
         Assert.False(fullResponse.IsPartial);
