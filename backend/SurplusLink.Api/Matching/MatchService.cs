@@ -209,7 +209,7 @@ public sealed partial class MatchService(
                 "Requirement not found.");
 
         var listing = await db.Listings
-            .AsNoTracking()
+            .AsNoTracking().Include(x => x.ConstructionItemTemplate)
             .SingleOrDefaultAsync(
                 x => x.Id == listingId,
                 ct)

@@ -13,7 +13,10 @@ public sealed class TransactionService(SurplusLinkDbContext db)
         x.Id, x.MaterialMatchId, x.BuyerId, x.SellerId, x.Quantity, x.UnitValue, x.TotalValue,
         x.Status, x.CreatedAtUtc, x.UpdatedAtUtc, x.Buyer.FullName, x.Seller.FullName,
         x.Seller.BusinessName, x.MaterialMatch.Listing.Title, x.MaterialMatch.MaterialRequest.Title,
-        x.MaterialMatch.Listing.Unit);
+        x.MaterialMatch.Listing.Unit,
+        x.MaterialMatch.Listing.Photos.OrderBy(photo => photo.SortOrder).Select(photo => photo.PhotoUrl).FirstOrDefault(),
+        x.MaterialMatch.Listing.PackageType == null ? null : x.MaterialMatch.Listing.PackageType.ToString(),
+        x.MaterialMatch.Listing.PackageSize, x.MaterialMatch.Listing.PackageCount);
 
     public async Task<OfferResponse> GetOfferAsync(Guid id, Guid actor, bool manager, CancellationToken ct)
     {

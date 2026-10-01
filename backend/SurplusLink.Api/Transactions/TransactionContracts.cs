@@ -52,7 +52,8 @@ public sealed record OfferResponse(Guid Id, Guid MaterialMatchId, Guid BuyerId, 
     decimal UnitValue, decimal TotalValue, [property: JsonConverter(typeof(JsonStringEnumConverter))] OfferStatus Status,
     DateTime CreatedAt, DateTime UpdatedAt,
     string? BuyerName = null, string? SellerName = null, string? SellerBusinessName = null,
-    string? MaterialName = null, string? RequirementTitle = null, string? Unit = null);
+    string? MaterialName = null, string? RequirementTitle = null, string? Unit = null,
+    string? ListingPhotoUrl = null, string? PackageType = null, decimal? PackageSize = null, int? PackageCount = null);
 public sealed record TransactionResponse(Guid Id, Guid OfferId, Guid BuyerId, Guid SellerId, decimal Quantity,
     decimal TotalValue, decimal ReservedQuantity, [property: JsonConverter(typeof(JsonStringEnumConverter))] TransactionStatus Status,
     DateTime CreatedAt, DateTime UpdatedAt, DateTime? CompletedAt,

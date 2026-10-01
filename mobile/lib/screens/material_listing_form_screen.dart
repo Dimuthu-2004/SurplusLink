@@ -664,13 +664,16 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
         : 'Enter a whole number of packages (at least 1).';
   }
 
+  bool get _hasListingIdentity => _selectedTemplate != null ||
+      (_isCustom && _category != null && _titleController.text.trim().isNotEmpty);
+
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
       leading: const DashboardBackButton(fallback: '/materials'),
       title: Text(widget.isEditing ? 'Edit Material' : 'Add Material'),
     ),
-    bottomNavigationBar: _isLoading || _loadFailed || _categories.isEmpty ? null : SafeArea(
+    bottomNavigationBar: _isLoading || _loadFailed || _categories.isEmpty || !_hasListingIdentity ? null : SafeArea(
       minimum: const EdgeInsets.all(12),
       child: Row(children: [
         Expanded(child: OutlinedButton(
@@ -682,7 +685,7 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
         Expanded(child: FilledButton(
           key: const Key('submit-material'),
           onPressed: _isSaving || _mediaBusy || _locating ? null : () => _save(submit: true),
-          child: Text(_text.submitListing),
+          child: Text(widget.isEditing ? 'Resubmit for review' : _text.submitListing),
         )),
       ]),
     ),
@@ -700,6 +703,11 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                         'No categories are available yet. Try again later.',
                   ),
                   const SizedBox(height: 12),
+                  if (!_hasListingIdentity)
+                    const Padding(
+                      padding: EdgeInsets.only(bottom: 12),
+                      child: Text('Choose a catalog item, or enter a custom item name, before saving a draft.'),
+                    ),
                   OutlinedButton(
                     onPressed: _loadExisting,
                     child: const Text('Retry'),

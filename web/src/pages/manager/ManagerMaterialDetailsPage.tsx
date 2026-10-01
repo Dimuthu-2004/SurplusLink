@@ -22,6 +22,7 @@ export function ManagerMaterialDetailsPage({
   const [history, setHistory] = useState<ListingHistoryItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [photoIndex, setPhotoIndex] = useState<number | null>(null);
 
   const load = async () => {
     if (!listingId) {
@@ -94,17 +95,23 @@ export function ManagerMaterialDetailsPage({
           <Detail label="Seller email" value={listing.seller?.email || 'Not provided'} />
           <Detail label="Seller phone" value={listing.seller?.phoneNumber || 'Not provided'} />
           <Detail label="Condition" value={listing.condition} />
-          <Detail label="Quantity" value={`${formatMaterialQuantity(listing.quantity, listing.unit)} ${listing.unit}`} />
+          <Detail label="Item" value={listing.constructionItemTemplateName || (listing.isCustomPendingReview ? 'Custom item (manager review)' : listing.title)} />
+          <Detail label="Physical stock" value={stockSummary(listing)} />
+          {listing.quantityMode === 'PACKAGE' || listing.quantityMode === 'PIECE' ? <>
+            <Detail label="Package size" value={listing.packageSize ? `${formatMaterialQuantity(listing.packageSize, listing.baseUnit || listing.unit)} ${listing.baseUnit || listing.unit} / ${listing.packageType?.toLowerCase() || 'package'}` : 'Not recorded'} />
+            <Detail label="Base-equivalent quantity" value={`${formatMaterialQuantity(listing.quantity, listing.baseUnit || listing.unit)} ${listing.baseUnit || listing.unit}`} />
+          </> : <Detail label="Quantity" value={`${formatMaterialQuantity(listing.quantity, listing.unit)} ${listing.unit}`} />}
           <Detail label="Reserved" value={`${formatMaterialQuantity(listing.reservedQuantity, listing.unit)} ${listing.unit}`} />
-          <Detail label="Unit price" value={formatPrice(listing.unitPrice)} />
+          <Detail label="Price" value={`${formatPrice(listing.unitPrice)} / ${listing.quantityMode === 'PACKAGE' || listing.quantityMode === 'PIECE' ? (listing.packageType?.toLowerCase() || 'item') : listing.unit}`} />
           <Detail label="Available until" value={formatDate(listing.availableUntil)} />
           <Detail label="Created" value={formatDate(listing.createdAtUtc)} />
           <Detail label="Updated" value={formatDate(listing.updatedAtUtc)} />
         </dl>
         {listing.latitude != null && listing.longitude != null && <a className="back-link" href={`https://www.google.com/maps/search/?api=1&query=${listing.latitude},${listing.longitude}`} target="_blank" rel="noreferrer">View material location in Google Maps</a>}
+        {specificationRows(listing.specificationsJson).length > 0 && <dl className="detail-grid">{specificationRows(listing.specificationsJson).map(([label, value]) => <Detail key={label} label={label} value={value} />)}</dl>}
         {listing.photos.length > 0 && (
           <div className="photo-grid" aria-label="Listing photos">
-            {listing.photos.map((photo) => <img key={photo.id} src={new URL(photo.photoUrl, environment.apiBaseUrl).toString()} alt={listing.title} />)}
+            {listing.photos.map((photo, index) => <button className="listing-photo-button" type="button" key={photo.id} onClick={() => setPhotoIndex(index)}><img src={new URL(photo.photoUrl, environment.apiBaseUrl).toString()} alt={`View ${listing.title} photo ${index + 1}`} /></button>)}
           </div>
         )}
         {canVerify && (
@@ -119,13 +126,15 @@ export function ManagerMaterialDetailsPage({
         )}
       </section>
 
+      {photoIndex !== null && <ListingPhotoViewer listing={listing} index={photoIndex} onClose={() => setPhotoIndex(null)} onChange={setPhotoIndex} />}
+
       <section className="manager-panel" aria-labelledby="history-heading">
         <h2 id="history-heading">Listing history</h2>
         {history.length === 0 ? <p className="empty-state">No history has been recorded yet.</p> : (
           <ol className="history-list">
             {history.map((item) => (
               <li key={item.id}>
-                <strong>{item.action}</strong>
+                <strong>{historyLabel(item.action)}</strong>
                 <span>{formatDate(item.createdAtUtc)} - {item.actorUserId ?? 'System'}</span>
               </li>
             ))}
@@ -134,6 +143,42 @@ export function ManagerMaterialDetailsPage({
       </section>
     </div>
   );
+}
+
+function ListingPhotoViewer({ listing, index, onClose, onChange }: { listing: MaterialListing; index: number; onClose: () => void; onChange: (index: number) => void }) {
+  const photo = listing.photos[index];
+  return <div className="listing-lightbox" role="dialog" aria-modal="true" aria-label="Listing photo viewer" onMouseDown={onClose}>
+    <div className="listing-lightbox-content" onMouseDown={event => event.stopPropagation()}>
+      <button className="listing-lightbox-close" type="button" onClick={onClose} aria-label="Close photo viewer">Close</button>
+      {listing.photos.length > 1 && <button className="listing-lightbox-nav previous" type="button" onClick={() => onChange((index - 1 + listing.photos.length) % listing.photos.length)} aria-label="Previous photo">Previous</button>}
+      <img src={new URL(photo.photoUrl, environment.apiBaseUrl).toString()} alt={`${listing.title} photo ${index + 1}`} />
+      {listing.photos.length > 1 && <button className="listing-lightbox-nav next" type="button" onClick={() => onChange((index + 1) % listing.photos.length)} aria-label="Next photo">Next</button>}
+      <p>{index + 1} of {listing.photos.length}</p>
+    </div>
+  </div>;
+}
+
+function stockSummary(listing: MaterialListing): string {
+  if (listing.quantityMode === 'PACKAGE' || listing.quantityMode === 'PIECE') return `${(listing.packageCount ?? 0) - (listing.reservedPackageCount ?? 0)} ${listing.packageType?.toLowerCase() || 'items'} available`;
+  return `${formatMaterialQuantity(listing.quantity - listing.reservedQuantity, listing.unit)} ${listing.unit} available`;
+}
+
+function specificationRows(value?: string | null): [string, string][] {
+  if (!value) return [];
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return [];
+    return Object.entries(parsed).filter(([, item]) => item != null && String(item).trim() !== '').map(([key, item]) => [key.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, c => c.toUpperCase()), String(item)]);
+  } catch { return []; }
+}
+
+function historyLabel(action: string): string {
+  const labels: Record<string, string> = {
+    LISTING_CREATED: 'Draft saved', LISTING_UPDATED: 'Listing edited', LISTING_EDITED_AFTER_REJECTION: 'Edited after rejection',
+    LISTING_SUBMITTED_FOR_VERIFICATION: 'Submitted for verification', LISTING_RESUBMITTED_FOR_VERIFICATION: 'Resubmitted for verification',
+    LISTING_VERIFIED: 'Approved', LISTING_REJECTED: 'Rejected', LISTING_DELETED: 'Listing closed',
+  };
+  return labels[action] ?? action.replaceAll('_', ' ');
 }
 
 function Detail({ label, value }: { label: string; value: string }) {

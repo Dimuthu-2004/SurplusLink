@@ -7,6 +7,10 @@ public sealed record MatchListingContext(
     string Description, string? ConstructionItemTemplateName, string? SpecificationsJson,
     IReadOnlyList<Materials.ListingPhotoResponse> Photos);
 
+public sealed record PreferenceCompatibilityResponse(
+    string Status, int MatchedCount, int ConsideredCount,
+    IReadOnlyList<PreferenceMismatch> Mismatches);
+
 public class MatchPageQuery
 {
     [Range(1, 1_000_000)]
@@ -90,7 +94,8 @@ public sealed record MatchResponse(
     decimal? MaximumContribution = null,
     bool? FullCoverage = null,
     string? SellerDisplayName = null,
-    MatchListingContext? ListingContext = null
+    MatchListingContext? ListingContext = null,
+    PreferenceCompatibilityResponse? PreferenceCompatibility = null
 );
 
 public sealed record MatchPage(
