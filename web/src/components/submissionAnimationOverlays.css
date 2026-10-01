@@ -1,0 +1,7 @@
+.submission-animation-backdrop { position: fixed; inset: 0; z-index: 11000; display: grid; place-items: center; padding: 1.25rem; background: rgba(16, 32, 26, .58); }
+.submission-animation-card { width: min(100%, 29rem); padding: 1.5rem; border-radius: 1rem; background: #fff; box-shadow: 0 1.5rem 4rem rgba(15, 34, 25, .3); text-align: center; }
+.submission-animation-card h2 { margin: .85rem 0 .4rem; color: #102a21; font-size: clamp(1.2rem, 3vw, 1.5rem); }
+.submission-animation-card p { margin: 0; color: #52655d; line-height: 1.5; }
+.submission-animation-art { width: min(100%, 17rem); max-height: 17rem; margin: 0 auto; }
+.submission-animation-static-icon { display: grid; width: 5.5rem; height: 5.5rem; place-items: center; margin: .4rem auto; border-radius: 50%; background: #dff1e5; color: #125f3b; font-size: 3rem; font-weight: 800; }
+@media (prefers-reduced-motion: reduce) { .submission-animation-card { transition: none; } }

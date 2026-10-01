@@ -6,6 +6,8 @@ import 'package:mobile/core/api_exception.dart';
 import 'package:mobile/requirements/requirement_gateway.dart';
 import 'package:mobile/requirements/requirement_models.dart';
 import 'package:mobile/requirements/requirement_widgets.dart';
+import 'package:mobile/l10n/app_localizations.dart';
+import 'package:mobile/widgets/submission_animation_overlays.dart';
 
 class RequirementDetailsScreen extends StatefulWidget {
   const RequirementDetailsScreen({
@@ -57,6 +59,9 @@ class _RequirementDetailsScreenState extends State<RequirementDetailsScreen> {
           _row = row;
           _categoryName = name;
         });
+        if (row.status == 'MATCHING') {
+          context.go('/requirements/${widget.requirementId}/status');
+        }
       }
     } on Object catch (error) {
       if (mounted) {
@@ -119,7 +124,15 @@ class _RequirementDetailsScreenState extends State<RequirementDetailsScreen> {
       switch (action) {
         case 'submit':
           final row = await widget.gateway.submit(widget.requirementId);
-          if (mounted) setState(() => _row = row);
+          if (!mounted) return;
+          setState(() => _row = row);
+          final text = AppLocalizations.of(context);
+          await showSubmittedAnimationOverlay(
+            context,
+            title: text?.requirementSubmitted ?? 'Requirement submitted',
+            message: text?.requirementSubmittedMessage ?? 'Your requirement is ready for matching.',
+          );
+          if (!mounted) return;
         case 'start':
           final result = await widget.gateway.startMatching(
             widget.requirementId,

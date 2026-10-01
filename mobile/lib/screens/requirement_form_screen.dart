@@ -277,7 +277,9 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
     } on LocationCaptureException catch (error) {
       if (mounted) setState(() => _locationError = error.message);
     } on Object {
-      if (mounted) setState(() => _locationError = 'Unable to capture location. Please retry.');
+      if (mounted) {
+        setState(() => _locationError = 'Unable to capture location. Please retry.');
+      }
     } finally {
       if (mounted) setState(() => _locating = false);
     }
@@ -359,6 +361,10 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
       if (_editing) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Requirement updated.')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppLocalizations.of(context)?.draftSaved ?? 'Draft saved')),
         );
       }
       if (_editing && context.canPop()) {

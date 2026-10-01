@@ -68,6 +68,8 @@ flutter:
   assets:
     - assets/branding/surpluslink_logo_transparent.png
     - assets/animations/architecture_and_construction.lottie
+    - assets/animations/submitted.json
+    - assets/animations/workflow-running.json
     - assets/images/login_background.jpg
 
   # The following line ensures that the Material Icons font is

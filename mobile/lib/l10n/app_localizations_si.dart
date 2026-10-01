@@ -88,4 +88,55 @@ class AppLocalizationsSi extends AppLocalizations {
 
   @override
   String get anyPreference => 'ඕනෑම / විශේෂ කැමැත්තක් නැත';
+
+  @override
+  String get draftSaved => 'කෙටුම්පත සුරකින ලදී';
+
+  @override
+  String get listingSubmitted => 'ලැයිස්තුගත කිරීම ඉදිරිපත් කරන ලදී';
+
+  @override
+  String get listingSubmittedMessage =>
+      'ඔබගේ ද්‍රව්‍යය කළමනාකරු සමාලෝචනයට යොමු කරන ලදී.';
+
+  @override
+  String get listingResubmitted => 'ලැයිස්තුගත කිරීම නැවත ඉදිරිපත් කරන ලදී';
+
+  @override
+  String get listingResubmittedMessage =>
+      'ඔබගේ යාවත්කාලීන ලැයිස්තුගත කිරීම කළමනාකරු සමාලෝචනයට යොමු කරන ලදී.';
+
+  @override
+  String get requirementSubmitted => 'අවශ්‍යතාව ඉදිරිපත් කරන ලදී';
+
+  @override
+  String get requirementSubmittedMessage =>
+      'ඔබගේ අවශ්‍යතාව ගැළපීම් සඳහා සූදානම්ය.';
+
+  @override
+  String get selectionSubmitted => 'තේරීම ඉදිරිපත් කරන ලදී';
+
+  @override
+  String get selectionSubmittedMessage =>
+      'ඔබ තෝරාගත් විකුණුම්කරුවන් කළමනාකරු අනුමැතිය සඳහා යොමු කරන ලදී.';
+
+  @override
+  String get findingSuitableMatches => 'සුදුසු ගැළපීම් සොයමින්...';
+
+  @override
+  String get matchingWorkflowMessage =>
+      'අපගේ ගැළපීම් කාර්ය ප්‍රවාහය පවතින විකුණුම්කරුවන් පරීක්ෂා කරයි.';
+
+  @override
+  String get stillWorkingOnMatches => 'ඔබගේ ගැළපීම් තවමත් සකසමින්...';
+
+  @override
+  String get matchingCouldNotComplete => 'ගැළපීම් සම්පූර්ණ කළ නොහැකි විය.';
+
+  @override
+  String get retryMatching => 'ගැළපීම නැවත උත්සාහ කරන්න';
+
+  @override
+  String get workflowRunning =>
+      'ගැළපීම ක්‍රියාත්මක වේ. තත්ත්වය ස්වයංක්‍රීයව යාවත්කාලීන වේ.';
 }

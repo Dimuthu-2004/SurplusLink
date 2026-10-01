@@ -7,6 +7,8 @@ import 'package:mobile/matches/match_models.dart';
 import 'package:mobile/matches/match_widgets.dart';
 import 'package:mobile/theme/surplus_link_theme.dart';
 import 'package:mobile/widgets/dashboard_back_button.dart';
+import 'package:mobile/l10n/app_localizations.dart';
+import 'package:mobile/widgets/submission_animation_overlays.dart';
 
 class RecommendedMatchesScreen extends StatefulWidget {
   const RecommendedMatchesScreen({
@@ -501,9 +503,14 @@ class _RecommendedMatchesScreenState extends State<RecommendedMatchesScreen> {
       if (mounted) {
         await _load(page: 1);
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Selections saved and sent for manager approval.')),
+        final text = AppLocalizations.of(context);
+        await showSubmittedAnimationOverlay(
+          context,
+          title: text?.selectionSubmitted ?? 'Selection submitted',
+          message: text?.selectionSubmittedMessage ??
+              'Your selected sellers were sent for manager approval.',
         );
+        if (!mounted) return;
         context.go('/requirements/${widget.requirementId}');
       }
     } on Object catch (error) {

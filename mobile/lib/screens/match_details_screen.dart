@@ -439,17 +439,21 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
 
   String _mediaUrl(String value) {
     final uri = Uri.tryParse(value);
-    if (uri != null && uri.hasScheme && (uri.scheme == 'http' || uri.scheme == 'https')) return value;
+    if (uri != null && uri.hasScheme && (uri.scheme == 'http' || uri.scheme == 'https')) {
+      return value;
+    }
     return AppConfig.apiBaseUri.resolve(value).toString();
   }
 
   Widget _specifications(String source) {
     try {
       final data = jsonDecode(source);
-      if (data is Map) return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      if (data is Map) {
+        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         const Text('Specifications', style: TextStyle(fontWeight: FontWeight.w600)),
         ...data.entries.where((e) => e.value != null && e.value.toString().trim().isNotEmpty).map((e) => _detail(_label(e.key.toString()), e.value.toString())),
-      ]);
+        ]);
+      }
     } catch (_) {}
     return const SizedBox.shrink();
   }

@@ -7,6 +7,7 @@ import type { MaterialCategory } from '../features/materials/managerMaterialsApi
 import { ConstructionItemPicker } from './ConstructionItemPicker';
 import { localized, useLanguage } from '../i18n/LanguageContext';
 import { ApiError } from '../api/apiClient';
+import { SubmittedAnimationOverlay } from './SubmissionAnimationOverlays';
 
 export interface ListingSubmitData {
   title: string;
@@ -33,6 +34,7 @@ export interface TemplateDrivenMaterialFormProps {
   onSubmit: (data: ListingSubmitData) => Promise<void>;
   initialData?: Partial<ListingSubmitData>;
   onCancel?: () => void;
+  onSubmitted?: () => void;
 }
 
 export function TemplateDrivenMaterialForm({
@@ -41,6 +43,7 @@ export function TemplateDrivenMaterialForm({
   onSubmit,
   initialData,
   onCancel,
+  onSubmitted,
 }: TemplateDrivenMaterialFormProps) {
   const { language, t } = useLanguage();
   const fieldRefs = useRef<Record<string, HTMLElement | null>>({});
@@ -130,6 +133,7 @@ export function TemplateDrivenMaterialForm({
 
   // Form submission & feedback
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showSubmitted, setShowSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Parse template attribute schema
@@ -296,6 +300,7 @@ export function TemplateDrivenMaterialForm({
     setIsSubmitting(true);
     try {
       await onSubmit(payload);
+      setShowSubmitted(true);
     } catch (err: unknown) {
       if (err instanceof ApiError && err.validationErrors) {
         const normalized = Object.fromEntries(Object.entries(err.validationErrors).map(([field, messages]) => [normalizeField(field), localizedValidation(messages[0], field, t)]));
@@ -308,6 +313,13 @@ export function TemplateDrivenMaterialForm({
   };
 
   return (
+    <>
+    <SubmittedAnimationOverlay
+      open={showSubmitted}
+      title={t('listingSubmitted')}
+      message={t('listingSubmittedMessage')}
+      onCompleted={() => { setShowSubmitted(false); onSubmitted?.(); }}
+    />
     <form onSubmit={handleSubmit} className="template-driven-form" data-testid="template-driven-form" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
       {error && <div className="error-banner" data-testid="form-error-banner">{error}</div>}
 
@@ -872,6 +884,7 @@ export function TemplateDrivenMaterialForm({
         </div>
       )}
     </form>
+    </>
   );
 }
 

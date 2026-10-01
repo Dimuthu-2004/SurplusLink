@@ -9,6 +9,34 @@ const dictionary: Record<AppLanguage, Record<string, string>> = {
   ta: { language: 'மொழி', listing: 'நீங்கள் பட்டியலிடுவது என்ன?', searchItems: 'கட்டுமானப் பொருட்களைத் தேடுங்கள்...', category: 'வகை', preferences: 'விருப்பங்கள் (விருப்பத்தேர்வு)' },
 };
 
+Object.assign(dictionary.en, {
+  listingSubmitted: 'Listing submitted',
+  listingSubmittedMessage: 'Your material was sent for manager review.',
+  findingSuitableMatches: 'Finding suitable matches...',
+  matchingWorkflowMessage: 'Our matching workflow is checking available sellers.',
+  stillWorkingOnMatches: 'Still working on your matches...',
+  matchingCouldNotComplete: 'Matching could not be completed.',
+  retryMatching: 'Retry Matching',
+});
+Object.assign(dictionary.si, {
+  listingSubmitted: 'ලැයිස්තුගත කිරීම ඉදිරිපත් කරන ලදී',
+  listingSubmittedMessage: 'ඔබගේ ද්‍රව්‍යය කළමනාකරු සමාලෝචනයට යොමු කරන ලදී.',
+  findingSuitableMatches: 'සුදුසු ගැළපීම් සොයමින්...',
+  matchingWorkflowMessage: 'අපගේ ගැළපීම් කාර්ය ප්‍රවාහය පවතින විකුණුම්කරුවන් පරීක්ෂා කරයි.',
+  stillWorkingOnMatches: 'ඔබගේ ගැළපීම් තවමත් සකසමින්...',
+  matchingCouldNotComplete: 'ගැළපීම් සම්පූර්ණ කළ නොහැකි විය.',
+  retryMatching: 'ගැළපීම නැවත උත්සාහ කරන්න',
+});
+Object.assign(dictionary.ta, {
+  listingSubmitted: 'பட்டியல் சமர்ப்பிக்கப்பட்டது',
+  listingSubmittedMessage: 'உங்கள் பொருள் மேலாளர் மதிப்பாய்வுக்கு அனுப்பப்பட்டது.',
+  findingSuitableMatches: 'பொருத்தமான பொருத்தங்களைக் கண்டறிகிறது...',
+  matchingWorkflowMessage: 'எங்கள் பொருத்தப் பணிப்பாய்வு கிடைக்கும் விற்பனையாளர்களைச் சரிபார்க்கிறது.',
+  stillWorkingOnMatches: 'உங்கள் பொருத்தங்களில் இன்னும் பணிபுரிகிறது...',
+  matchingCouldNotComplete: 'பொருத்தத்தை முடிக்க முடியவில்லை.',
+  retryMatching: 'பொருத்தத்தை மீண்டும் முயற்சிக்கவும்',
+});
+
 const LanguageContext = createContext<{ language: AppLanguage; setLanguage: (language: AppLanguage) => void; t: (key: string) => string }>({ language: 'en', setLanguage: () => {}, t: key => dictionary.en[key] ?? key });
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
