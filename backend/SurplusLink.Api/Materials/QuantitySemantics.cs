@@ -24,6 +24,17 @@ public sealed record NormalizedRequirement(
 
 public static class QuantitySemantics
 {
+    // Quantities and increments must already be in the requirement's unit.
+    public static bool IsMinimalFulfillment(decimal required,
+        IEnumerable<(decimal Quantity, decimal? PackageIncrement)> allocations)
+    {
+        var rows = allocations.ToArray();
+        var total = rows.Sum(x => x.Quantity);
+        if (total <= required) return true;
+        return rows.All(x => x.PackageIncrement is > 0 &&
+            total - x.PackageIncrement.Value < required);
+    }
+
     private sealed record Unit(string Dimension, decimal Factor, int Precision);
 
     // Factors are expressed in a canonical unit per dimension.  This registry
@@ -103,14 +114,11 @@ public static class QuantitySemantics
     }
 
     public static bool IsCompatible(BuyerRequest request, Listing listing) =>
-        (request.ConstructionItemTemplateId is null || listing.ConstructionItemTemplateId is null ||
-         request.ConstructionItemTemplateId == listing.ConstructionItemTemplateId) &&
-        TryConvert(request.RequiredQuantity, request.Unit, ListingBaseUnit(listing), out _);
+        IncompatibilityReason(request, listing) is null;
 
     public static string? IncompatibilityReason(BuyerRequest request, Listing listing)
     {
-        if (request.ConstructionItemTemplateId is not null && listing.ConstructionItemTemplateId is not null &&
-            request.ConstructionItemTemplateId != listing.ConstructionItemTemplateId)
+        if (!Matching.ItemRelevance.Evaluate(request, listing).Eligible)
             return "ITEM_MISMATCH";
         return TryConvert(request.RequiredQuantity, request.Unit, ListingBaseUnit(listing), out _) ? null : "UNIT_MISMATCH";
     }

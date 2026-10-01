@@ -171,6 +171,90 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Please correct the highlighted fields.'**
   String get validationSummary;
+
+  /// No description provided for @submitListing.
+  ///
+  /// In en, this message translates to:
+  /// **'Submit Listing'**
+  String get submitListing;
+
+  /// No description provided for @packageType.
+  ///
+  /// In en, this message translates to:
+  /// **'Package type'**
+  String get packageType;
+
+  /// No description provided for @packages.
+  ///
+  /// In en, this message translates to:
+  /// **'Packages'**
+  String get packages;
+
+  /// No description provided for @customPackageName.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom package name'**
+  String get customPackageName;
+
+  /// No description provided for @baseMeasurement.
+  ///
+  /// In en, this message translates to:
+  /// **'Base measurement'**
+  String get baseMeasurement;
+
+  /// No description provided for @piecesUnits.
+  ///
+  /// In en, this message translates to:
+  /// **'Pieces / Units'**
+  String get piecesUnits;
+
+  /// No description provided for @bulkQuantity.
+  ///
+  /// In en, this message translates to:
+  /// **'Bulk Quantity'**
+  String get bulkQuantity;
+
+  /// No description provided for @howSold.
+  ///
+  /// In en, this message translates to:
+  /// **'How is this item sold?'**
+  String get howSold;
+
+  /// No description provided for @requiredField.
+  ///
+  /// In en, this message translates to:
+  /// **'This field is required.'**
+  String get requiredField;
+
+  /// No description provided for @packageSizeRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose or enter the amount contained in one package.'**
+  String get packageSizeRequired;
+
+  /// No description provided for @invalidMeasurement.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a valid measurement unit.'**
+  String get invalidMeasurement;
+
+  /// No description provided for @wholeNumberRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a whole number greater than zero.'**
+  String get wholeNumberRequired;
+
+  /// No description provided for @futureDateRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a future date.'**
+  String get futureDateRequired;
+
+  /// No description provided for @anyPreference.
+  ///
+  /// In en, this message translates to:
+  /// **'Any / No preference'**
+  String get anyPreference;
 }
 
 class _AppLocalizationsDelegate

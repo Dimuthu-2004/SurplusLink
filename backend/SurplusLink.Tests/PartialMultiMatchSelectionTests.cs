@@ -18,6 +18,7 @@ public sealed class PartialMultiMatchSelectionTests
     {
         var request = new BuyerRequest
         {
+            ConstructionItemTemplateId = Guid.Parse("00000000-0000-0000-0000-000000000203"),
             Id = Guid.NewGuid(),
             BuyerId = buyerId,
             CategoryId = categoryId,
@@ -30,6 +31,7 @@ public sealed class PartialMultiMatchSelectionTests
 
         var listing = new Listing
         {
+            ConstructionItemTemplateId = Guid.Parse("00000000-0000-0000-0000-000000000203"),
             Id = Guid.NewGuid(),
             SellerId = sellerA,
             CategoryId = categoryId,
@@ -53,6 +55,7 @@ public sealed class PartialMultiMatchSelectionTests
     {
         var request = new BuyerRequest
         {
+            ConstructionItemTemplateId = Guid.Parse("00000000-0000-0000-0000-000000000203"),
             Id = Guid.NewGuid(),
             BuyerId = buyerId,
             CategoryId = categoryId,
@@ -65,6 +68,7 @@ public sealed class PartialMultiMatchSelectionTests
 
         var zeroStockListing = new Listing
         {
+            ConstructionItemTemplateId = Guid.Parse("00000000-0000-0000-0000-000000000203"),
             Id = Guid.NewGuid(),
             SellerId = sellerA,
             CategoryId = categoryId,
@@ -83,6 +87,7 @@ public sealed class PartialMultiMatchSelectionTests
 
         var overReservedListing = new Listing
         {
+            ConstructionItemTemplateId = Guid.Parse("00000000-0000-0000-0000-000000000203"),
             Id = Guid.NewGuid(),
             SellerId = sellerA,
             CategoryId = categoryId,
@@ -105,6 +110,7 @@ public sealed class PartialMultiMatchSelectionTests
     {
         var request = new BuyerRequest
         {
+            ConstructionItemTemplateId = Guid.Parse("00000000-0000-0000-0000-000000000203"),
             Id = Guid.NewGuid(),
             BuyerId = buyerId,
             CategoryId = categoryId,
@@ -118,6 +124,7 @@ public sealed class PartialMultiMatchSelectionTests
         // Self match
         var selfListing = new Listing
         {
+            ConstructionItemTemplateId = Guid.Parse("00000000-0000-0000-0000-000000000203"),
             Id = Guid.NewGuid(),
             SellerId = buyerId,
             CategoryId = categoryId,
@@ -133,6 +140,7 @@ public sealed class PartialMultiMatchSelectionTests
         // Inactive listing
         var inactiveListing = new Listing
         {
+            ConstructionItemTemplateId = Guid.Parse("00000000-0000-0000-0000-000000000203"),
             Id = Guid.NewGuid(),
             SellerId = sellerA,
             CategoryId = categoryId,
@@ -148,6 +156,7 @@ public sealed class PartialMultiMatchSelectionTests
         // Expired listing
         var expiredListing = new Listing
         {
+            ConstructionItemTemplateId = Guid.Parse("00000000-0000-0000-0000-000000000203"),
             Id = Guid.NewGuid(),
             SellerId = sellerA,
             CategoryId = categoryId,
@@ -163,6 +172,7 @@ public sealed class PartialMultiMatchSelectionTests
         // Category mismatch
         var wrongCategoryListing = new Listing
         {
+            ConstructionItemTemplateId = Guid.Parse("00000000-0000-0000-0000-000000000203"),
             Id = Guid.NewGuid(),
             SellerId = sellerA,
             CategoryId = Guid.NewGuid(),
@@ -178,6 +188,7 @@ public sealed class PartialMultiMatchSelectionTests
         // Unit mismatch
         var wrongUnitListing = new Listing
         {
+            ConstructionItemTemplateId = Guid.Parse("00000000-0000-0000-0000-000000000203"),
             Id = Guid.NewGuid(),
             SellerId = sellerA,
             CategoryId = categoryId,

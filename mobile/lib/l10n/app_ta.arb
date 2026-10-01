@@ -11,5 +11,19 @@
   "category": "வகை",
   "preferencesOptional": "விருப்பங்கள் (விருப்பத்தேர்வு)",
   "saveDraft": "வரைவைச் சேமி",
-  "validationSummary": "குறிக்கப்பட்ட புலங்களைச் சரிசெய்யவும்."
+  "validationSummary": "குறிக்கப்பட்ட புலங்களைச் சரிசெய்யவும்.",
+  "submitListing": "பட்டியலைச் சமர்ப்பிக்கவும்",
+  "packageType": "பொதி வகை",
+  "packages": "பொதிகள்",
+  "customPackageName": "தனிப்பயன் பொதி பெயர்",
+  "baseMeasurement": "அளவீட்டு அலகு",
+  "piecesUnits": "துண்டுகள் / அலகுகள்",
+  "bulkQuantity": "மொத்த அளவு",
+  "howSold": "இந்தப் பொருள் எவ்வாறு விற்கப்படுகிறது?",
+  "requiredField": "இந்த விவரம் தேவை.",
+  "packageSizeRequired": "ஒரு பொதியிலுள்ள அளவைத் தேர்ந்தெடுக்கவும் அல்லது உள்ளிடவும்.",
+  "invalidMeasurement": "சரியான அளவீட்டு அலகைத் தேர்ந்தெடுக்கவும்.",
+  "wholeNumberRequired": "பூச்சியத்தை விடப் பெரிய முழு எண்ணை உள்ளிடவும்.",
+  "futureDateRequired": "வரவிருக்கும் தேதியைத் தேர்ந்தெடுக்கவும்.",
+  "anyPreference": "ஏதேனும் / விருப்பம் இல்லை"
 }

@@ -13,8 +13,8 @@ public sealed class MatchScoringTests
         MaterialMatch Row(int id, MaterialCondition condition, decimal transport, decimal distance) => new()
         {
             Id = Guid.NewGuid(), ListingId = Guid.Parse($"00000000-0000-0000-0000-{id:000000000000}"),
-            Score = .6m, Listing = new Listing { Condition = condition, UnitPrice = 100 },
-            MaterialRequest = new BuyerRequest { RequiredQuantity = 10 },
+            Score = .6m, Listing = new Listing { ConstructionItemTemplateId = Guid.Parse("00000000-0000-0000-0000-000000000203"), Condition = condition, UnitPrice = 100 },
+            MaterialRequest = new BuyerRequest { ConstructionItemTemplateId = Guid.Parse("00000000-0000-0000-0000-000000000203"), RequiredQuantity = 10 },
             EstimatedTransportCost = transport, Distance = distance
         };
         var rows = new[] { Row(1, MaterialCondition.POOR, 0, 0), Row(2, MaterialCondition.GOOD, 501, 0),
@@ -37,17 +37,17 @@ public sealed class MatchScoringTests
     [Fact]
     public void Partial_stock_candidate_remains_eligible_and_scored()
     {
-        var request = new BuyerRequest { BuyerId = Guid.NewGuid(), CategoryId = Guid.NewGuid(),
+        var request = new BuyerRequest { ConstructionItemTemplateId = Guid.Parse("00000000-0000-0000-0000-000000000203"), BuyerId = Guid.NewGuid(), CategoryId = Guid.NewGuid(),
             RequiredQuantity = 50, Unit = "pcs", MaximumBudget = 2000, Deadline = DateTime.UtcNow.AddDays(2),
             Status = BuyerRequestStatus.MATCHING };
-        var listing = new Listing { SellerId = Guid.NewGuid(), CategoryId = request.CategoryId,
+        var listing = new Listing { ConstructionItemTemplateId = Guid.Parse("00000000-0000-0000-0000-000000000203"), SellerId = Guid.NewGuid(), CategoryId = request.CategoryId,
             Quantity = 20, ReservedQuantity = 0, Unit = "pcs", UnitPrice = 10,
             Status = ListingStatus.ACTIVE, AvailableUntil = DateTime.UtcNow.AddDays(5) };
         Assert.True(WorkflowQueueProcessor.StillEligible(request, listing, 50));
 
         var row = new WorkflowListingSnapshot(Guid.NewGuid(), Guid.NewGuid(), listing.SellerId,
             request.CategoryId, 20, "pcs", 10, "GOOD", "ACTIVE", listing.AvailableUntil,
-            6, 79, 10, 30, 50, null);
+            6, 79, 10, 30, 50, null, ConstructionItemTemplateId: request.ConstructionItemTemplateId);
         var input = new WorkflowRunRequest(Guid.NewGuid(), new { }, [row]);
         var score = MatchScoring.Score(row.Condition, row.UnitPrice * request.RequiredQuantity,
             request.MaximumBudget, row.DistanceKm, row.TransportCost);
@@ -64,10 +64,10 @@ public sealed class MatchScoringTests
     public void Exactly_one_deterministic_recommendation_is_accepted(string firstCondition,
         string secondCondition, decimal firstCost, decimal secondCost)
     {
-        var request = new BuyerRequest { BuyerId = Guid.NewGuid(), CategoryId = Guid.NewGuid(),
+        var request = new BuyerRequest { ConstructionItemTemplateId = Guid.Parse("00000000-0000-0000-0000-000000000203"), BuyerId = Guid.NewGuid(), CategoryId = Guid.NewGuid(),
             RequiredQuantity = 10, Unit = "kg", MaximumBudget = 2000, Deadline = DateTime.UtcNow.AddDays(2) };
         var first = new WorkflowListingSnapshot(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), request.CategoryId,
-            20, "kg", 100, firstCondition, "ACTIVE", DateTime.UtcNow.AddDays(5), 6, 79, 10, 30, firstCost, null);
+            20, "kg", 100, firstCondition, "ACTIVE", DateTime.UtcNow.AddDays(5), 6, 79, 10, 30, firstCost, null, ConstructionItemTemplateId: request.ConstructionItemTemplateId);
         var second = first with { MatchId = Guid.NewGuid(), ListingId = Guid.NewGuid(), Condition = secondCondition,
             TransportCost = secondCost };
         var snapshot = new WorkflowRunRequest(Guid.NewGuid(), new { }, [first, second]);

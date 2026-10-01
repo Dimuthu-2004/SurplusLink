@@ -27,7 +27,10 @@ public abstract class MaterialsControllerBase : ControllerBase
 
     protected ActionResult MaterialError(MaterialOperationException exception) => exception.Error switch
     {
-        MaterialOperationError.Validation => BadRequest(new { message = exception.Message }),
+        MaterialOperationError.Validation => BadRequest(new { message = exception.Message,
+            code = exception.Code, field = exception.Field,
+            errors = exception.Field is null ? null : new Dictionary<string, string[]> {
+                [exception.Field] = [exception.Code ?? exception.Message] } }),
         MaterialOperationError.NotFound => NotFound(new { message = exception.Message }),
         MaterialOperationError.Forbidden => Forbid(),
         MaterialOperationError.Conflict => Conflict(new { message = exception.Message }),

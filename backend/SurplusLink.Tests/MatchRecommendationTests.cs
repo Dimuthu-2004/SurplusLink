@@ -60,14 +60,14 @@ public sealed class MatchRecommendationTests
 
     private static (BuyerRequest, MaterialMatch, MaterialMatch) Candidates()
     {
-        var request = new BuyerRequest { Id = Guid.NewGuid(), BuyerId = Guid.NewGuid(),
+        var request = new BuyerRequest { ConstructionItemTemplateId = Guid.Parse("00000000-0000-0000-0000-000000000203"), Id = Guid.NewGuid(), BuyerId = Guid.NewGuid(),
             CategoryId = Guid.NewGuid(), RequiredQuantity = 2, MaximumBudget = 1000,
             Deadline = DateTime.UtcNow.AddDays(1), Unit = "kg" };
         MaterialMatch Candidate(decimal score) => new()
         {
             Id = Guid.NewGuid(), ListingId = Guid.NewGuid(), Score = score, Status = MatchStatus.ROUTED,
             Distance = 10, DurationMinutes = 20, EstimatedTransportCost = 100,
-            Listing = new Listing { SellerId = Guid.NewGuid(), CategoryId = request.CategoryId,
+            Listing = new Listing { ConstructionItemTemplateId = Guid.Parse("00000000-0000-0000-0000-000000000203"), SellerId = Guid.NewGuid(), CategoryId = request.CategoryId,
                 Status = ListingStatus.ACTIVE, Condition = MaterialCondition.GOOD, Quantity = 10,
                 Unit = "kg", UnitPrice = 10, AvailableUntil = DateTime.UtcNow.AddDays(3) }
         };

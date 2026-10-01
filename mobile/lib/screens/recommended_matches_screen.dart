@@ -32,6 +32,8 @@ class _RecommendedMatchesScreenState extends State<RecommendedMatchesScreen> {
   final Map<String, RecommendedMatch> _selectedMatches = {};
   bool _submittingMultiMatch = false;
   String? _multiMatchError;
+  List<MatchAllocation> get _allocations => _selectedQuantities.entries
+      .map((entry) => MatchAllocation.fromMatch(_selectedMatches[entry.key]!, entry.value)).toList();
 
   @override
   void initState() {
@@ -158,53 +160,51 @@ class _RecommendedMatchesScreenState extends State<RecommendedMatchesScreen> {
   Widget _buildBottomSummaryBar(double requestedQuantity, String unit) {
     final selectedTotal =
         _selectedQuantities.values.fold(0.0, (sum, q) => sum + q);
-    final remaining = requestedQuantity - selectedTotal;
-    final isOver = remaining < 0;
-    final isComplete = remaining == 0;
-
-    final totalMaterialCost =
-        _selectedQuantities.entries.fold(0.0, (sum, entry) {
+    final remaining = (requestedQuantity - selectedTotal).clamp(0.0, double.infinity);
+    final overage = (selectedTotal - requestedQuantity).clamp(0.0, double.infinity);
+    final isOver = overage > 0.000001;
+    final isComplete = remaining < 0.000001;
+    final minimalOverage = _selectedQuantities.entries.every((entry) {
       final match = _selectedMatches[entry.key];
-      final packages = match?.packageCountFor(entry.value);
-      return sum + ((packages ?? entry.value) * (match?.unitPrice ?? 0.0));
+      return match != null && match.isPackaged &&
+          selectedTotal - match.selectionStep < requestedQuantity - 0.000001;
     });
 
-    final totalTransportCost =
-        _selectedQuantities.entries.fold(0.0, (sum, entry) {
-      final match = _selectedMatches[entry.key];
-      return sum + (match?.estimatedTransportCost ?? 0.0);
-    });
-
-    final totalCost = totalMaterialCost + totalTransportCost;
+    final totalCost = _allocations.fold(0.0, (sum, allocation) => sum + allocation.totalValue);
 
     bool hasErrors = false;
     String? errorMsg;
     if (selectedTotal <= 0) {
       hasErrors = true;
       errorMsg = 'Total selected quantity must be greater than 0.';
-    } else if (isOver) {
+    } else if (isOver && !minimalOverage) {
       hasErrors = true;
       errorMsg =
-          'Total selected exceeds requirement by ${quantities.formatQuantity(-remaining, unit)} $unit.';
+          'Remove unnecessary packages before submitting.';
     } else {
       for (final entry in _selectedQuantities.entries) {
         final match = _selectedMatches[entry.key];
         final avail = match?.availableQuantity ?? 0;
+        if (match == null || !match.isSelectable || !match.isWholePackageQuantity(entry.value)) {
+          hasErrors = true;
+          errorMsg = 'Select available stock in whole sellable quantities.';
+          break;
+        }
         if (entry.value <= 0) {
           hasErrors = true;
           errorMsg = 'Allocated quantity must be greater than 0.';
           break;
         }
-        if (quantities.isDiscreteUnit(match?.unit ?? unit) &&
+        if (quantities.isDiscreteUnit(match.unit ?? unit) &&
             entry.value != entry.value.roundToDouble()) {
           hasErrors = true;
-          errorMsg = 'Allocated quantity for ${match?.sellerName ?? "seller"} must be a whole number.';
+          errorMsg = 'Allocated quantity for ${match.sellerName ?? "seller"} must be a whole number.';
           break;
         }
         if (entry.value > avail) {
           hasErrors = true;
           errorMsg =
-              'Allocated quantity for ${match?.sellerName ?? "seller"} exceeds available stock ($avail).';
+              'Allocated quantity for ${match.sellerName ?? "seller"} exceeds available stock ($avail).';
           break;
         }
       }
@@ -242,8 +242,9 @@ class _RecommendedMatchesScreenState extends State<RecommendedMatchesScreen> {
                   ),
                 ),
               ),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            Wrap(
+              spacing: 16,
+              runSpacing: 6,
               children: [
                 Text(
                   'Need: ${quantities.formatQuantity(requestedQuantity, unit)} $unit',
@@ -259,7 +260,7 @@ class _RecommendedMatchesScreenState extends State<RecommendedMatchesScreen> {
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.bold,
-                    color: isOver
+                    color: isOver && !minimalOverage
                         ? Theme.of(context).colorScheme.error
                         : (isComplete
                             ? const Color(0xFF15803D)
@@ -268,13 +269,13 @@ class _RecommendedMatchesScreenState extends State<RecommendedMatchesScreen> {
                 ),
                 Text(
                   isOver
-                      ? 'Over: ${quantities.formatQuantity(-remaining, unit)} $unit'
+                      ? 'Remaining: 0 $unit · Package overage: ${quantities.formatQuantity(overage.toDouble(), unit)} $unit'
                       : 'Remaining: ${quantities.formatQuantity(remaining, unit)} $unit',
                   key: const Key('summary-remaining-quantity'),
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
-                    color: isOver
+                    color: isOver && !minimalOverage
                         ? Theme.of(context).colorScheme.error
                         : SurplusLinkTheme.slate700,
                   ),
@@ -294,7 +295,7 @@ class _RecommendedMatchesScreenState extends State<RecommendedMatchesScreen> {
             }),
             const SizedBox(height: 4),
             Text(
-              isComplete ? 'Requirement fully covered' : 'Partial fulfillment — ${quantities.formatQuantity(remaining, unit)} $unit will remain unfulfilled.',
+              isComplete ? (isOver ? 'Full fulfillment — includes unavoidable package overage' : 'Requirement fully covered') : 'Partial fulfillment — ${quantities.formatQuantity(remaining.toDouble(), unit)} $unit will remain unfulfilled.',
               key: const Key('fulfillment-status'),
               style: TextStyle(
                 fontSize: 12,
@@ -303,8 +304,10 @@ class _RecommendedMatchesScreenState extends State<RecommendedMatchesScreen> {
               ),
             ),
             const SizedBox(height: 6),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              spacing: 12,
+              runSpacing: 4,
               children: [
                 const Text(
                   'Estimated Total:',
@@ -376,6 +379,34 @@ class _RecommendedMatchesScreenState extends State<RecommendedMatchesScreen> {
   ) async {
     if (_submittingMultiMatch || _selectedQuantities.isEmpty) return;
 
+    setState(() => _submittingMultiMatch = true);
+    try {
+      final current = await Future.wait(_selectedMatches.keys.map((id) => widget.gateway.get(widget.requirementId, id)));
+      if (!mounted) return;
+      String? changed;
+      for (final match in current) {
+        final previous = _selectedMatches[match.id]!;
+        final quantity = _selectedQuantities[match.id]!;
+        if (!match.isSelectable || quantity > (match.availableQuantity ?? 0)) {
+          changed = 'Seller stock changed. Only ${match.packageCountAvailable ?? match.availableQuantity ?? 0} ${match.isPackaged ? match.packageType?.toLowerCase() ?? "packages" : match.unit ?? "units"} are now available.';
+        } else if (match.unitPrice != previous.unitPrice || match.estimatedTransportCost != previous.estimatedTransportCost || match.packageSize != previous.packageSize) {
+          changed = 'Listing terms changed. Review the updated allocation before submitting.';
+        }
+        _selectedMatches[match.id] = match;
+      }
+      if (changed != null) {
+        setState(() => _multiMatchError = changed);
+        return;
+      }
+    } on Object catch (error) {
+      if (mounted) setState(() => _multiMatchError = matchError(error));
+      return;
+    } finally {
+      if (mounted) setState(() => _submittingMultiMatch = false);
+    }
+    if (!mounted) return;
+    final finalAllocations = _allocations;
+    totalCost = finalAllocations.fold(0.0, (sum, allocation) => sum + allocation.totalValue);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -410,7 +441,7 @@ class _RecommendedMatchesScreenState extends State<RecommendedMatchesScreen> {
                     final seller =
                         match?.sellerBusinessName ?? match?.sellerName ?? 'Seller';
                     final qty = quantities.formatQuantity(entry.value, unit);
-                    final itemCost = entry.value * (match?.unitPrice ?? 0.0);
+                    final itemCost = finalAllocations.singleWhere((allocation) => allocation.matchId == entry.key).materialValue;
                     return Padding(
                       padding: const EdgeInsets.symmetric(vertical: 2),
                       child: Row(
@@ -427,8 +458,9 @@ class _RecommendedMatchesScreenState extends State<RecommendedMatchesScreen> {
                 ),
               ],
               const Divider(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              Wrap(
+                spacing: 12,
+                runSpacing: 6,
                 children: [
                   const Text(
                     'Total Estimated Cost:',
@@ -465,14 +497,7 @@ class _RecommendedMatchesScreenState extends State<RecommendedMatchesScreen> {
     });
 
     try {
-      final allocations = _selectedQuantities.entries
-          .map((e) {
-            final match = _selectedMatches[e.key]!;
-            return MatchAllocation(matchId: e.key, quantity: e.value,
-                packageCount: match.packageCountFor(e.value));
-          })
-          .toList();
-      await widget.gateway.selectMatches(widget.requirementId, allocations);
+      await widget.gateway.selectMatches(widget.requirementId, finalAllocations);
       if (mounted) {
         await _load(page: 1);
         if (!mounted) return;

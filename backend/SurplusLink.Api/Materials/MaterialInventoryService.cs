@@ -236,7 +236,7 @@ public sealed class MaterialInventoryService(
         }
         if (listing.AvailableUntil <= DateTime.UtcNow)
         {
-            throw new MaterialOperationException(MaterialOperationError.Validation, "AvailableUntil must be in the future.");
+            throw new MaterialOperationException(MaterialOperationError.Validation, "AvailableUntil must be in the future.", "availableUntil", "DATE_MUST_BE_FUTURE");
         }
 
         listing.Status = ListingStatus.PENDING_VERIFICATION;
@@ -488,6 +488,10 @@ public sealed class MaterialInventoryService(
             throw new MaterialOperationException(MaterialOperationError.Validation, "CategoryId must reference an existing material category.");
         }
         var normalized = MaterialUnits.Normalize(unit);
+        // Categories suggest measurements; custom stock uses the shared safe
+        // measurement registry, never a hidden category restriction.
+        if (template is null && QuantitySemantics.TryConvert(1, unit, unit, out _)) return;
+        if (template is not null && QuantitySemantics.TryConvert(1, unit, template.BaseUnit, out _)) return;
         var allowed = MaterialUnits.Distinct(category.AllowedUnits);
         if (template is not null && template.AllowedUnits.Length > 0)
         {
@@ -498,7 +502,7 @@ public sealed class MaterialInventoryService(
             }
         }
         if (!allowed.Contains(normalized))
-            throw new MaterialOperationException(MaterialOperationError.Validation, "Select an allowed unit for this category.");
+            throw new MaterialOperationException(MaterialOperationError.Validation, "Choose a valid measurement unit.", "unit", "UNIT_INVALID");
     }
 
     private async Task<Listing?> GetListingWithDetailsAsync(Guid listingId, CancellationToken cancellationToken) =>
@@ -520,7 +524,7 @@ public sealed class MaterialInventoryService(
     {
         if (request.AvailableUntil is null || request.AvailableUntil <= DateTime.UtcNow)
         {
-            throw new MaterialOperationException(MaterialOperationError.Validation, "AvailableUntil must be in the future.");
+            throw new MaterialOperationException(MaterialOperationError.Validation, "AvailableUntil must be in the future.", "availableUntil", "DATE_MUST_BE_FUTURE");
         }
         if (request.Latitude.HasValue != request.Longitude.HasValue)
         {
@@ -536,7 +540,7 @@ public sealed class MaterialInventoryService(
             if (mode == "PACKAGE")
             {
                 var packageCount = request.PackageCount ?? (request.PackageSize.HasValue && request.PackageSize.Value > 0 ? (int)Math.Max(1, Math.Round(request.Quantity / request.PackageSize.Value)) : null);
-                var packageSize = request.PackageSize ?? (template.AllowedPackageSizes.Length > 0 ? template.AllowedPackageSizes[0] : 1m);
+                var packageSize = TemplatePackageSize.Resolve(template, request.SpecificationsJson, request.PackageSize) ?? 0;
                 if (packageCount is null || packageCount <= 0 || packageSize <= 0)
                 {
                     throw new MaterialOperationException(MaterialOperationError.Validation, "Packaged items require a positive package size and a whole package count.");
@@ -680,7 +684,7 @@ public sealed class MaterialInventoryService(
 
             if (!hasValue)
             {
-                throw new MaterialOperationException(MaterialOperationError.Validation, $"The field '{label}' is required.");
+                throw new MaterialOperationException(MaterialOperationError.Validation, $"The field '{label}' is required.", $"specifications.{id}", "REQUIRED");
             }
         }
     }
@@ -708,7 +712,8 @@ public sealed class MaterialInventoryService(
             {
                 listing.QuantityMode = QuantityMode.PACKAGE;
                 listing.PackageType = Enum.TryParse<PackageType>(request.PackageType ?? template.PackageType ?? "BOX", true, out var pType) ? pType : PackageType.BOX;
-                listing.PackageSize = request.PackageSize ?? (template.AllowedPackageSizes.Length > 0 ? template.AllowedPackageSizes[0] : 1m);
+                listing.PackageSize = TemplatePackageSize.Resolve(template, request.SpecificationsJson, request.PackageSize)
+                    ?? throw new MaterialOperationException(MaterialOperationError.Validation, "Enter a package size.", "packageSize", "PACKAGE_SIZE_REQUIRED");
                 listing.PackageCount = request.PackageCount ?? (int)Math.Max(1, Math.Round(request.Quantity / listing.PackageSize.Value));
                 listing.Quantity = listing.PackageSize.Value * listing.PackageCount.Value;
                 listing.BaseUnit = MaterialUnits.Normalize(request.BaseUnit ?? template.BaseUnit);

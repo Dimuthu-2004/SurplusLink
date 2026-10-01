@@ -19,6 +19,7 @@ export interface ConstructionItemTemplate {
 }
 
 export interface AttributeFieldDefinition {
+  packageSizeSource?: "QUANTITY_FIELD" | "SPECIFICATION_FIELD" | "CALCULATED";
   id: string;
   label: string;
   labelI18n?: Record<'en' | 'si' | 'ta', string>;

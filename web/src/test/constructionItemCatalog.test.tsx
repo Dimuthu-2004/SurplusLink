@@ -206,7 +206,7 @@ describe('TemplateDrivenMaterialForm', () => {
     expect(submitted.packageSize).toBe(4);
     expect(submitted.packageCount).toBe(5);
     expect(submitted.pricePerPackage).toBe(4500);
-    expect(submitted.unitPrice).toBe(1125); // 4500 / 4
+    expect(submitted.unitPrice).toBe(4500); // price is per complete package
     expect(submitted.constructionItemTemplateId).toBe('paint-id');
     expect(JSON.parse(submitted.specificationsJson!)).toEqual({
       colour: 'Brilliant White',

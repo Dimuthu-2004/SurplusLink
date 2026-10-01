@@ -459,16 +459,16 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
                           padding: const EdgeInsets.only(bottom: 12),
                           child: field.type == 'select'
                               ? DropdownButtonFormField<String>(
-                                  initialValue: _preferences[field.id] as String?,
+                                  initialValue: _preferences[field.id] as String? ?? (field.allowAnyPreference ? '__ANY__' : null),
                                   isExpanded: true,
                                   decoration: InputDecoration(labelText: field.labelFor(Localizations.localeOf(context).languageCode), helperText: field.helper),
                                   hint: const Text('Any / No preference'),
                                   items: [
                                     if (field.allowAnyPreference)
-                                      const DropdownMenuItem<String>(value: null, child: Text('Any / No preference')),
+                                      DropdownMenuItem<String>(value: '__ANY__', child: Text(text?.anyPreference ?? 'Any / No preference')),
                                     ...field.options.map((option) => DropdownMenuItem(value: option, child: Text(option))),
                                   ],
-                                  onChanged: _saving ? null : (value) => setState(() { if (value == null) { _preferences.remove(field.id); } else { _preferences[field.id] = value; } }),
+                                  onChanged: _saving ? null : (value) => setState(() { if (value == null || value == '__ANY__') { _preferences.remove(field.id); } else { _preferences[field.id] = value; } }),
                                 )
                               : TextFormField(
                                   initialValue: _preferences[field.id]?.toString(),

@@ -30,7 +30,8 @@ public sealed partial class MatchService
         var request = await LockOpenRequirement(id, actor, manager, ct);
         // Unit compatibility is domain normalization, not a SQL equality filter:
         // a CAN is a selling form while L is the comparable base measurement.
-        var listings = (await db.Listings.AsNoTracking().Where(x => x.CategoryId == request.CategoryId)
+        var listings = (await db.Listings.AsNoTracking().Include(x => x.ConstructionItemTemplate).Where(x => x.CategoryId == request.CategoryId &&
+            (request.ConstructionItemTemplateId == null || x.ConstructionItemTemplateId == null || x.ConstructionItemTemplateId == request.ConstructionItemTemplateId))
             .OrderBy(x => x.UnitPrice).ThenBy(x => x.Id).Take(500).ToListAsync(ct))
             // Rejected candidates stay visible/auditable.  Do not filter them
             // out before GenerateAsync can persist their deterministic reason.

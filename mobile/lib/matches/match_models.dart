@@ -5,11 +5,20 @@ class MatchAllocation {
     required this.matchId,
     required this.quantity,
     this.packageCount,
+    this.unitPrice = 0,
+    this.transportCost = 0,
   });
 
   final String matchId;
   final double quantity;
   final int? packageCount;
+  final double unitPrice, transportCost;
+  double get materialValue => (packageCount ?? quantity) * unitPrice;
+  double get totalValue => materialValue + transportCost;
+  factory MatchAllocation.fromMatch(RecommendedMatch match, double quantity) => MatchAllocation(
+    matchId: match.id, quantity: quantity, packageCount: match.packageCountFor(quantity),
+    unitPrice: match.unitPrice ?? 0, transportCost: match.estimatedTransportCost ?? 0,
+  );
 
   Map<String, dynamic> toJson() => {
     'matchId': matchId,

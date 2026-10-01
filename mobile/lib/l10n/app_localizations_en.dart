@@ -44,4 +44,47 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get validationSummary => 'Please correct the highlighted fields.';
+
+  @override
+  String get submitListing => 'Submit Listing';
+
+  @override
+  String get packageType => 'Package type';
+
+  @override
+  String get packages => 'Packages';
+
+  @override
+  String get customPackageName => 'Custom package name';
+
+  @override
+  String get baseMeasurement => 'Base measurement';
+
+  @override
+  String get piecesUnits => 'Pieces / Units';
+
+  @override
+  String get bulkQuantity => 'Bulk Quantity';
+
+  @override
+  String get howSold => 'How is this item sold?';
+
+  @override
+  String get requiredField => 'This field is required.';
+
+  @override
+  String get packageSizeRequired =>
+      'Choose or enter the amount contained in one package.';
+
+  @override
+  String get invalidMeasurement => 'Choose a valid measurement unit.';
+
+  @override
+  String get wholeNumberRequired => 'Enter a whole number greater than zero.';
+
+  @override
+  String get futureDateRequired => 'Choose a future date.';
+
+  @override
+  String get anyPreference => 'Any / No preference';
 }

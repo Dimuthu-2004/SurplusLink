@@ -18,7 +18,7 @@ public class CreateMaterialListingRequest
     [RegularExpression("^(PACKAGE|PIECE|CONTINUOUS)$")]
     public string? QuantityMode { get; init; }
     [MaxLength(32)] public string? BaseUnit { get; init; }
-    [RegularExpression("^(CAN|BAG|BOX|CARTRIDGE|ROLL|SHEET|ROD|PIPE|PACK|PIECE|OTHER)$")]
+    [RegularExpression("^(CAN|BAG|BOX|BOTTLE|BUNDLE|SACK|CARTON|CARTRIDGE|ROLL|SHEET|ROD|PIPE|PACK|PIECE|OTHER)$")]
     public string? PackageType { get; init; }
     [Range(typeof(decimal), "0.001", "999999999999999.999")] public decimal? PackageSize { get; init; }
     [Range(1, int.MaxValue)] public int? PackageCount { get; init; }

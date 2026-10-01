@@ -8,8 +8,7 @@ import 'package:mobile/theme/surplus_link_theme.dart';
 
 String matchError(Object error) => switch (error) {
   ApiException(statusCode: 403) => 'You do not have access to these matches.',
-  ApiException(statusCode: 404) =>
-    'These matches are not available. Return to your requirements or retry.',
+  ApiException(statusCode: 404, :final message) => message,
   ApiException(statusCode: 401) =>
     'Your session has expired. Please sign in again.',
   ApiException(statusCode: 429) => 'Too many requests. Please wait and retry.',
@@ -151,7 +150,7 @@ class MatchListCard extends StatelessWidget {
 
     // Seller display name
     final sellerLabel =
-        match.sellerBusinessName ?? match.sellerName ?? match.sellerId;
+        match.sellerDisplayName ?? match.sellerBusinessName ?? match.sellerName ?? 'Verified seller';
 
     return RecommendedMatchCard(
       recommended: match.aiRecommended,
@@ -224,7 +223,7 @@ class MatchListCard extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
               // Seller / Business name
-              if (sellerLabel != null) ...[
+              ...[
                 const SizedBox(height: 2),
                 Text(
                   sellerLabel,
@@ -368,7 +367,8 @@ class MatchListCard extends StatelessWidget {
                                 ],
                               ),
                               const SizedBox(height: 6),
-                              Row(
+                              Wrap(
+                                crossAxisAlignment: WrapCrossAlignment.center,
                                 children: [
                                   IconButton(
                                     key: Key('qty-decrement-${match.id}'),
@@ -408,7 +408,6 @@ class MatchListCard extends StatelessWidget {
                                           )
                                         : null,
                                   ),
-                                  const Spacer(),
                                   TextButton(
                                     key: Key('qty-max-${match.id}'),
                                     onPressed: () => onQuantityChanged!(

@@ -316,6 +316,7 @@ public static class ConstructionItemTemplateCatalogSeed
                 new { id = "material", label = "Material", type = "select", required = true, options = new[] { "Ceramic", "Porcelain", "Granite", "Marble", "Terracotta", "Glass Mosaic" } },
                 new { id = "dimensionsMm", label = "Dimensions (mm)", type = "string", required = true, placeholder = "e.g. 600x600, 300x300, 300x600" },
                 new { id = "piecesPerBox", label = "Pieces per Box", type = "number", required = false, placeholder = "e.g. 4" },
+                new { id = "coveragePerBoxSqm", label = "Coverage per box", type = "number", required = true, packageSizeSource = "CALCULATED", calculation = "RECTANGLE_MM_AREA", unit = "sqm" },
                 new { id = "finish", label = "Finish", type = "select", required = false, options = new[] { "Polished / Gloss", "Matt", "Anti-Slip", "Textured / Rustic", "Honed" } }
             }),
             PriceBasis = "PER_PACKAGE",
@@ -356,15 +357,15 @@ public static class ConstructionItemTemplateCatalogSeed
             CategoryId = FinishesId,
             ItemClass = "MATERIAL",
             QuantityMode = "PACKAGE",
-            BaseUnit = "cartridge",
+            BaseUnit = "ml",
             PackageType = "CARTRIDGE",
-            AllowedUnits = ["cartridge", "piece"],
-            AllowedPackageSizes = [1m],
+            AllowedUnits = ["ml", "L"],
+            AllowedPackageSizes = [300m, 310m, 600m],
             AttributeSchema = JsonSerializer.Serialize(new object[]
             {
                 new { id = "sealantType", label = "Sealant Type", type = "select", required = true, options = new[] { "Silicone (Acetic)", "Silicone (Neutral)", "Polyurethane (PU)", "Acrylic / Gap Filler" } },
                 new { id = "colour", label = "Colour", type = "string", required = false, placeholder = "e.g. Clear, White, Grey, Black" },
-                new { id = "volumeMl", label = "Cartridge Size (ml)", type = "select", required = false, options = new[] { "300ml", "310ml", "600ml sausage" } }
+                new { id = "volumeMl", label = "Cartridge Size (ml)", type = "select", required = true, packageSizeSource = "SPECIFICATION_FIELD", unit = "ml", options = new[] { "300ml", "310ml", "600ml sausage" } }
             }),
             PriceBasis = "PER_PACKAGE",
             IsActive = true,
@@ -974,6 +975,13 @@ public static class ConstructionItemTemplateCatalogSeed
     {
         foreach (var template in templates)
         {
+            template.Aliases = template.Name switch
+            {
+                "Generator" => ["generator", "portable generator", "genset"],
+                "Paint" => ["paint", "wall paint", "emulsion paint"],
+                "Air Compressor" => ["air compressor", "compressor"],
+                _ => [template.Name.ToLowerInvariant()]
+            };
             if (JsonNode.Parse(template.AttributeSchema) is not JsonArray fields) continue;
             foreach (var node in fields.OfType<JsonObject>())
             {
@@ -984,9 +992,10 @@ public static class ConstructionItemTemplateCatalogSeed
                 // unknown technical details remain null instead of receiving fake defaults.
                 // Paint type and colour are the small exception: together they are
                 // the ordinary identifying detail needed to price a paint listing.
-                var requiredForSafeIdentification = template.Name == "Paint" && id is "paintType" or "colour";
+                var requiredForSafeIdentification = node["packageSizeSource"] is not null || (template.Name == "Paint" && id is "paintType" or "colour");
                 node["required"] = requiredForSafeIdentification;
-                node["priority"] = requiredForSafeIdentification ? "REQUIRED" : IsRecommended(id) ? "RECOMMENDED" : "OPTIONAL";
+                node["priority"] = requiredForSafeIdentification ? "CORE_REQUIRED" : IsBuyerPreference(template.Name, id) ? "MATCH_REQUIRED" : "OPTIONAL";
+                node["allowAnyPreference"] = true;
                 node["sellerField"] = true;
                 node["buyerPreference"] = IsBuyerPreference(template.Name, id);
                 node["allowOther"] = node["type"]?.GetValue<string>() == "select";
@@ -1008,7 +1017,7 @@ public static class ConstructionItemTemplateCatalogSeed
     private static bool IsBuyerPreference(string item, string id) => (item, id) switch
     {
         ("Bricks", "brickType") or ("Bricks", "dimensionsMm") or
-        ("Paint", "paintType") or ("Paint", "finish") or
+        ("Paint", "paintType") or ("Paint", "finish") or ("Paint", "colour") or ("Paint", "brand") or
         ("Tiles", "material") or ("Tiles", "dimensionsMm") or ("Tiles", "finish") or
         ("Generator", "capacityKva") or ("Generator", "fuelType") or
         ("Drill", "drillType") => true,

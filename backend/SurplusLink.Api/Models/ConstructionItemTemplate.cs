@@ -5,6 +5,7 @@ public sealed class ConstructionItemTemplate : AuditableEntity
     public Guid Id { get; set; }
 
     public string Name { get; set; } = string.Empty;
+    public string[] Aliases { get; set; } = [];
 
     public Guid CategoryId { get; set; }
 
