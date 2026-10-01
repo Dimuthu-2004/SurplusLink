@@ -315,7 +315,7 @@ public sealed class MatchIntegrationTests(RequirementsDatabase fixture) : IClass
         var category = Guid.Parse("00000000-0000-0000-0000-000000000101");
         var request = new BuyerRequest
         {
-            Id = Guid.NewGuid(), BuyerId = fixture.Buyer, CategoryId = category, RequiredQuantity = 5,
+            Id = Guid.NewGuid(), BuyerId = fixture.Buyer, CategoryId = category, Title = "Matching stock", RequiredQuantity = 5,
             MaximumBudget = 10000, Unit = "kg", Deadline = DateTime.UtcNow.AddDays(7), Status = BuyerRequestStatus.OPEN
         };
         var listing = new Listing

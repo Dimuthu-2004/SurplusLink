@@ -66,6 +66,45 @@ public sealed class BuyerRequirementsIntegrationTests : IClassFixture<Requiremen
     }
 
     [PostgresFact]
+    public async Task Requirement_item_identity_and_quantity_metadata_round_trip_through_api()
+    {
+        using var db = fixture.Context();
+        var template = await db.ConstructionItemTemplates.OrderBy(x => x.Name).FirstAsync();
+        var unit = template.BaseUnit;
+        using var app = fixture.App();
+        using var buyer = fixture.Client(app, fixture.Buyer);
+        var body = Body();
+        body["categoryId"] = template.CategoryId;
+        body["unit"] = unit;
+        body["constructionItemTemplateId"] = template.Id;
+        body["buyerPreferencesJson"] = "{}";
+        body["inputMode"] = "BASE_QUANTITY";
+        body["enteredQuantity"] = 10m;
+        body["enteredUnit"] = unit;
+
+        var createdResponse = await buyer.PostAsJsonAsync("/api/requirements", body);
+        Assert.Equal(HttpStatusCode.Created, createdResponse.StatusCode);
+        var created = (await createdResponse.Content.ReadFromJsonAsync<RequirementResponse>())!;
+        Assert.Equal(template.Id, created.ConstructionItemTemplateId);
+        Assert.Equal(template.Name, created.ConstructionItemTemplateName);
+        Assert.Equal("{}", created.BuyerPreferencesJson);
+        Assert.Equal("BASE_QUANTITY", created.InputMode);
+        Assert.Equal(10m, created.EnteredQuantity);
+        Assert.Equal(unit, created.EnteredUnit);
+
+        body["requiredQuantity"] = 12m;
+        var updatedResponse = await buyer.PutAsJsonAsync($"/api/requirements/{created.Id}", body);
+        Assert.Equal(HttpStatusCode.OK, updatedResponse.StatusCode);
+        var updated = (await updatedResponse.Content.ReadFromJsonAsync<RequirementResponse>())!;
+        Assert.Equal(template.Id, updated.ConstructionItemTemplateId);
+        Assert.Equal(template.Name, updated.ConstructionItemTemplateName);
+        using var verify = fixture.Context();
+        var stored = await verify.BuyerRequests.SingleAsync(x => x.Id == created.Id);
+        Assert.Equal(template.Id, stored.ConstructionItemTemplateId);
+        Assert.Equal(template.Name + " requirement", stored.Title);
+    }
+
+    [PostgresFact]
     public async Task Authentication_ownership_and_manager_read_only_access_cover_every_route()
     {
         using var app = fixture.App();
