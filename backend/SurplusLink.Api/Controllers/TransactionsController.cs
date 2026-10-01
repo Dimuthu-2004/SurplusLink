@@ -52,6 +52,11 @@ public sealed class TransactionsController(TransactionService service) : Control
     public Task<ActionResult<TransactionAnalyticsSummary>> Analytics(CancellationToken ct) =>
         Execute(() => service.AnalyticsAsync(ct));
 
+    [HttpGet("transactions/follow-ups")]
+    [Authorize(Roles = "MANAGER")]
+    public Task<ActionResult<IReadOnlyList<TransactionFollowUpResponse>>> FollowUps(CancellationToken ct) =>
+        Execute(() => service.FollowUpsAsync(ct));
+
     [HttpPost("offers/{id:guid}/approve")]
     [Authorize(Roles = "MANAGER")]
     public Task<IActionResult> ApproveOffer(Guid id, CancellationToken ct) => DecideOffer(id, OfferStatus.ACCEPTED, ct);
@@ -79,6 +84,16 @@ public sealed class TransactionsController(TransactionService service) : Control
     [Authorize(Roles = "BUYER")]
     public Task<ActionResult<TransactionResponse>> Complete(Guid id, CancellationToken ct) =>
         Execute(() => service.CompleteAsync(id, Actor(), ct));
+
+    [HttpPost("transactions/{id:guid}/resolve-completed")]
+    [Authorize(Roles = "MANAGER")]
+    public Task<ActionResult<TransactionResponse>> ResolveCompleted(Guid id, [FromBody] ManagerTransactionResolutionRequest request, CancellationToken ct) =>
+        Execute(() => service.ResolveCompletedAsync(id, Actor(), request.Note, ct));
+
+    [HttpPost("transactions/{id:guid}/resolve-not-completed")]
+    [Authorize(Roles = "MANAGER")]
+    public Task<ActionResult<TransactionResponse>> ResolveNotCompleted(Guid id, [FromBody] ManagerTransactionResolutionRequest request, CancellationToken ct) =>
+        Execute(() => service.ResolveNotCompletedAsync(id, Actor(), request.Note ?? string.Empty, ct));
 
     [HttpPost("transactions/{id:guid}/reject")]
     [Authorize(Roles = "MANAGER")]

@@ -5,6 +5,8 @@ const transactionStatuses = [
   'PENDING_APPROVAL',
   'APPROVED',
   'HANDED_OVER',
+  'MANAGER_REVIEW_REQUIRED',
+  'NOT_COMPLETED',
   'REJECTED',
   'COMPLETED',
 ];
@@ -94,6 +96,9 @@ class Transaction {
     required this.reservedQuantity,
     required this.totalValue,
     required this.updatedAt,
+    this.confirmationDeadline,
+    this.sellerHandoverConfirmedAt,
+    this.buyerReceivedConfirmedAt,
   });
   factory Transaction.fromJson(Map<String, dynamic> j) => Transaction(
     id: j['id'] as String,
@@ -110,6 +115,9 @@ class Transaction {
     reservedQuantity: (j['reservedQuantity'] as num).toDouble(),
     totalValue: (j['totalValue'] as num).toDouble(),
     updatedAt: DateTime.parse(j['updatedAt'] as String),
+    confirmationDeadline: j['confirmationDeadline'] == null ? null : DateTime.parse(j['confirmationDeadline'] as String),
+    sellerHandoverConfirmedAt: j['sellerHandoverConfirmedAt'] == null ? null : DateTime.parse(j['sellerHandoverConfirmedAt'] as String),
+    buyerReceivedConfirmedAt: j['buyerReceivedConfirmedAt'] == null ? null : DateTime.parse(j['buyerReceivedConfirmedAt'] as String),
   );
   final String id, offerId, status, buyerId, sellerId;
   final TransactionContact? buyerContact, sellerContact;
@@ -117,14 +125,18 @@ class Transaction {
       const ['APPROVED', 'HANDED_OVER', 'COMPLETED'].contains(status);
   bool canHandover(AppUser user) =>
       status == 'APPROVED' &&
+      sellerHandoverConfirmedAt == null &&
       sellerId == user.id &&
       user.hasRole(AppRole.seller);
   bool canConfirmReceipt(AppUser user) =>
       status == 'HANDED_OVER' &&
+      sellerHandoverConfirmedAt != null &&
+      buyerReceivedConfirmedAt == null &&
       buyerId == user.id &&
       user.hasRole(AppRole.buyer);
   final double reservedQuantity, totalValue;
   final DateTime updatedAt;
+  final DateTime? confirmationDeadline, sellerHandoverConfirmedAt, buyerReceivedConfirmedAt;
 }
 
 class OfferPage {

@@ -15,6 +15,7 @@ export function resolveImageUrl(photoUrl?: string | null): string {
   }
 
   const trimmed = photoUrl.trim();
+  if (trimmed.startsWith('file:')) return FALLBACK_MATERIAL_IMAGE;
   if (!trimmed) {
     return FALLBACK_MATERIAL_IMAGE;
   }

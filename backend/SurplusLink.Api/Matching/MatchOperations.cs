@@ -166,7 +166,7 @@ public sealed partial class MatchService
             x.Listing.AvailableUntil, x.MaterialRequest.Deadline, available,
             x.MaterialRequest.MaximumBudget, x.MaterialRequest.Status.ToString(),
             x.Listing.Seller.FullName, x.Listing.Seller.BusinessName, x.Listing.Condition.ToString(),
-            x.Listing.Latitude, x.Listing.Longitude, LocationDisplay.Concise(x.Listing.Seller.Address),
+            x.Listing.Latitude, x.Listing.Longitude, LocationDisplay.Concise(x.Listing.Seller.Address), LocationDisplay.Concise(x.Listing.Seller.Address),
             x.Id == x.MaterialRequest.RecommendedMatchId,
             x.MaterialRequest.RecommendedMatchId,
             x.MaterialRequest.RecommendationReason ?? (x.Id == x.MaterialRequest.RecommendedMatchId

@@ -82,6 +82,7 @@ public sealed record MatchResponse(
     decimal? Latitude = null,
     decimal? Longitude = null,
     string? SellerAddress = null,
+    string? DisplayLocation = null,
     bool AiRecommended = false,
     Guid? RecommendedMatchId = null,
     string? RecommendationReason = null,

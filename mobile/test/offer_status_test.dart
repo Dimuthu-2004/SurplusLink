@@ -54,16 +54,16 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(
-        find.text('Material Handed Over'),
+        find.text('Handed Over'),
         role == 'seller' ? findsOneWidget : findsNothing,
       );
       expect(
-        find.text('Yes, Received'),
+        find.text('Received'),
         role == 'buyer' ? findsOneWidget : findsNothing,
       );
       if (role == 'seller') {
         expect(find.text('buyer@test.local'), findsOneWidget);
-        await tester.tap(find.text('Material Handed Over'));
+        await tester.tap(find.text('Handed Over'));
         await tester.pumpAndSettle();
         expect(gateway.status, 'HANDED_OVER');
         expect(
@@ -73,9 +73,8 @@ void main() {
       }
       if (role == 'buyer') {
         expect(find.text('seller@test.local'), findsOneWidget);
-        expect(find.text('Have you received the materials?'), findsOneWidget);
-        await tester.scrollUntilVisible(find.text('Yes, Received'), 100);
-        await tester.tap(find.text('Yes, Received'));
+        await tester.scrollUntilVisible(find.text('Received'), 100);
+        await tester.tap(find.text('Received'));
         await tester.pumpAndSettle();
         expect(gateway.status, 'COMPLETED');
         expect(find.text('Completed'), findsWidgets);
@@ -109,7 +108,7 @@ void main() {
     await tester.tap(find.text('Refresh transaction'));
     await tester.pumpAndSettle();
     expect(find.text('seller@test.local'), findsOneWidget);
-    expect(find.text('Yes, Received'), findsNothing);
+    expect(find.text('Received'), findsNothing);
     expect(find.byTooltip('Call seller'), findsOneWidget);
   });
 
@@ -152,6 +151,8 @@ class FakeOffers implements OfferGateway {
     reservedQuantity: 400,
     totalValue: 320000,
     updatedAt: DateTime.utc(2026),
+    sellerHandoverConfirmedAt: status == 'HANDED_OVER' || status == 'COMPLETED' ? DateTime.utc(2026, 10, 1) : null,
+    buyerReceivedConfirmedAt: status == 'COMPLETED' ? DateTime.utc(2026, 10, 2) : null,
     buyerContact: const TransactionContact(email: 'buyer@test.local'),
     sellerContact: const TransactionContact(email: 'seller@test.local', phoneNumber: '0771234567'),
   );

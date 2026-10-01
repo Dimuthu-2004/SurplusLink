@@ -1,9 +1,11 @@
-import { type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { AnalyticsMetric } from '../../components/AnalyticsChart';
 import { LiveIndicator, MetricTrend, PageHeader } from '../../components/DesignSystem';
 import { managerDashboardApi } from '../../features/dashboard/managerDashboardApi';
 import { requirementNumber } from '../../features/requirements/requirementUi';
+import { requirementDate } from '../../features/requirements/requirementUi';
+import { transactionConfirmationsApi, type TransactionFollowUp } from '../../features/transactions/transactionsApi';
 import { useLiveResource } from '../../hooks/useLiveResource';
 
 export function ManagerDashboardPage() {
@@ -40,6 +42,7 @@ export function ManagerDashboardPage() {
           </div>
         )}
       </section>
+      <TransactionConfirmationWarnings />
       <div className="dashboard-grid">
         <AnalyticsPanel title="Inventory" load={managerDashboardApi.inventory}>
           {(data) => <>
@@ -123,6 +126,35 @@ export function ManagerDashboardPage() {
       </div>
     </div>
   );
+}
+
+function TransactionConfirmationWarnings() {
+  const warnings = useLiveResource(transactionConfirmationsApi.followUps);
+  const [reviewing, setReviewing] = useState<TransactionFollowUp | null>(null);
+  const [busy, setBusy] = useState(false);
+  const resolve = async (completed: boolean) => {
+    if (!reviewing) return;
+    const verb = completed ? 'completed' : 'not completed';
+    if (!window.confirm(`Mark this transaction as ${verb} after confirming with the parties?`)) return;
+    const note = window.prompt(completed ? 'Resolution note (optional, max 500 characters)' : 'Reason for marking not completed (required, max 500 characters)');
+    if (!completed && !note?.trim()) return;
+    setBusy(true);
+    try {
+      if (completed) await transactionConfirmationsApi.resolveCompleted(reviewing.id, note ?? undefined);
+      else await transactionConfirmationsApi.resolveNotCompleted(reviewing.id, note!.trim());
+      setReviewing(null);
+      await warnings.reload();
+    } finally { setBusy(false); }
+  };
+  if (warnings.loading || warnings.error || warnings.data === null) return null;
+  return <section className="manager-panel" aria-label="Transaction confirmation warnings">
+    <div className="section-heading"><div><p className="eyebrow">Action required</p><h2>⚠ Transaction confirmation pending</h2></div><button type="button" className="button button-secondary" onClick={() => void warnings.reload()}>Refresh</button></div>
+    {warnings.data.length === 0 ? <p className="muted">No transaction confirmations currently need attention.</p> : <div className="transaction-warning-grid">{warnings.data.map(row => <article key={row.id} className="transaction-warning-card"><p className="eyebrow">{row.status === 'MANAGER_REVIEW_REQUIRED' ? 'Manager review required' : 'Follow-up needed'}</p><h3>{row.materialTitle}</h3><p className="muted">{row.reference} · Seller: {row.seller.fullName || 'Unavailable'}</p><p>Seller handover: {row.sellerHandoverConfirmedAt ? 'Confirmed' : 'Not confirmed'}</p><p>Buyer receipt: {row.buyerReceivedConfirmedAt ? 'Received' : row.sellerHandoverConfirmedAt ? 'No response' : 'Waiting for seller'}</p><button type="button" className="button" onClick={() => setReviewing(row)}>Review transaction</button></article>)}</div>}
+    {reviewing && <div className="modal-backdrop" role="presentation"><section className="manager-panel" role="dialog" aria-modal="true" aria-label="Transaction confirmation review"><div className="section-heading"><h2>{reviewing.reference} · {reviewing.materialTitle}</h2><button type="button" className="text-button" onClick={() => setReviewing(null)}>Close</button></div>
+      <dl className="detail-grid"><div><dt>Seller</dt><dd>{reviewing.seller.fullName || 'Seller unavailable'}</dd></div><div><dt>Buyer</dt><dd>{reviewing.buyer.fullName || 'Buyer unavailable'}</dd></div><div><dt>Physical selected quantity</dt><dd>{requirementNumber(reviewing.quantity)} {reviewing.unit}</dd></div><div><dt>Material value</dt><dd>LKR {requirementNumber(reviewing.totalValue, 2)}</dd></div><div><dt>Approved</dt><dd>{reviewing.managerApprovedAt ? requirementDate(reviewing.managerApprovedAt) : 'Unavailable'}</dd></div><div><dt>Confirmation deadline</dt><dd>{reviewing.confirmationDeadline ? requirementDate(reviewing.confirmationDeadline) : 'Unavailable'} ({reviewing.daysRemaining} days remaining)</dd></div><div><dt>Seller handover</dt><dd>{reviewing.sellerHandoverConfirmedAt ? `Confirmed — ${requirementDate(reviewing.sellerHandoverConfirmedAt)}` : 'Not confirmed'}</dd></div><div><dt>Buyer receipt</dt><dd>{reviewing.buyerReceivedConfirmedAt ? `Received — ${requirementDate(reviewing.buyerReceivedConfirmedAt)}` : reviewing.sellerHandoverConfirmedAt ? 'No response' : 'Waiting for Seller'}</dd></div></dl>
+      <p>Seller phone: {reviewing.seller.phoneNumber || 'Phone number is unavailable.'}</p><p>Buyer phone: {reviewing.buyer.phoneNumber || 'Phone number is unavailable.'}</p><p>Seller email: {reviewing.seller.email}</p><p>Buyer email: {reviewing.buyer.email}</p><div className="button-row"><button type="button" className="button" disabled={busy} onClick={() => void resolve(true)}>Mark Completed</button><button type="button" className="button button-danger" disabled={busy} onClick={() => void resolve(false)}>Mark Not Completed</button></div>
+    </section></div>}
+  </section>;
 }
 
 function rejectionReasonLabel(reason: string) {

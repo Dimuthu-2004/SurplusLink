@@ -457,6 +457,9 @@ class _OfferTransactionDetailsState extends State<OfferTransactionDetails> {
               _DetailLine(label: 'Status', value: offerStatusLabel(row.status)),
               _DetailLine(label: 'Reserved quantity', value: row.reservedQuantity.toStringAsFixed(2)),
               _DetailLine(label: 'Total value', value: 'LKR ${row.totalValue.toStringAsFixed(2)}'),
+              if (row.confirmationDeadline != null) _DetailLine(label: 'Confirmation deadline', value: row.confirmationDeadline!.toLocal().toString()),
+              _DetailLine(label: 'Seller handover', value: row.sellerHandoverConfirmedAt == null ? 'Waiting for Seller to confirm handover.' : 'Handed over on ${row.sellerHandoverConfirmedAt!.toLocal()}'),
+              _DetailLine(label: 'Buyer receipt', value: row.buyerReceivedConfirmedAt == null ? (row.sellerHandoverConfirmedAt == null ? 'Not available yet' : 'Waiting for Buyer to confirm receipt.') : 'Received on ${row.buyerReceivedConfirmedAt!.toLocal()}'),
             ],
           ),
           if (!row.contactsVisible)
@@ -475,16 +478,15 @@ class _OfferTransactionDetailsState extends State<OfferTransactionDetails> {
           if (row.canHandover(widget.user))
             FilledButton(
               onPressed: busy ? null : () => act(true),
-              child: const Text('Material Handed Over'),
+              child: const Text('Handed Over'),
             ),
           if (row.canConfirmReceipt(widget.user)) ...[
-            const Text('Have you received the materials?'),
             FilledButton(
               onPressed: busy ? null : () => act(false),
-              child: const Text('Yes, Received'),
+              child: const Text('Received'),
             ),
           ],
-          if (row.status == 'APPROVED' && row.buyerId == widget.user.id)
+          if (row.status == 'APPROVED' && row.buyerId == widget.user.id && row.sellerHandoverConfirmedAt == null)
             const Text('Waiting for the seller to hand over the materials.'),
           if (row.status == 'HANDED_OVER' && row.sellerId == widget.user.id)
             const Text('Waiting for the buyer to confirm receipt.'),

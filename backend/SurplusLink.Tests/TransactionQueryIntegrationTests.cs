@@ -116,18 +116,18 @@ public sealed class TransactionQueryIntegrationTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Forbidden, (await manager.PostAsync($"/api/transactions/{seeded.Pending.Id}/complete", null)).StatusCode);
         using var seller = fixture.Client(app, fixture.Seller, "SELLER");
         Assert.Equal(HttpStatusCode.OK, (await seller.PostAsync($"/api/transactions/{seeded.Pending.Id}/handover", null)).StatusCode);
-        var completed = await buyer.PostAsync($"/api/transactions/{seeded.Pending.Id}/confirm-receipt", null);
+        using var completed = await buyer.PostAsync($"/api/transactions/{seeded.Pending.Id}/confirm-receipt", null);
         Assert.Equal(HttpStatusCode.OK, completed.StatusCode);
+        Assert.Equal(0, (await completed.Content.ReadFromJsonAsync<TransactionResponse>())!.ReservedQuantity);
 
         var history = await manager.GetFromJsonAsync<TransactionHistoryPage>(
             $"/api/transactions/{seeded.Pending.Id}/history?pageSize=10");
-        Assert.Equal(new[] { "TRANSACTION_COMPLETED", "TRANSACTION_HANDED_OVER", "WORKFLOW_APPROVED" },
+        Assert.Equal(new[] { "BUYER_RECEIPT_CONFIRMED_TRANSACTION_COMPLETED", "SELLER_HANDOVER_CONFIRMED", "TRANSACTION_APPROVED_STOCK_RESERVED", "WORKFLOW_APPROVED" },
             history!.Items.Select(x => x.Action).OrderBy(x => x));
 
         var summary = await manager.GetFromJsonAsync<TransactionAnalyticsSummary>("/api/transactions/analytics/summary");
         Assert.True(summary!.CompletionCount >= 1);
         Assert.True(summary.CompletedValue >= seeded.Pending.TotalValue);
-        Assert.True(summary.ReservedQuantity >= seeded.Pending.Quantity);
     }
 
     [PostgresFact]
@@ -175,7 +175,9 @@ public sealed class TransactionQueryIntegrationTests : IAsyncLifetime
             Assert.Equal(fixture.Buyer + "@requirements.test", approved!.BuyerContact!.Email);
             Assert.Equal(fixture.Seller + "@requirements.test", approved.SellerContact!.Email);
         }
-        Assert.Null((await manager.GetFromJsonAsync<TransactionResponse>(path))!.BuyerContact);
+        var managerApproved = await manager.GetFromJsonAsync<TransactionResponse>(path);
+        Assert.Equal(fixture.Buyer + "@requirements.test", managerApproved!.BuyerContact!.Email);
+        Assert.Equal(fixture.Seller + "@requirements.test", managerApproved.SellerContact!.Email);
         Assert.Equal(HttpStatusCode.Conflict, (await buyer.PostAsync(path + "/confirm-receipt", null)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await seller.PostAsync(path + "/handover", null)).StatusCode);
         await AssertState(TransactionStatus.HANDED_OVER, BuyerRequestStatus.APPROVED, ReservationStatus.ACTIVE, AgentWorkflowStatus.APPROVED);
@@ -184,20 +186,21 @@ public sealed class TransactionQueryIntegrationTests : IAsyncLifetime
         await AssertState(TransactionStatus.COMPLETED, BuyerRequestStatus.COMPLETED, ReservationStatus.CONFIRMED, AgentWorkflowStatus.COMPLETED);
         Assert.Equal(HttpStatusCode.Conflict, (await buyer.PostAsync(path + "/confirm-receipt", null)).StatusCode);
         var history = await buyer.GetFromJsonAsync<TransactionHistoryPage>(path + "/history");
-        Assert.Equal(new[] { "WORKFLOW_APPROVED", "TRANSACTION_HANDED_OVER", "TRANSACTION_COMPLETED" }, history!.Items.Select(x => x.Action));
+        Assert.Equal(new[] { "WORKFLOW_APPROVED", "TRANSACTION_APPROVED_STOCK_RESERVED", "SELLER_HANDOVER_CONFIRMED", "BUYER_RECEIPT_CONFIRMED_TRANSACTION_COMPLETED" }, history!.Items.Select(x => x.Action));
 
         async Task AssertState(TransactionStatus status, BuyerRequestStatus requestStatus, ReservationStatus reservationStatus, AgentWorkflowStatus workflowStatus)
         {
             using var db = fixture.Context();
             var row = await db.Transactions.Include(x => x.Offer).ThenInclude(x => x.MaterialMatch).ThenInclude(x => x.MaterialRequest).SingleAsync(x => x.Id == seeded.Pending.Id);
             Assert.Equal(status, row.Status);
-            Assert.Equal(row.Quantity, row.ReservedQuantity);
+            Assert.Equal(status == TransactionStatus.COMPLETED ? 0 : row.Quantity, row.ReservedQuantity);
             Assert.Equal(status == TransactionStatus.COMPLETED, row.CompletedAtUtc.HasValue);
             Assert.Equal(requestStatus, row.Offer.MaterialMatch.MaterialRequest.Status);
             var reservation = Assert.Single(await db.Reservations.Where(x => x.MaterialRequestId == row.Offer.MaterialMatch.MaterialRequestId).ToListAsync());
             Assert.Equal(reservationStatus, reservation.Status);
             Assert.Equal(row.Quantity, reservation.Quantity);
-            Assert.Equal(row.Quantity, (await db.Listings.SingleAsync(x => x.Id == reservation.ListingId)).ReservedQuantity);
+            Assert.Equal(status == TransactionStatus.COMPLETED ? 0 : row.Quantity,
+                (await db.Listings.SingleAsync(x => x.Id == reservation.ListingId)).ReservedQuantity);
             var workflow = await db.AgentWorkflows.SingleAsync(x => x.MaterialMatchId == seeded.Offer.MaterialMatchId);
             Assert.Equal(workflowStatus, workflow.Status);
             Assert.Equal(status == TransactionStatus.COMPLETED, workflow.CompletedAtUtc.HasValue);
@@ -223,6 +226,98 @@ public sealed class TransactionQueryIntegrationTests : IAsyncLifetime
                 Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsync(path + action, null)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await unrelated.GetAsync(path)).StatusCode);
         Assert.Equal(TransactionStatus.HANDED_OVER, (await buyer.GetFromJsonAsync<TransactionResponse>(path))!.Status);
+    }
+
+    [PostgresFact]
+    public async Task Manager_not_completed_releases_only_the_reserved_physical_allocation()
+    {
+        var seeded = await Seed();
+        using var app = fixture.App();
+        using var manager = fixture.Client(app, fixture.Manager, "MANAGER");
+        var path = $"/api/transactions/{seeded.Pending.Id}";
+        Assert.Equal(HttpStatusCode.OK, (await manager.PostAsync(path + "/approve", null)).StatusCode);
+        var response = await manager.PostAsJsonAsync(path + "/resolve-not-completed", new { note = "Confirmed neither party completed handover." });
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var db = fixture.Context();
+        var row = await db.Transactions.SingleAsync(x => x.Id == seeded.Pending.Id);
+        var reservation = await db.Reservations.SingleAsync(x => x.TransactionId == row.Id);
+        var listing = await db.Listings.SingleAsync(x => x.Id == reservation.ListingId);
+        Assert.Equal(TransactionStatus.NOT_COMPLETED, row.Status);
+        Assert.Equal(0, row.ReservedQuantity);
+        Assert.Equal(ReservationStatus.RELEASED, reservation.Status);
+        Assert.Equal(20, listing.Quantity);
+        Assert.Equal(0, listing.ReservedQuantity);
+        Assert.Equal("MANAGER_MARKED_NOT_COMPLETED", row.ResolutionReasonCode);
+    }
+
+    [PostgresFact]
+    public async Task Manager_completed_finalizes_the_reservation_without_claiming_buyer_receipt()
+    {
+        var seeded = await Seed();
+        using var app = fixture.App();
+        using var manager = fixture.Client(app, fixture.Manager, "MANAGER");
+        Assert.Equal(HttpStatusCode.OK, (await manager.PostAsync($"/api/transactions/{seeded.Pending.Id}/approve", null)).StatusCode);
+        var response = await manager.PostAsJsonAsync($"/api/transactions/{seeded.Pending.Id}/resolve-completed", new { note = "Confirmed after speaking with both parties." });
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var db = fixture.Context();
+        var row = await db.Transactions.SingleAsync(x => x.Id == seeded.Pending.Id);
+        var reservation = await db.Reservations.SingleAsync(x => x.TransactionId == row.Id);
+        var listing = await db.Listings.SingleAsync(x => x.Id == reservation.ListingId);
+        Assert.Equal(TransactionStatus.COMPLETED, row.Status);
+        Assert.Null(row.BuyerReceivedConfirmedAtUtc);
+        Assert.Equal(fixture.Manager, row.ResolvedByManagerId);
+        Assert.Equal(ReservationStatus.CONFIRMED, reservation.Status);
+        Assert.Equal(17, listing.Quantity);
+        Assert.Equal(0, listing.ReservedQuantity);
+        Assert.Contains(await db.AuditLogs.Where(x => x.EntityId == row.Id).Select(x => x.Action).ToListAsync(), action => action == "COMPLETED_BY_MANAGER_AFTER_FOLLOW_UP");
+    }
+
+    [PostgresFact]
+    public async Task Deadline_without_handover_releases_but_handover_without_receipt_requires_manager_review()
+    {
+        var noHandover = await Seed();
+        using var app = fixture.App();
+        using var manager = fixture.Client(app, fixture.Manager, "MANAGER");
+        using var seller = fixture.Client(app, fixture.Seller, "SELLER");
+        Assert.Equal(HttpStatusCode.OK, (await manager.PostAsync($"/api/transactions/{noHandover.Pending.Id}/approve", null)).StatusCode);
+        await Expire(noHandover.Pending.Id);
+        await AssertNoHandoverReleased(noHandover.Pending.Id);
+
+        var handedOver = await Seed();
+        Assert.Equal(HttpStatusCode.OK, (await manager.PostAsync($"/api/transactions/{handedOver.Pending.Id}/approve", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await seller.PostAsync($"/api/transactions/{handedOver.Pending.Id}/handover", null)).StatusCode);
+        await Expire(handedOver.Pending.Id);
+        using var verify = fixture.Context();
+        var row = await verify.Transactions.SingleAsync(x => x.Id == handedOver.Pending.Id);
+        var reservation = await verify.Reservations.SingleAsync(x => x.TransactionId == row.Id);
+        var listing = await verify.Listings.SingleAsync(x => x.Id == reservation.ListingId);
+        Assert.Equal(TransactionStatus.MANAGER_REVIEW_REQUIRED, row.Status);
+        Assert.NotNull(row.SellerHandoverConfirmedAtUtc);
+        Assert.Equal(ReservationStatus.ACTIVE, reservation.Status);
+        Assert.Equal(3, listing.ReservedQuantity);
+
+        async Task Expire(Guid id)
+        {
+            using (var db = fixture.Context())
+            {
+                var row = await db.Transactions.SingleAsync(x => x.Id == id);
+                row.ConfirmationDeadlineUtc = DateTime.UtcNow.AddSeconds(-1);
+                await db.SaveChangesAsync();
+            }
+            using var processorDb = fixture.Context();
+            await new TransactionService(processorDb).ProcessDeadlineAsync(id, DateTime.UtcNow, CancellationToken.None);
+        }
+        async Task AssertNoHandoverReleased(Guid id)
+        {
+            using var db = fixture.Context();
+            var row = await db.Transactions.SingleAsync(x => x.Id == id);
+            var reservation = await db.Reservations.SingleAsync(x => x.TransactionId == row.Id);
+            var listing = await db.Listings.SingleAsync(x => x.Id == reservation.ListingId);
+            Assert.Equal(TransactionStatus.NOT_COMPLETED, row.Status);
+            Assert.Equal(ReservationStatus.RELEASED, reservation.Status);
+            Assert.Equal(0, listing.ReservedQuantity);
+            Assert.Equal("CONFIRMATION_TIMEOUT_NO_HANDOVER", row.ResolutionReasonCode);
+        }
     }
 
     private async Task<(Offer Offer, Transaction Pending)> Seed()

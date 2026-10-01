@@ -135,6 +135,7 @@ builder.Services.AddScoped<IMaterialInventoryService, MaterialInventoryService>(
 builder.Services.AddScoped<SurplusLink.Api.Requirements.RequirementService>();
 builder.Services.AddScoped<SurplusLink.Api.Matching.MatchService>();
 builder.Services.AddScoped<SurplusLink.Api.Transactions.TransactionService>();
+builder.Services.AddScoped<SurplusLink.Api.Transactions.TransactionConfirmationProcessor>();
 builder.Services.AddScoped<SurplusLink.Api.Workflows.AgentWorkflowService>();
 builder.Services.AddScoped<SurplusLink.Api.Handoffs.IMobileHandoffService, SurplusLink.Api.Handoffs.MobileHandoffService>();
 builder.Services.AddScoped<SurplusLink.Api.Notifications.INotificationService, SurplusLink.Api.Notifications.NotificationService>();
@@ -159,6 +160,13 @@ builder.Services.AddHttpClient<SurplusLink.Api.Workflows.IAgentWorkflowClient, S
     .RedactLoggedHeaders(_ => true);
 builder.Services.AddScoped<SurplusLink.Api.Workflows.WorkflowQueueProcessor>();
 builder.Services.AddHostedService<SurplusLink.Api.Workflows.WorkflowExecutionWorker>();
+builder.Services.AddOptions<SurplusLink.Api.Transactions.TransactionConfirmationOptions>()
+    .BindConfiguration(SurplusLink.Api.Transactions.TransactionConfirmationOptions.SectionName)
+    .Validate(x => x.WindowDays is >= 1 and <= 365 && x.FollowUpAfterDays is >= 1 and <= 364 &&
+        x.FollowUpAfterDays < x.WindowDays && x.PollSeconds is >= 10 and <= 3600,
+        "Transaction confirmation settings are out of range.")
+    .ValidateOnStart();
+builder.Services.AddHostedService<SurplusLink.Api.Transactions.TransactionConfirmationWorker>();
 builder.Services.AddScoped<SurplusLink.Api.Workflows.IRequirementWorkflowStarter,
     SurplusLink.Api.Workflows.PersistentRequirementWorkflowStarter>();
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

@@ -164,6 +164,10 @@ th { color: #456057; font-size: 0.8rem; text-transform: uppercase; letter-spacin
 
 /* Analytics: readable values remain available without animation or color. */
 .analytics-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: 14px; margin: 20px 0 26px; }
+.transaction-warning-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-top: 1rem; }
+.transaction-warning-card { text-align: left; border: 1px solid #f0b36c; border-radius: 1rem; padding: 1.1rem; background: #fffaf4; }
+.transaction-warning-card h3 { margin: .2rem 0; }
+.transaction-warning-card p { margin: .45rem 0; }
 .analytics-metric { display: flex; flex-direction: column; gap: 8px; padding: 20px; border: 1px solid #dceae8; border-radius: 16px; background: linear-gradient(130deg, #f2faf8, #fff); animation: metric-enter .45s ease-out both; }
 .analytics-metric:nth-child(2) { animation-delay: .06s; }
 .analytics-metric:nth-child(3) { animation-delay: .12s; }
