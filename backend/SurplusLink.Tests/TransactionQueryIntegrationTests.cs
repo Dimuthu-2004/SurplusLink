@@ -186,7 +186,7 @@ public sealed class TransactionQueryIntegrationTests : IAsyncLifetime
         await AssertState(TransactionStatus.COMPLETED, BuyerRequestStatus.COMPLETED, ReservationStatus.CONFIRMED, AgentWorkflowStatus.COMPLETED);
         Assert.Equal(HttpStatusCode.Conflict, (await buyer.PostAsync(path + "/confirm-receipt", null)).StatusCode);
         var history = await buyer.GetFromJsonAsync<TransactionHistoryPage>(path + "/history");
-        Assert.Equal(new[] { "WORKFLOW_APPROVED", "TRANSACTION_APPROVED_STOCK_RESERVED", "SELLER_HANDOVER_CONFIRMED", "BUYER_RECEIPT_CONFIRMED_TRANSACTION_COMPLETED" }, history!.Items.Select(x => x.Action));
+        Assert.Equal(new[] { "TRANSACTION_APPROVED_STOCK_RESERVED", "WORKFLOW_APPROVED", "SELLER_HANDOVER_CONFIRMED", "BUYER_RECEIPT_CONFIRMED_TRANSACTION_COMPLETED" }, history!.Items.Select(x => x.Action));
 
         async Task AssertState(TransactionStatus status, BuyerRequestStatus requestStatus, ReservationStatus reservationStatus, AgentWorkflowStatus workflowStatus)
         {
