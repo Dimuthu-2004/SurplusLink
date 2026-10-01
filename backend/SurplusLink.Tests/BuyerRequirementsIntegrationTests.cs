@@ -101,7 +101,7 @@ public sealed class BuyerRequirementsIntegrationTests : IClassFixture<Requiremen
         using var verify = fixture.Context();
         var stored = await verify.BuyerRequests.SingleAsync(x => x.Id == created.Id);
         Assert.Equal(template.Id, stored.ConstructionItemTemplateId);
-        Assert.Equal(template.Name, stored.Title);
+        Assert.Equal(template.Name + " requirement", stored.Title);
     }
 
     [PostgresFact]

@@ -38,6 +38,10 @@ public class UniversalStabilizationTests
         request.ConstructionItemTemplateId = catalog.Single(x => x.Name == "Paint").Id;
         Assert.True(ItemRelevance.Evaluate(request, new Listing { Title = "Exterior Wall Paint" }).Eligible);
         Assert.False(ItemRelevance.Evaluate(request, new Listing { Title = "Random Finishes item" }).Eligible);
+        var legacyCement = new BuyerRequest { Title = "Cement" };
+        Assert.True(ItemRelevance.Evaluate(legacyCement, new Listing { Title = "Cement" }).Eligible);
+        Assert.False(ItemRelevance.Evaluate(legacyCement, new Listing { ConstructionItemTemplateId = compressor.Id }).Eligible);
+        Assert.True(ItemRelevance.Evaluate(legacyCement, new Listing { Title = "Cement - Portland" }).Eligible);
         Assert.False(ItemRelevance.Evaluate(new BuyerRequest(), new Listing()).Eligible);
     }
 
