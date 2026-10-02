@@ -23,6 +23,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _profile = ProfileFieldsController();
   int _step = 0;
   String? _usage;
+  bool _switchingAuthMode = false;
+
+  Future<void> _goToLogin() async {
+    setState(() => _switchingAuthMode = true);
+    await Future<void>.delayed(const Duration(milliseconds: 180));
+    if (mounted) context.go(AppRoutes.login);
+  }
 
   @override
   void dispose() {
@@ -60,6 +67,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) => AuthScaffold(
+    showIllustration: !_switchingAuthMode && !widget.authController.isBusy,
     title: 'Create your account',
     subtitle: _step == 0
         ? 'Start with your account details.'
@@ -147,7 +155,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ? null
                   : () {
                       widget.authController.clearError();
-                      context.go(AppRoutes.login);
+                      _goToLogin();
                     },
               child: const Text('Already have an account? Sign in'),
             ),

@@ -96,7 +96,8 @@ public sealed record MatchResponse(
     bool? FullCoverage = null,
     string? SellerDisplayName = null,
     MatchListingContext? ListingContext = null,
-    PreferenceCompatibilityResponse? PreferenceCompatibility = null
+    PreferenceCompatibilityResponse? PreferenceCompatibility = null,
+    string? FullAddress = null
 );
 
 public sealed record MatchPage(

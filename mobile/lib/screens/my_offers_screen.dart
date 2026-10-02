@@ -9,6 +9,7 @@ import 'package:mobile/notifications/notification_bell.dart';
 import 'package:mobile/offers/offer_gateway.dart';
 import 'package:mobile/offers/offer_models.dart';
 import 'package:mobile/widgets/role_navigation.dart';
+import 'package:mobile/widgets/status_animation.dart';
 
 class MyOffersScreen extends StatefulWidget {
   const MyOffersScreen({
@@ -369,6 +370,9 @@ class _OfferTransactionDetailsState extends State<OfferTransactionDetails> {
   Transaction? transaction;
   bool busy = true;
   String? error;
+  String? _lastStatus;
+  bool _hasLoaded = false;
+  bool _completionShown = false;
   @override
   void initState() {
     super.initState();
@@ -390,7 +394,16 @@ class _OfferTransactionDetailsState extends State<OfferTransactionDetails> {
         if (page.items.isNotEmpty) id = page.items.first.id;
       }
       final result = id == null ? null : await widget.gateway.transaction(id);
-      if (mounted) setState(() => transaction = result);
+      final newlyCompleted = _hasLoaded && _lastStatus != 'COMPLETED' && result?.status == 'COMPLETED';
+      _lastStatus = result?.status;
+      _hasLoaded = true;
+      if (mounted) {
+        setState(() => transaction = result);
+        if (newlyCompleted && !_completionShown) {
+          _completionShown = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) => _showCompletion());
+        }
+      }
     } on Object catch (failure) {
       if (mounted) {
         setState(
@@ -400,6 +413,23 @@ class _OfferTransactionDetailsState extends State<OfferTransactionDetails> {
     } finally {
       if (mounted) setState(() => busy = false);
     }
+  }
+
+  Future<void> _showCompletion() async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) => AlertDialog(
+        content: const Column(mainAxisSize: MainAxisSize.min, children: [
+          StatusAnimation(asset: 'assets/animations/payment-done.json', semanticLabel: 'Transaction completed', size: 210),
+          Text('Transaction completed', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+          SizedBox(height: 8),
+          Text('Your material transaction has been completed successfully.', textAlign: TextAlign.center),
+        ]),
+        actions: [TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('View transaction'))],
+      ),
+    );
   }
 
   Future<void> act(bool handover) async {
@@ -468,11 +498,20 @@ class _OfferTransactionDetailsState extends State<OfferTransactionDetails> {
             if (contact.fullName != null) Text(contact.fullName!),
             Text(contact.email),
             if (contact.phoneNumber case final phone? when phone.trim().isNotEmpty)
-              FilledButton.icon(
-                icon: const Icon(Icons.phone),
-                label: Text(row.buyerId == widget.user.id ? 'Call Seller' : 'Call Buyer'),
-                onPressed: () => launchUrl(Uri(scheme: 'tel', path: phone)),
-              ),
+              Semantics(
+                button: true,
+                label: '${row.buyerId == widget.user.id ? 'Call seller' : 'Call buyer'} at $phone',
+                child: FilledButton(
+                  onPressed: () => launchUrl(Uri(scheme: 'tel', path: phone)),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    const StatusAnimation(asset: 'assets/animations/smartphone-call.json', semanticLabel: 'Phone', size: 34, repeat: true),
+                    const SizedBox(width: 8),
+                    Text(row.buyerId == widget.user.id ? 'Call Seller' : 'Call Buyer'),
+                  ]),
+                ),
+              )
+            else
+              const OutlinedButton(onPressed: null, child: Text('Seller phone number unavailable.')),
           ],
           if (row.canHandover(widget.user))
             FilledButton(

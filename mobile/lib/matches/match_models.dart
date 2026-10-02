@@ -97,6 +97,7 @@ class RecommendedMatch {
     this.longitude,
     this.sellerAddress,
     this.displayLocation,
+    this.fullAddress,
     this.recommendedMatchId,
     this.quantityMode,
     this.packageType,
@@ -123,7 +124,7 @@ class RecommendedMatch {
   final DateTime? availableUntil, requiredBy;
   final double? availableQuantity, maximumBudget;
   final String? requirementStatus;
-  final String? sellerName, sellerBusinessName, sellerDisplayName, condition, sellerAddress, displayLocation;
+  final String? sellerName, sellerBusinessName, sellerDisplayName, condition, sellerAddress, displayLocation, fullAddress;
   final double? latitude, longitude;
   final String? recommendedMatchId;
   final bool? _isPartial;
@@ -208,6 +209,7 @@ class RecommendedMatch {
         longitude: _number(json, 'longitude', optional: true),
         sellerAddress: _optionalString(json, 'sellerAddress'),
         displayLocation: _optionalString(json, 'displayLocation'),
+        fullAddress: _optionalString(json, 'fullAddress'),
         recommendedMatchId: _optionalString(json, 'recommendedMatchId'),
         isPartial: _boolean(json, 'isPartial'),
         quantityMode: _optionalString(json, 'quantityMode'),

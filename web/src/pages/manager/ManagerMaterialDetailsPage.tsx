@@ -9,6 +9,7 @@ import {
   type ManagerMaterialsApi,
   type MaterialListing,
 } from '../../features/materials/managerMaterialsApi';
+import { SuccessOverlay } from '../../components/StatusAnimation';
 
 export function ManagerMaterialDetailsPage({
   api = managerMaterialsApi,
@@ -23,6 +24,7 @@ export function ManagerMaterialDetailsPage({
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [photoIndex, setPhotoIndex] = useState<number | null>(null);
+  const [showApprovalSuccess, setShowApprovalSuccess] = useState(false);
 
   const load = async () => {
     if (!listingId) {
@@ -54,6 +56,7 @@ export function ManagerMaterialDetailsPage({
     try {
       setListing(await api.verifyListing(listing.id, approved));
       setHistory(await api.getHistory(listing.id));
+      if (approved) setShowApprovalSuccess(true);
     } catch (reason) {
       setError(messageFor(reason));
     } finally {
@@ -78,6 +81,7 @@ export function ManagerMaterialDetailsPage({
 
   return (
     <div className="manager-page">
+      {showApprovalSuccess && <SuccessOverlay kind="approval" title="Approved successfully" message="Seller listing approved." onComplete={() => setShowApprovalSuccess(false)} />}
       <Link className="back-link" to={fromApprovals ? "/app/manager/listing-approvals" : "/app/manager/materials"}>{fromApprovals ? "Back to Seller Listing Approvals" : "Back to all listings"}</Link>
       {error && <p className="error-message" role="alert">{error}</p>}
       <section className="manager-panel">

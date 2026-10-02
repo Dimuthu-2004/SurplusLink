@@ -29,6 +29,13 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _showVerification = false;
   int _resendSeconds = 0;
   Timer? _resendTimer;
+  bool _switchingAuthMode = false;
+
+  Future<void> _goToRegister() async {
+    setState(() => _switchingAuthMode = true);
+    await Future<void>.delayed(const Duration(milliseconds: 180));
+    if (mounted) context.go(AppRoutes.register);
+  }
 
   @override
   void initState() {
@@ -89,6 +96,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) => LoginScaffold(
+    showIllustration: !_switchingAuthMode && !widget.authController.isBusy,
     title: 'Welcome to SurplusLink',
     subtitle: 'Sign in to continue.',
     child: AnimatedBuilder(
@@ -169,7 +177,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ? null
                           : () {
                               widget.authController.clearError();
-                              context.go(AppRoutes.register);
+                              _goToRegister();
                             },
                       child: const Text('Create an account'),
                     ),

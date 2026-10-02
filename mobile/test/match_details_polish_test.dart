@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile/core/api_exception.dart';
 import 'package:mobile/matches/match_models.dart';
+import 'package:mobile/matches/match_widgets.dart';
 import 'package:mobile/screens/match_details_screen.dart';
 import 'package:mobile/theme/surplus_link_theme.dart';
 
@@ -54,6 +55,7 @@ Future<void> show(
   SelectionFake fake, {
   bool reducedMotion = false,
   Size size = const Size(800, 3000),
+  Future<bool> Function(Uri)? launchMap,
 }) async {
   await tester.binding.setSurfaceSize(size);
   addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -66,6 +68,7 @@ Future<void> show(
           gateway: fake,
           requirementId: 'r1',
           matchId: 'm1',
+          launchMap: launchMap ?? launchExternalMap,
         ),
       ),
       GoRoute(
@@ -91,6 +94,58 @@ Future<void> show(
 }
 
 void main() {
+  testWidgets('recommended card keeps the concise display location', (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(body: MatchListCard(
+        match: candidate({
+          'displayLocation': 'Negombo',
+          'fullAddress': 'No. 42, Main Street, Negombo, Gampaha',
+        }),
+        onTap: () {},
+      )),
+    ));
+    expect(find.text('Negombo'), findsOneWidget);
+    expect(find.text('No. 42, Main Street, Negombo, Gampaha'), findsNothing);
+  });
+
+  testWidgets('shows the full address and opens coordinates in Google Maps', (tester) async {
+    Uri? launched;
+    await show(
+      tester,
+      SelectionFake()..value = candidate({
+        'displayLocation': 'Negombo',
+        'fullAddress': 'No. 42, Main Street, Negombo, Gampaha',
+        'latitude': 7.2083,
+        'longitude': 79.8358,
+      }),
+      launchMap: (uri) async { launched = uri; return true; },
+    );
+    expect(find.text('No. 42, Main Street, Negombo, Gampaha'), findsOneWidget);
+    expect(find.text('Negombo'), findsNothing);
+    await tester.tap(find.byKey(const Key('view-location-on-google-maps')));
+    await tester.pump();
+    expect(launched.toString(), 'https://www.google.com/maps/search/?api=1&query=7.2083%2C79.8358');
+  });
+
+  testWidgets('uses the encoded full address when coordinates are unavailable', (tester) async {
+    Uri? launched;
+    const address = 'No. 42, Main Street, Negombo, Gampaha';
+    await show(
+      tester,
+      SelectionFake()..value = candidate({'fullAddress': address}),
+      launchMap: (uri) async { launched = uri; return true; },
+    );
+    await tester.tap(find.byKey(const Key('view-location-on-google-maps')));
+    await tester.pump();
+    expect(launched?.queryParameters['query'], address);
+  });
+
+  testWidgets('hides the map action when no location is available', (tester) async {
+    await show(tester, SelectionFake()..value = candidate({'sellerAddress': null}));
+    expect(find.text('Location details unavailable'), findsOneWidget);
+    expect(find.byKey(const Key('view-location-on-google-maps')), findsNothing);
+  });
+
   testWidgets('valid details group and format values, keep contact private', (
     tester,
   ) async {

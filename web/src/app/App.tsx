@@ -41,6 +41,7 @@ export function App() {
       />
       <Route element={<GuestRoute />}>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<LoginPage />} />
       </Route>
       <Route element={<ProtectedRoute />}>
         <Route path="/app" element={<AppLayout />}>
