@@ -17,12 +17,14 @@ import 'package:mobile/requirements/requirement_gateway.dart';
 import 'package:mobile/requirements/requirement_location.dart';
 import 'package:mobile/location/location_lookup.dart';
 import 'package:mobile/theme/surplus_link_theme.dart';
+import 'package:mobile/core/api_client.dart';
 import 'package:mobile/l10n/app_localizations.dart';
 import 'package:mobile/l10n/locale_controller.dart';
 
 class SurplusLinkApp extends StatefulWidget {
   const SurplusLinkApp({
     required this.authController,
+    this.apiClient,
     this.materialGateway,
     this.requirementGateway,
     this.matchGateway,
@@ -37,6 +39,7 @@ class SurplusLinkApp extends StatefulWidget {
   });
 
   final AuthController authController;
+  final ApiClient? apiClient;
   final MaterialInventoryGateway? materialGateway;
   final RequirementGateway? requirementGateway;
   final MatchGateway? matchGateway;
@@ -65,6 +68,7 @@ class _SurplusLinkAppState extends State<SurplusLinkApp> {
     if (widget.localeController == null) unawaited(_localeController.load());
     _router = createAppRouter(
       authController: widget.authController,
+      apiClient: widget.apiClient,
       materialGateway: widget.materialGateway,
       requirementGateway: widget.requirementGateway,
       matchGateway: widget.matchGateway,

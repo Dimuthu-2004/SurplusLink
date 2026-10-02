@@ -1,0 +1,99 @@
+{
+  "train": {
+    "file": "train.jsonl",
+    "total_examples": 2003,
+    "schema_valid_examples": 2003,
+    "schema_valid_rate": 1.0,
+    "intent_distribution": {
+      "LIVE_MARKETPLACE_QUERY": 360,
+      "PRICE_INFORMATION": 240,
+      "MATERIAL_ESTIMATION": 382,
+      "CREATE_REQUIREMENT_DRAFT": 884,
+      "CONSTRUCTION_KNOWLEDGE": 87,
+      "UNIT_CONVERSION": 22,
+      "CLARIFICATION": 11,
+      "LIVE_DATA_QUERY": 9,
+      "PLATFORM_HELP": 7,
+      "CONTINUE_REQUIREMENT_DRAFT": 1
+    },
+    "language_distribution": {
+      "en": 714,
+      "si-Latn": 1049,
+      "ta": 171,
+      "si": 69
+    },
+    "unique_messages": 2003
+  },
+  "val": {
+    "file": "val.jsonl",
+    "total_examples": 250,
+    "schema_valid_examples": 250,
+    "schema_valid_rate": 1.0,
+    "intent_distribution": {
+      "CREATE_REQUIREMENT_DRAFT": 117,
+      "MATERIAL_ESTIMATION": 52,
+      "LIVE_MARKETPLACE_QUERY": 38,
+      "PRICE_INFORMATION": 22,
+      "CONSTRUCTION_KNOWLEDGE": 13,
+      "PLATFORM_HELP": 2,
+      "UNIT_CONVERSION": 5,
+      "CLARIFICATION": 1
+    },
+    "language_distribution": {
+      "ta": 21,
+      "en": 89,
+      "si-Latn": 130,
+      "si": 10
+    },
+    "unique_messages": 250
+  },
+  "test": {
+    "file": "test.jsonl",
+    "total_examples": 251,
+    "schema_valid_examples": 251,
+    "schema_valid_rate": 1.0,
+    "intent_distribution": {
+      "CREATE_REQUIREMENT_DRAFT": 114,
+      "LIVE_MARKETPLACE_QUERY": 42,
+      "MATERIAL_ESTIMATION": 55,
+      "UNIT_CONVERSION": 2,
+      "PLATFORM_HELP": 1,
+      "PRICE_INFORMATION": 24,
+      "CONSTRUCTION_KNOWLEDGE": 10,
+      "CLARIFICATION": 2,
+      "LIVE_DATA_QUERY": 1
+    },
+    "language_distribution": {
+      "en": 104,
+      "si-Latn": 118,
+      "si": 8,
+      "ta": 21
+    },
+    "unique_messages": 251
+  },
+  "challenge": {
+    "file": "challenge.jsonl",
+    "total_examples": 320,
+    "schema_valid_examples": 320,
+    "schema_valid_rate": 1.0,
+    "intent_distribution": {
+      "CREATE_REQUIREMENT_DRAFT": 184,
+      "MATERIAL_ESTIMATION": 39,
+      "LIVE_MARKETPLACE_QUERY": 53,
+      "PRICE_INFORMATION": 44
+    },
+    "language_distribution": {
+      "si-Latn": 161,
+      "ta": 32,
+      "en": 121,
+      "si": 6
+    },
+    "unique_messages": 320
+  },
+  "data_leakage": {
+    "overlap_count": 0,
+    "leakage_rate": 0.0,
+    "has_leakage": false
+  },
+  "all_datasets_passed_schema": true
+}

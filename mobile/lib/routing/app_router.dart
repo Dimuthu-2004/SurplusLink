@@ -1,4 +1,6 @@
+import 'package:mobile/core/api_client.dart';
 import 'package:mobile/handoff/mobile_handoff_gateway.dart';
+import 'package:mobile/screens/ai_assistant_screen.dart';
 import 'package:mobile/screens/handoff_screen.dart';
 import 'package:mobile/screens/qr_scanner_screen.dart';
 import 'package:mobile/marketplace/marketplace_mode.dart';
@@ -39,6 +41,7 @@ abstract final class AppRoutes {
   static const verifyEmail = '/verify-email';
   static const forgotPassword = '/forgot-password';
   static const home = '/home';
+  static const aiAssistant = '/ai-assistant';
   static const requirements = '/requirements';
   static const materials = '/materials';
   static const addMaterial = '/materials/new';
@@ -46,6 +49,7 @@ abstract final class AppRoutes {
 
 GoRouter createAppRouter({
   required AuthController authController,
+  ApiClient? apiClient,
   MaterialInventoryGateway? materialGateway,
   RequirementGateway? requirementGateway,
   MatchGateway? matchGateway,
@@ -204,6 +208,15 @@ GoRouter createAppRouter({
             code: state.pathParameters['code']!,
             authController: authController,
             handoffGateway: handoffGateway,
+          ),
+        ),
+      ],
+      if (apiClient != null) ...[
+        GoRoute(
+          path: AppRoutes.aiAssistant,
+          builder: (context, state) => AiAssistantScreen(
+            apiClient: apiClient,
+            requirementGateway: requirementGateway,
           ),
         ),
       ],

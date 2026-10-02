@@ -1,0 +1,35 @@
+{
+  "dataset_version": "dataset-v1",
+  "target_total_examples": 2500,
+  "challenge_set_size": 320,
+  "splits": {
+    "train_ratio": 0.80,
+    "val_ratio": 0.10,
+    "test_ratio": 0.10
+  },
+  "target_intent_distribution": {
+    "CREATE_REQUIREMENT_DRAFT": 0.12,
+    "CONTINUE_REQUIREMENT_DRAFT": 0.08,
+    "MATERIAL_ESTIMATION": 0.15,
+    "CONSTRUCTION_KNOWLEDGE": 0.15,
+    "LIVE_MARKETPLACE_QUERY": 0.10,
+    "PRICE_INFORMATION": 0.10,
+    "PLATFORM_HELP": 0.10,
+    "LIVE_DATA_QUERY": 0.03,
+    "TRANSACTION_QUERY": 0.02,
+    "MATCH_EXPLANATION": 0.02,
+    "UNIT_CONVERSION": 0.05,
+    "CLARIFICATION": 0.04,
+    "TOPIC_SWITCH_ADVERSARIAL": 0.04
+  },
+  "supported_languages": ["en", "si", "si-Latn", "ta"],
+  "language_distribution": {
+    "si-Latn": 0.45,
+    "en": 0.25,
+    "si": 0.15,
+    "ta": 0.10,
+    "mixed": 0.05
+  },
+  "noisy_example_ratio": 0.15,
+  "multi_turn_ratio": 0.25
+}
