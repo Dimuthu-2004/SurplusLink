@@ -166,7 +166,7 @@ public sealed partial class MatchService
             x.Listing.AvailableUntil, x.MaterialRequest.Deadline, available,
             x.MaterialRequest.MaximumBudget, x.MaterialRequest.Status.ToString(),
             x.Listing.Seller.FullName, x.Listing.Seller.BusinessName, x.Listing.Condition.ToString(),
-            x.Listing.Latitude, x.Listing.Longitude, LocationDisplay.Concise(x.Listing.Seller.Address), LocationDisplay.Concise(x.Listing.Seller.Address),
+            x.Listing.Latitude, x.Listing.Longitude, x.Listing.Seller.Address, LocationDisplay.Concise(x.Listing.Seller.Address),
             x.Id == x.MaterialRequest.RecommendedMatchId,
             x.MaterialRequest.RecommendedMatchId,
             x.MaterialRequest.RecommendationReason ?? (x.Id == x.MaterialRequest.RecommendedMatchId
@@ -180,7 +180,8 @@ public sealed partial class MatchService
             new MatchListingContext(x.Listing.Description, x.Listing.ConstructionItemTemplate?.Name,
                 x.Listing.SpecificationsJson, x.Listing.Photos.OrderBy(photo => photo.SortOrder)
                     .Select(photo => new ListingPhotoResponse(photo.Id, photo.PhotoUrl, photo.SortOrder)).ToArray()),
-            ToPreferenceResponse(PreferenceCompatibility.Evaluate(x.MaterialRequest, x.Listing)));
+            ToPreferenceResponse(PreferenceCompatibility.Evaluate(x.MaterialRequest, x.Listing)),
+            x.Listing.Seller.Address);
     }
 
     private static PreferenceCompatibilityResponse? ToPreferenceResponse(PreferenceCompatibilityResult result) =>

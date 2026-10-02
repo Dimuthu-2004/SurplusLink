@@ -210,15 +210,18 @@ class _Hero extends StatelessWidget {
     animation: glow,
     builder: (_, _) => Container(
       key: const Key('home-hero'),
+      constraints: const BoxConstraints(minHeight: 165),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(24),
-        gradient: const LinearGradient(
-          colors: [SurplusLinkTheme.slate900, SurplusLinkTheme.slate800],
+        image: const DecorationImage(
+          image: AssetImage('assets/images/dashboard-reuse-hero.png'),
+          fit: BoxFit.cover,
+          alignment: Alignment.centerRight,
         ),
         boxShadow: [
           BoxShadow(
-            color: SurplusLinkTheme.slate900.withValues(alpha: .18),
+            color: SurplusLinkTheme.slate900.withValues(alpha: .10),
             blurRadius: 22,
             offset: const Offset(0, 10),
           ),
@@ -226,18 +229,7 @@ class _Hero extends StatelessWidget {
       ),
       child: Stack(
         children: [
-          Positioned(
-            right: -22 + glow.value * 13,
-            top: -30,
-            child: Container(
-              width: 124,
-              height: 124,
-              decoration: BoxDecoration(
-                color: SurplusLinkTheme.amber.withValues(alpha: .2),
-                shape: BoxShape.circle,
-              ),
-            ),
-          ),
+          const Positioned.fill(child: DecoratedBox(decoration: BoxDecoration(borderRadius: BorderRadius.all(Radius.circular(24)), gradient: LinearGradient(colors: [Color(0xF7FFFDF8), Color(0xB8FFF9F0), Color(0x14FFFFFF)], stops: [0, .48, 1])))),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -253,13 +245,13 @@ class _Hero extends StatelessWidget {
                     ),
                   ),
                   const NotificationBell(
-                    color: Colors.white,
+                    color: SurplusLinkTheme.slate900,
                     badgeColor: SurplusLinkTheme.amber,
                     badgeTextColor: Colors.white,
                   ),
                   const SizedBox(width: 8),
                   Material(
-                    color: Colors.white.withValues(alpha: .13),
+                    color: Colors.white.withValues(alpha: .82),
                     borderRadius: BorderRadius.circular(14),
                     child: InkWell(
                       key: const Key('home-profile-button'),
@@ -272,7 +264,7 @@ class _Hero extends StatelessWidget {
                           child: Text(
                             _initial(user),
                             style: const TextStyle(
-                              color: Colors.white,
+                              color: SurplusLinkTheme.slate900,
                               fontSize: 18,
                               fontWeight: FontWeight.w900,
                             ),
@@ -287,7 +279,7 @@ class _Hero extends StatelessWidget {
               Text(
                 'Good to see you,',
                 style: Theme.of(context).textTheme.titleMedium
-                    ?.copyWith(color: Colors.white70),
+                    ?.copyWith(color: SurplusLinkTheme.slate600),
               ),
               const SizedBox(height: 3),
               Text(
@@ -296,7 +288,7 @@ class _Hero extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: Colors.white,
+                  color: SurplusLinkTheme.slate900,
                   fontWeight: FontWeight.w900,
                 ),
               ),
@@ -304,7 +296,7 @@ class _Hero extends StatelessWidget {
                 key: const Key('logout-button'),
                 tooltip: 'Sign out',
                 onPressed: onLogout,
-                color: Colors.white,
+                color: SurplusLinkTheme.slate700,
                 icon: const Icon(Icons.logout),
               ),
               const SizedBox(height: 13),
@@ -338,17 +330,17 @@ class _RolePill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
       decoration: BoxDecoration(
-        color: SurplusLinkTheme.amber.withValues(alpha: .18),
+        color: Colors.white.withValues(alpha: .82),
         borderRadius: BorderRadius.circular(99),
         border: Border.all(
-          color: SurplusLinkTheme.amber.withValues(alpha: .45),
+          color: SurplusLinkTheme.amber.withValues(alpha: .55),
         ),
       ),
       child: Text(
         label,
         key: const Key('home-role-label'),
         style: const TextStyle(
-          color: Colors.white,
+          color: SurplusLinkTheme.slate800,
           fontWeight: FontWeight.w800,
           fontSize: 12,
         ),

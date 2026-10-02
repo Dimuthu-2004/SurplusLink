@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import type { PublicRegistration, UserRole } from '../auth/authTypes';
 import { SurplusLinkLogo } from '../components/SurplusLinkLogo';
+import { StatusAnimation } from '../components/StatusAnimation';
 import './loginPage.css';
 
 type AuthMode = 'signIn' | 'signUp';
@@ -22,9 +23,10 @@ export function LoginPage() {
   const { login, register, verifyEmail, resendVerification, forgotPassword, resetPassword, pending, error, errorCode, clearError } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-  const [mode, setMode] = useState<AuthMode>('signIn');
-  const [step, setStep] = useState<AuthStep>('signIn');
-  const [panelMode, setPanelMode] = useState<AuthMode>('signIn');
+  const initialMode: AuthMode = location.pathname === '/register' ? 'signUp' : 'signIn';
+  const [mode, setMode] = useState<AuthMode>(initialMode);
+  const [step, setStep] = useState<AuthStep>(initialMode);
+  const [panelMode, setPanelMode] = useState<AuthMode>(initialMode);
   const [changing, setChanging] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
@@ -50,6 +52,15 @@ export function LoginPage() {
     const timer = window.setInterval(() => setResendSeconds(value => Math.max(0, value - 1)), 1000);
     return () => window.clearInterval(timer);
   }, [resendSeconds]);
+  useEffect(() => {
+    if (changing) return;
+    const routeMode: AuthMode = location.pathname === '/register' ? 'signUp' : 'signIn';
+    if (routeMode === mode || !['signIn', 'signUp'].includes(step)) return;
+    setMode(routeMode);
+    setStep(routeMode);
+    setPanelMode(routeMode);
+    setLeaving(false);
+  }, [changing, location.pathname, mode, step]);
 
   function switchMode(nextMode: AuthMode) {
     if (nextMode === mode || changing || pending) return;
@@ -62,7 +73,9 @@ export function LoginPage() {
     setPanelMode(nextMode);
     formTimer.current = window.setTimeout(() => {
       setMode(nextMode);
+      setStep(nextMode);
       setLeaving(false);
+      navigate(nextMode === 'signUp' ? '/register' : '/login', { replace: true });
     }, 120);
     transitionTimer.current = window.setTimeout(() => setChanging(false), 650);
   }
@@ -211,7 +224,7 @@ export function LoginPage() {
             )}
           </div>
         </div>
-        <aside className="auth-brand-panel" aria-label="SurplusLink introduction"><div className="auth-panel-texture" aria-hidden="true" /><div className="auth-panel-content"><Brand /><div className="auth-panel-copy"><p className="auth-panel-kicker">SURPLUS, CONNECTED</p><h2>{signUp ? 'Already part of the exchange?' : 'New to SurplusLink?'}</h2><p>{signUp ? 'Sign in to return to your materials, opportunities, and project activity.' : 'Create your account to list surplus materials, source what your project needs, and keep useful materials in circulation.'}</p></div><button className="auth-panel-action" type="button" onClick={() => switchMode(signUp ? 'signIn' : 'signUp')} disabled={pending || changing}>{signUp ? 'Sign in' : 'Create account'} <Arrow /></button><div className="auth-panel-line" aria-hidden="true"><span /><span /><span /></div></div></aside>
+        <aside className="auth-brand-panel" aria-label="SurplusLink introduction"><div className="auth-panel-texture" aria-hidden="true" /><div className="auth-panel-content"><Brand /><div className={`auth-login-ready ${changing || leaving || pending || !['signIn', 'signUp'].includes(step) ? 'is-hidden' : ''}`} aria-hidden={changing || leaving || pending}><StatusAnimation kind="login" size={220} loop label="Ready to use SurplusLink" /></div><div className="auth-panel-copy"><p className="auth-panel-kicker">SURPLUS, CONNECTED</p><h2>{signUp ? 'Already part of the exchange?' : 'New to SurplusLink?'}</h2><p>{signUp ? 'Sign in to return to your materials, opportunities, and project activity.' : 'Create your account to list surplus materials, source what your project needs, and keep useful materials in circulation.'}</p></div><button className="auth-panel-action" type="button" onClick={() => switchMode(signUp ? 'signIn' : 'signUp')} disabled={pending || changing}>{signUp ? 'Sign in' : 'Create account'} <Arrow /></button><div className="auth-panel-line" aria-hidden="true"><span /><span /><span /></div></div></aside>
       </section>
     </main>
   );

@@ -70,6 +70,15 @@
 .allocation-cards { display: grid; gap: 16px; }
 .allocation-card { padding: 20px; border: 1px solid #e2e5e8; border-radius: 12px; background: #fff; }
 .allocation-card h4 { margin: 0 0 8px; }
+.success-overlay { position:fixed; inset:0; z-index:1000; display:grid; place-items:center; padding:1rem; background:#17203366; backdrop-filter:blur(4px); }
+.success-overlay-card { width:min(100%,25rem); padding:1.5rem; border-radius:1.25rem; background:#fff; box-shadow:0 24px 70px #17203338; text-align:center; }
+.success-overlay-card .status-animation { margin-inline:auto; }
+.success-overlay-card h2 { margin:.25rem 0; }.success-overlay-card p { color:#64748b; }
+.contact-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1rem; margin:1rem 0; }
+.contact-card { padding:1rem; border:1px solid #e2e8f0; border-radius:.9rem; background:#fffdf9; }
+.contact-phone { display:flex; align-items:center; gap:.5rem; margin-top:.5rem; font-weight:750; }
+.contact-phone .status-animation { flex:0 0 auto; }
+@media (max-width:700px) { .contact-grid { grid-template-columns:1fr; } }
 @media (max-width: 1100px) {
   .responsive-business-table, .responsive-business-table tbody { display: block; min-width: 0; }
   .responsive-business-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }

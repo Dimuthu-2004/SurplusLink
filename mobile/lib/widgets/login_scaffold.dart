@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:mobile/theme/surplus_link_theme.dart';
 import 'package:mobile/widgets/surplus_link_logo.dart';
+import 'package:mobile/widgets/status_animation.dart';
 
 /// Login-only presentation; authentication and form state live in LoginScreen.
 class LoginScaffold extends StatelessWidget {
@@ -8,11 +9,13 @@ class LoginScaffold extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.child,
+    this.showIllustration = true,
     super.key,
   });
 
   final String title, subtitle;
   final Widget child;
+  final bool showIllustration;
 
   @override
   Widget build(BuildContext context) => Stack(
@@ -75,6 +78,12 @@ class LoginScaffold extends StatelessWidget {
                                 ),
                               ),
                               const SizedBox(height: 16),
+                              AnimatedSize(
+                                duration: const Duration(milliseconds: 180),
+                                child: showIllustration
+                                    ? const Center(child: StatusAnimation(asset: 'assets/animations/login-ready.json', semanticLabel: 'Ready to sign in', size: 140, repeat: true, key: Key('login-ready-animation')))
+                                    : const SizedBox(key: Key('login-ready-hidden')),
+                              ),
                               Text(
                                 title,
                                 style: Theme.of(context).textTheme.headlineSmall

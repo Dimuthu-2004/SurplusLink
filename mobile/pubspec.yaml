@@ -70,7 +70,12 @@ flutter:
     - assets/animations/architecture_and_construction.lottie
     - assets/animations/submitted.json
     - assets/animations/workflow-running.json
+    - assets/animations/thumbs-up-birdie.json
+    - assets/animations/smartphone-call.json
+    - assets/animations/login-ready.json
+    - assets/animations/payment-done.json
     - assets/images/login_background.jpg
+    - assets/images/dashboard-reuse-hero.png
 
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in

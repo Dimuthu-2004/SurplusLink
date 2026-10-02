@@ -136,15 +136,17 @@ GoRouter createAppRouter({
       ),
       GoRoute(
         path: AppRoutes.login,
-        builder: (context, state) => LoginScreen(
-          authController: authController,
-          initialEmail: state.uri.queryParameters['email'] ?? '',
-        ),
+        pageBuilder: (context, state) => _authPage(state, LoginScreen(
+              authController: authController,
+              initialEmail: state.uri.queryParameters['email'] ?? '',
+            )),
       ),
       GoRoute(
         path: AppRoutes.register,
-        builder: (context, state) =>
-            RegisterScreen(authController: authController),
+        pageBuilder: (context, state) => _authPage(
+          state,
+          RegisterScreen(authController: authController),
+        ),
       ),
       GoRoute(
         path: '/profile',
@@ -321,6 +323,24 @@ GoRouter createAppRouter({
     ),
   );
 }
+
+CustomTransitionPage<void> _authPage(GoRouterState state, Widget child) =>
+    CustomTransitionPage<void>(
+      key: state.pageKey,
+      transitionDuration: const Duration(milliseconds: 320),
+      reverseTransitionDuration: const Duration(milliseconds: 320),
+      child: child,
+      transitionsBuilder: (context, animation, secondaryAnimation, child) {
+        final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
+        return FadeTransition(
+          opacity: curved,
+          child: SlideTransition(
+            position: Tween<Offset>(begin: const Offset(.08, 0), end: Offset.zero).animate(curved),
+            child: child,
+          ),
+        );
+      },
+    );
 
 Widget _materialsScreen(
   AuthController authController,

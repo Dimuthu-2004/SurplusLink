@@ -25,6 +25,9 @@
 .auth-brand-panel { position: absolute; z-index: 2; inset: 0 0 0 auto; width: 45%; overflow: hidden; color: white; background: linear-gradient(135deg, #a84a0c 0%, #d96712 48%, #e9791d 100%); clip-path: polygon(7% 0, 100% 0, 100% 100%, 0 100%, 9% 79%, 3% 54%, 8% 28%); transition: transform 650ms var(--auth-ease), clip-path 650ms var(--auth-ease); will-change: transform, clip-path; }
 .auth-panel-texture { position: absolute; inset: -3%; background: linear-gradient(160deg, rgba(23,17,12,.68), rgba(23,17,12,.14)), url('/images/hero/steel-loading-bay.png') center/cover; mix-blend-mode: multiply; opacity: .64; transform: scale(1.04); transition: transform 650ms var(--auth-ease); }
 .auth-panel-content { min-height: inherit; position: relative; display: flex; flex-direction: column; justify-content: center; padding: clamp(2rem, 5vw, 4.5rem); }
+.auth-login-ready { display:grid; place-items:center; min-height:13.75rem; opacity:1; transform:scale(1); transition:opacity 150ms ease, transform 150ms ease; }
+.auth-login-ready.is-hidden { opacity:0; transform:scale(.96); visibility:hidden; }
+.status-animation { display:grid; place-items:center; max-width:100%; }
 .auth-mode-signUp .auth-brand-panel { transform: translateX(-122.25%); clip-path: polygon(0 0, 93% 0, 97% 25%, 91% 51%, 97% 75%, 91% 100%, 0 100%); }
 .auth-mode-signUp .auth-form-surface { transform: translateX(81.82%); }
 .auth-mode-signUp .auth-panel-texture { transform: scale(1.09) translateX(-1.5%); }

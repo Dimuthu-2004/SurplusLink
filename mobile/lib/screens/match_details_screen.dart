@@ -7,16 +7,22 @@ import 'package:mobile/matches/match_gateway.dart';
 import 'package:mobile/matches/match_models.dart';
 import 'package:mobile/matches/match_widgets.dart';
 import 'package:mobile/widgets/dashboard_back_button.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+Future<bool> launchExternalMap(Uri uri) =>
+    launchUrl(uri, mode: LaunchMode.externalApplication);
 
 class MatchDetailsScreen extends StatefulWidget {
   const MatchDetailsScreen({
     required this.gateway,
     required this.requirementId,
     required this.matchId,
+    this.launchMap = launchExternalMap,
     super.key,
   });
   final MatchGateway gateway;
   final String requirementId, matchId;
+  final Future<bool> Function(Uri uri) launchMap;
   @override
   State<MatchDetailsScreen> createState() => _MatchDetailsScreenState();
 }
@@ -115,6 +121,33 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
       if (mounted) setState(() => _error = matchDetailsError(error));
     } finally {
       if (mounted) setState(() => _routing = false);
+    }
+  }
+
+  String? _readableLocation(RecommendedMatch match) {
+    for (final value in [match.fullAddress, match.sellerAddress, match.displayLocation]) {
+      if (value?.trim().isNotEmpty == true) return value!.trim();
+    }
+    return null;
+  }
+
+  Uri? _mapUri(RecommendedMatch match) {
+    final latitude = match.latitude;
+    final longitude = match.longitude;
+    final validCoordinates = latitude != null && longitude != null &&
+        latitude.isFinite && longitude.isFinite && latitude.abs() <= 90 && longitude.abs() <= 180;
+    final query = validCoordinates ? '$latitude,$longitude' : _readableLocation(match);
+    return query == null ? null : Uri.https('www.google.com', '/maps/search/', {'api': '1', 'query': query});
+  }
+
+  Future<void> _openMap(RecommendedMatch match) async {
+    final uri = _mapUri(match);
+    if (uri == null) return;
+    final opened = await widget.launchMap(uri);
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open Google Maps.')),
+      );
     }
   }
 
@@ -244,14 +277,8 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
                   ]),
                 if (match.preferenceCompatibility?.hasMismatch == true)
                   _preferenceWarning(match.preferenceCompatibility!),
+                _locationCard(match),
                 _card('Delivery / Logistics', [
-                  _detail(
-                    'Seller location / address',
-                    match.sellerAddress ??
-                        (match.latitude != null && match.longitude != null
-                            ? '${match.latitude!.toStringAsFixed(5)}, ${match.longitude!.toStringAsFixed(5)}'
-                            : 'Not recorded'),
-                  ),
                   if (getRoutingState(match) == RoutingUiState.notEvaluated)
                     const Text('Delivery route has not been evaluated yet.'),
                   _detail(
@@ -389,6 +416,28 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
       ],
     ),
   );
+
+  Widget _locationCard(RecommendedMatch match) {
+    final location = _readableLocation(match);
+    final uri = _mapUri(match);
+    return _card('Location', [
+      Text(
+        location ?? 'Location details unavailable',
+        key: const Key('match-full-address'),
+        style: Theme.of(context).textTheme.bodyLarge?.copyWith(height: 1.45),
+      ),
+      if (uri != null) ...[
+        const SizedBox(height: 8),
+        TextButton.icon(
+          key: const Key('view-location-on-google-maps'),
+          onPressed: () => _openMap(match),
+          icon: const Icon(Icons.location_on_outlined),
+          label: const Text('View location on Google Maps'),
+          style: TextButton.styleFrom(foregroundColor: const Color(0xFFD96712)),
+        ),
+      ],
+    ]);
+  }
 
   Widget _warning(RecommendedMatch match) => Card(
     key: const Key('match-warning'),
