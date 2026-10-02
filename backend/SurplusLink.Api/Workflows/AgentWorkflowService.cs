@@ -590,7 +590,11 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db, INotificationS
                 EntityType = nameof(Offer), EntityId = row.OfferId, Action = "OFFER_" + offerStatus });
             row.ReservedQuantity = status == TransactionStatus.APPROVED ? row.Quantity : 0;
             db.AuditLogs.Add(new AuditLog { Id = Guid.NewGuid(), ActorUserId = actor,
-                EntityType = nameof(Transaction), EntityId = row.Id, Action = "WORKFLOW_" + workflow.Status });
+                EntityType = nameof(Transaction), EntityId = row.Id, Action = "WORKFLOW_" + workflow.Status,
+                // This audit logically precedes the approval/reservation audit added
+                // after participation is updated. Stamp it now so SaveChanges does
+                // not give both rows the same timestamp and fall back to random IDs.
+                CreatedAtUtc = DateTime.UtcNow });
         }
     }
 
