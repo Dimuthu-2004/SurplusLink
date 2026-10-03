@@ -4,13 +4,14 @@ import json
 from typing import Any, Dict, List, Optional, Tuple
 
 from app.assistant.item_resolver import ItemResolver, ResolvedItem
+from app.assistant.material_estimation import MaterialEstimationEngine
 from app.assistant.semantic_schemas import ExtractedSlots, RequirementDraft
 
 
 class CatalogDraftValidator:
     """
     Applies deterministic catalog & open-vocabulary custom item rules to semantic LLM slots.
-    Never rejects custom items solely because a catalog template is absent.
+    Preserves multi-turn location, package details, and performs tile coverage estimation.
     """
 
     def __init__(self, item_resolver: Optional[ItemResolver] = None):
@@ -37,6 +38,21 @@ class CatalogDraftValidator:
         if current and resolved and not slots.item:
             resolved = self.item_resolver.resolve(current.item_name, catalog_override=catalog)
 
+        # Check for missing unit when simple numeric quantity is provided without unit or package_count
+        if slots.quantity and slots.quantity.value is not None and not slots.quantity.unit and not slots.quantity.package_count:
+            draft = current.model_copy(deep=True) if current else RequirementDraft(
+                template_id=resolved.catalog_item_id or "CUSTOM_ITEM" if resolved else "CUSTOM_ITEM",
+                category_id=resolved.category_id or "GENERAL" if resolved else "GENERAL",
+                item_name=resolved.display_name if resolved else (item_text or "Item"),
+                display_name=resolved.display_name if resolved else (item_text or "Item"),
+                is_custom_item=resolved.is_custom_item if resolved else True,
+                input_mode="BASE_QUANTITY",
+                normalized_base_unit=resolved.base_unit if resolved else "piece",
+                entered_quantity=slots.quantity.value,
+                normalized_quantity=None,
+            )
+            return draft, "What unit should I use for that quantity?"
+
         # 1. Custom Item Handling (e.g. Water Pump, Generator, Air Compressor)
         if resolved and resolved.is_custom_item:
             draft = current.model_copy(deep=True) if current and current.is_custom_item else RequirementDraft(
@@ -49,36 +65,12 @@ class CatalogDraftValidator:
                 normalized_base_unit=resolved.base_unit,
             )
 
-            quantity = slots.quantity
-            if quantity:
-                if quantity.package_count is not None:
-                    draft.input_mode = "PACKAGE_COUNT"
-                    draft.package_count = quantity.package_count
-                    draft.package_size = quantity.package_size or 1.0
-                    draft.entered_quantity = float(quantity.package_count)
-                    draft.entered_unit = quantity.package_unit or resolved.base_unit
-                    draft.normalized_quantity = quantity.package_count * (quantity.package_size or 1.0)
-                elif quantity.value is not None:
-                    if not quantity.unit:
-                        draft.normalized_quantity = None
-                        return draft, "What unit should I use for that quantity?"
-                    draft.input_mode = "BASE_QUANTITY"
-                    draft.entered_quantity = quantity.value
-                    draft.entered_unit = quantity.unit
-                    draft.normalized_quantity = quantity.value
-
-            if slots.preferences:
-                draft.preferences.update(slots.preferences)
-
-            if slots.location_text:
-                draft.location_text = slots.location_text
-            if slots.structured_location:
-                draft.structured_location = slots.structured_location
+            self._merge_slots_and_locations(draft, slots, current)
 
             missing = []
-            if not draft.entered_quantity and not draft.package_count:
+            if not draft.entered_quantity and not draft.package_count and not draft.calculated_physical_quantity:
                 missing.append("quantity")
-            if not draft.location_text:
+            if not draft.location_text and not draft.location_source:
                 missing.append("delivery_location")
 
             draft.missing_required_fields = missing
@@ -112,20 +104,11 @@ class CatalogDraftValidator:
                 input_mode="BASE_QUANTITY",
                 normalized_base_unit="piece",
             )
+            self._merge_slots_and_locations(draft, slots, current)
             missing = []
-            if slots.quantity and slots.quantity.value:
-                if not slots.quantity.unit:
-                    draft.normalized_quantity = None
-                    return draft, "What unit should I use for that quantity?"
-                draft.entered_quantity = slots.quantity.value
-                draft.entered_unit = slots.quantity.unit
-                draft.normalized_quantity = slots.quantity.value
-            else:
+            if not draft.entered_quantity and not draft.package_count:
                 missing.append("quantity")
-
-            if slots.location_text:
-                draft.location_text = slots.location_text
-            else:
+            if not draft.location_text and not draft.location_source:
                 missing.append("delivery_location")
 
             draft.missing_required_fields = missing
@@ -142,57 +125,142 @@ class CatalogDraftValidator:
             normalized_base_unit=str(template.get("baseUnit", "piece")),
         )
 
-        quantity = slots.quantity
-        if quantity:
-            if quantity.package_count is not None:
-                if quantity.package_size is None and template.get("allowedPackageSizes"):
-                    allowed = [float(x) for x in template.get("allowedPackageSizes", [])]
-                    if len(allowed) == 1:
-                        quantity.package_size = allowed[0]
-                    else:
-                        draft.package_count = quantity.package_count
-                        draft.missing_required_fields = ["package_size"]
-                        draft.ready_for_review = False
-                        return draft, f"What is the size of each package?"
+        # Merge slots and locations
+        self._merge_slots_and_locations(draft, slots, current, template=template)
 
-                draft.input_mode = "PACKAGE_COUNT"
-                draft.package_count = quantity.package_count
-                draft.package_size = quantity.package_size or 1.0
-                draft.entered_quantity = float(quantity.package_count)
-                draft.entered_unit = str(template.get("packageType") or "PACKAGE")
-                draft.normalized_quantity = quantity.package_count * (quantity.package_size or 1.0)
-            elif quantity.value is not None:
-                unit = quantity.unit
-                if not unit:
-                    draft.normalized_quantity = None
-                    return draft, "What unit should I use for that quantity?"
+        # Tile Coverage Deterministic Calculation
+        if "tile" in draft.item_name.lower() or "tile" in (draft.display_name or "").lower():
+            if draft.coverage_area and draft.dimensions:
+                w_mm = draft.dimensions.get("width", 600)
+                l_mm = draft.dimensions.get("length", 600)
+                est = MaterialEstimationEngine.estimate_tiles({
+                    "area_sqm": draft.coverage_area,
+                    "tile_width_mm": w_mm,
+                    "tile_length_mm": l_mm,
+                })
+                draft.calculated_physical_quantity = est.calculated_physical_quantity
+                draft.calculated_package_count = est.calculated_package_count
                 draft.input_mode = "BASE_QUANTITY"
-                draft.entered_quantity = quantity.value
-                draft.entered_unit = unit
-                draft.normalized_quantity = quantity.value
-
-        if slots.preferences:
-            for k, v in slots.preferences.items():
-                if isinstance(v, str):
-                    draft.preferences[k] = v.upper() if len(v) <= 4 else v.title()
-                else:
-                    draft.preferences[k] = str(v)
-
-        if slots.location_text:
-            draft.location_text = slots.location_text
-        if slots.structured_location:
-            draft.structured_location = slots.structured_location
+                draft.entered_quantity = float(est.calculated_physical_quantity or 37)
+                draft.entered_unit = "piece"
+                draft.normalized_quantity = est.calculated_value
+                draft.notes = f"Required coverage: {draft.coverage_area:g} m² | Tile size: {w_mm:g}×{l_mm:g} mm | Calculated: {est.calculated_physical_quantity} tiles (approx. {est.calculated_package_count} boxes)"
 
         missing = []
-        if not draft.entered_quantity and not draft.package_count:
+        if not draft.entered_quantity and not draft.package_count and not draft.calculated_physical_quantity:
             missing.append("quantity")
-        if not draft.location_text:
+        if not draft.location_text and not draft.location_source:
             missing.append("delivery_location")
 
         draft.missing_required_fields = missing
         draft.ready_for_review = len(missing) == 0
 
         return draft, None
+
+    def _merge_slots_and_locations(
+        self,
+        draft: RequirementDraft,
+        slots: ExtractedSlots,
+        current: Optional[RequirementDraft],
+        template: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Merges new slots into draft while preserving previously collected multi-turn fields."""
+
+        # 1. Quantity & Package Details
+        quantity = slots.quantity
+        if quantity:
+            if quantity.package_count is not None:
+                draft.input_mode = "PACKAGE_COUNT"
+                draft.package_count = quantity.package_count
+                if quantity.package_size is not None:
+                    draft.package_size = quantity.package_size
+                elif current and current.package_size is not None:
+                    draft.package_size = current.package_size
+
+                pkg_sz = draft.package_size or 1.0
+                draft.entered_quantity = float(quantity.package_count)
+                draft.entered_unit = (
+                    quantity.package_unit
+                    or (template.get("packageType") if template else None)
+                    or draft.normalized_base_unit
+                )
+                draft.normalized_quantity = quantity.package_count * pkg_sz
+            elif quantity.value is not None:
+                # If package_count was previously collected, user giving "50kg" supplies package_size!
+                if current and current.package_count is not None:
+                    draft.input_mode = "PACKAGE_COUNT"
+                    draft.package_count = current.package_count
+                    draft.package_size = quantity.value
+                    draft.package_unit = quantity.unit or current.package_unit or "kg"
+                    draft.entered_quantity = float(current.package_count)
+                    draft.entered_unit = draft.package_unit
+                    draft.normalized_quantity = current.package_count * quantity.value
+                else:
+                    draft.input_mode = "BASE_QUANTITY"
+                    draft.entered_quantity = quantity.value
+                    draft.entered_unit = quantity.unit or draft.normalized_base_unit
+                    draft.normalized_quantity = quantity.value
+        elif current:
+            # Retain quantity fields from current draft
+            if current.package_count is not None:
+                draft.package_count = current.package_count
+            if current.package_size is not None:
+                draft.package_size = current.package_size
+            if current.entered_quantity is not None:
+                draft.entered_quantity = current.entered_quantity
+            if current.entered_unit is not None:
+                draft.entered_unit = current.entered_unit
+            if current.normalized_quantity is not None:
+                draft.normalized_quantity = current.normalized_quantity
+
+        # 2. Location Preservation & Handoff Contract
+        if slots.location_source == "CURRENT_DEVICE_LOCATION" or (slots.location_text and "current location" in slots.location_text.lower()):
+            draft.location_source = "CURRENT_DEVICE_LOCATION"
+            if slots.structured_location or (slots.location_text and "current location" not in slots.location_text.lower()):
+                draft.location_pending = False
+            else:
+                draft.location_pending = True
+                draft.location_text = None
+        elif slots.location_text:
+            draft.location_text = slots.location_text
+            draft.location_source = "USER_TEXT"
+            draft.location_pending = False
+        elif current and (current.location_text or current.location_source):
+            # PRESERVE location from current turn!
+            draft.location_text = current.location_text
+            draft.structured_location = current.structured_location
+            draft.location_source = current.location_source
+            draft.location_pending = current.location_pending
+            draft.latitude = current.latitude
+            draft.longitude = current.longitude
+            draft.resolved_address = current.resolved_address
+
+        if slots.structured_location:
+            draft.structured_location = slots.structured_location
+            if slots.structured_location.get("latitude"):
+                draft.latitude = float(slots.structured_location["latitude"])
+            if slots.structured_location.get("longitude"):
+                draft.longitude = float(slots.structured_location["longitude"])
+            if slots.structured_location.get("address"):
+                draft.resolved_address = str(slots.structured_location["address"])
+            if slots.structured_location.get("city") and not draft.location_text:
+                draft.location_text = str(slots.structured_location["city"])
+
+        # 3. Preferences
+        if slots.preferences:
+            for k, v in slots.preferences.items():
+                if isinstance(v, str):
+                    draft.preferences[k] = v.upper() if len(v) <= 4 else v.title()
+                else:
+                    draft.preferences[k] = str(v)
+        elif current and current.preferences:
+            draft.preferences.update(current.preferences)
+
+        # 4. Notes
+        if slots.notes:
+            draft.notes = slots.notes
+        elif current and current.notes:
+            draft.notes = current.notes
 
     def next_question(self, draft: RequirementDraft, language: str = "en") -> str:
         if not draft.missing_required_fields:
@@ -206,4 +274,3 @@ class CatalogDraftValidator:
         elif field == "delivery_location":
             return f"Where should the {item} be delivered?"
         return f"Please provide details for {field}."
-

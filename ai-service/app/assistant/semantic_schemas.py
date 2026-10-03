@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 import uuid
 from enum import Enum
-from typing import Any
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -44,6 +44,8 @@ class ExtractedSlots(BaseModel):
     preferences: dict[str, str] = Field(default_factory=dict)
     location_text: str | None = None
     structured_location: dict[str, Any] | None = None
+    location_source: str | None = None
+    location_pending: bool = False
     notes: str | None = None
     live_resource: str | None = None
     referenced_id: str | None = None
@@ -105,46 +107,34 @@ class SemanticIntent(BaseModel):
 class SemanticRoutingResult(BaseModel):
     intents: list[SemanticIntent] = Field(min_length=1, max_length=3)
 
-    @field_validator("intents", mode="before")
-    @classmethod
-    def parse_intents_list(cls, v):
-        if isinstance(v, list):
-            coerced = []
-            for item in v:
-                if isinstance(item, str):
-                    coerced.append(
-                        SemanticIntent(
-                            intent=Intent.UNKNOWN if item not in Intent.__members__ else Intent(item),
-                            confidence=0.9,
-                            is_question="?" in item or "price" in item.lower(),
-                            is_purchase_request="DRAFT" in item,
-                        )
-                    )
-                elif isinstance(item, dict):
-                    coerced.append(item)
-                else:
-                    coerced.append(item)
-            return coerced
-        return v
-
 
 class RequirementDraft(BaseModel):
     id: str = Field(default_factory=lambda: f"draft_{uuid.uuid4().hex[:8]}")
-    template_id: str
-    category_id: str
+    template_id: str | None = None
+    category_id: str | None = None
     item_name: str
     display_name: str | None = None
     is_custom_item: bool = False
-    input_mode: str
+    input_mode: str = "BASE_QUANTITY"
     entered_quantity: float | None = None
     entered_unit: str | None = None
     package_count: int | None = None
     package_size: float | None = None
+    package_unit: str | None = None
     normalized_quantity: float | None = None
-    normalized_base_unit: str
-    preferences: dict[str, str] = Field(default_factory=dict)
+    normalized_base_unit: str = "piece"
+    dimensions: dict[str, Any] | None = None
+    coverage_area: float | None = None
+    calculated_physical_quantity: int | None = None
+    calculated_package_count: int | None = None
     location_text: str | None = None
     structured_location: dict[str, Any] | None = None
+    location_source: str | None = None  # "CURRENT_DEVICE_LOCATION" | "USER_TEXT"
+    location_pending: bool = False
+    latitude: float | None = None
+    longitude: float | None = None
+    resolved_address: str | None = None
+    preferences: dict[str, str] = Field(default_factory=dict)
     notes: str | None = None
     missing_required_fields: list[str] = Field(default_factory=list)
     ready_for_review: bool = False
@@ -159,4 +149,3 @@ class ConversationState(BaseModel):
     last_resolved_intent: Intent | None = None
     last_referenced_item: str | None = None
     last_tool_context: dict[str, Any] | None = None
-

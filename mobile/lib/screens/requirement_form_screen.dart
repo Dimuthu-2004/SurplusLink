@@ -174,53 +174,87 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
     final template = templates
         .where((item) => item.id == draft.templateId)
         .firstOrNull;
-    if (template == null) return;
-    _useTemplate(template);
+
+    if (template != null) {
+      _useTemplate(template);
+    } else if (draft.categoryId != null) {
+      _category = draft.categoryId;
+    }
+
     setState(() {
       _inputMode =
           draft.inputMode == 'PACKAGE' || draft.inputMode == 'PACKAGE_COUNT'
           ? 'PACKAGE_COUNT'
           : 'BASE_QUANTITY';
+
       if (_inputMode == 'PACKAGE_COUNT') {
-        _packageCount.text =
-            (draft.packageCount ?? draft.enteredQuantity.toInt()).toString();
-        _packageSize.text =
-            (draft.packageSize ??
-                    (draft.normalizedQuantity > 0 && draft.enteredQuantity > 0
-                        ? draft.normalizedQuantity / draft.enteredQuantity
-                        : null))
-                ?.toString() ??
-            '';
-        _packageSizeIsOther =
-            _packageSize.text.isNotEmpty &&
-            !template.allowedPackageSizes
-                .map((value) => value.toString())
-                .contains(_packageSize.text);
+        final countVal = draft.packageCount ?? (draft.enteredQuantity > 0 ? draft.enteredQuantity.toInt() : null);
+        if (countVal != null && countVal > 0) {
+          _packageCount.text = countVal.toString();
+        }
+        if (draft.packageSize != null && draft.packageSize! > 0) {
+          _packageSize.text = draft.packageSize.toString();
+        } else if (draft.normalizedQuantity > 0 && draft.enteredQuantity > 0) {
+          _packageSize.text = (draft.normalizedQuantity / draft.enteredQuantity).toStringAsFixed(1);
+        }
+        if (template != null && _packageSize.text.isNotEmpty) {
+          _packageSizeIsOther = !template.allowedPackageSizes
+              .map((value) => value.toString())
+              .contains(_packageSize.text);
+        }
       } else {
-        _quantity.text =
-            (draft.normalizedQuantity > 0
-                    ? draft.normalizedQuantity
-                    : draft.enteredQuantity)
-                .toString();
-        _unit = template.allowedUnits.firstWhere(
-          (value) =>
-              value.toLowerCase() == draft.normalizedBaseUnit.toLowerCase(),
-          orElse: () => template.baseUnit,
-        );
+        final qVal = prefill.quantity;
+        if (qVal > 0) {
+          _quantity.text = qVal.toString();
+        }
+        if (prefill.unit.isNotEmpty) {
+          _unit = prefill.unit;
+        }
       }
-      _notes.text = draft.notes ?? '';
-      for (final field in template.parsedAttributes.where(
-        (field) => field.buyerPreference,
-      )) {
-        final value = draft.preferences?[field.id];
-        if (value == null) continue;
-        final canonical = field.options.firstWhere(
-          (option) => option.toLowerCase() == value.toLowerCase(),
-          orElse: () => field.allowOther || field.options.isEmpty ? value : '',
-        );
-        if (canonical.isNotEmpty) _preferences[field.id] = canonical;
+
+      // Prefill notes & location info
+      final notesBuffer = StringBuffer();
+      if (draft.notes != null && draft.notes!.isNotEmpty) {
+        notesBuffer.write(draft.notes);
+      }
+      if (draft.locationText != null &&
+          draft.locationText!.isNotEmpty &&
+          !draft.locationText!.toLowerCase().contains('current location')) {
+        if (notesBuffer.isNotEmpty) notesBuffer.write(' | ');
+        notesBuffer.write('Delivery Area: ${draft.locationText}');
+      }
+      _notes.text = notesBuffer.toString();
+
+      // Coordinates handoff
+      if (draft.latitude != null && draft.longitude != null) {
+        _capturedLatitude = draft.latitude;
+        _capturedLongitude = draft.longitude;
+      }
+
+      // Attributes prefill if template exists
+      if (template != null) {
+        for (final field in template.parsedAttributes.where(
+          (field) => field.buyerPreference,
+        )) {
+          final value = draft.preferences?[field.id];
+          if (value == null) continue;
+          final canonical = field.options.firstWhere(
+            (option) => option.toLowerCase() == value.toLowerCase(),
+            orElse: () => field.allowOther || field.options.isEmpty ? value : '',
+          );
+          if (canonical.isNotEmpty) _preferences[field.id] = canonical;
+        }
       }
     });
+
+    // Device GPS auto-capture trigger if location is pending
+    if (draft.locationPending ||
+        (draft.locationSource == 'CURRENT_DEVICE_LOCATION' &&
+            _capturedLatitude == null)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _captureGps();
+      });
+    }
   }
 
   void _useTemplate(ConstructionItemTemplate template) {

@@ -136,6 +136,15 @@ class SemanticRouter:
         # Clean location via ValidationGate
         valid_loc = ValidationGate.validate_location(slots.location_text)
 
+        # Check for device location handoff ("to my current location")
+        msg_lower = message.lower()
+        is_current_loc_phrase = any(phrase in msg_lower for phrase in ["current location", "my location", "same location"])
+        loc_source = "CURRENT_DEVICE_LOCATION" if is_current_loc_phrase else ("USER_TEXT" if valid_loc else None)
+        loc_pending = is_current_loc_phrase and not state.structured_location
+
+        if is_current_loc_phrase and valid_loc and "current location" in valid_loc.lower():
+            valid_loc = None
+
         # Quantity slots
         qty_slots = slots.quantity
         pkg_count = norm_qty.package_count if norm_qty else (qty_slots.package_count if qty_slots else None)
@@ -163,6 +172,8 @@ class SemanticRouter:
             catalog_item_id=catalog_id,
             is_custom_item=is_custom,
             location_text=valid_loc,
+            location_source=loc_source,
+            location_pending=loc_pending,
             quantity=qty_slots,
             package_count=pkg_count,
             package_size=pkg_size,
@@ -179,4 +190,3 @@ class SemanticRouter:
             needs_clarification=primary.needs_clarification,
             clarification_question=primary.clarification_question,
         )
-

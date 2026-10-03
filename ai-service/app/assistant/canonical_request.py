@@ -43,9 +43,16 @@ class CanonicalUserRequest(BaseModel):
 
     dimensions: Optional[ItemDimensions] = None
     coverage_area: Optional[float] = Field(default=None, ge=0.0)  # Always in m2 / sqm
+    calculated_physical_quantity: Optional[int] = None
+    calculated_package_count: Optional[int] = None
 
     location_text: Optional[str] = Field(default=None, alias="location")
     structured_location: Optional[Dict[str, Any]] = None  # {latitude, longitude, city, address}
+    location_source: Optional[str] = None  # "CURRENT_DEVICE_LOCATION" | "USER_TEXT"
+    location_pending: bool = False
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    resolved_address: Optional[str] = None
 
     preferences: Dict[str, str] = Field(default_factory=dict)
     estimation_context: Dict[str, Any] = Field(default_factory=dict)
@@ -109,6 +116,14 @@ class CanonicalUserRequest(BaseModel):
         return self.structured_location
 
     @property
+    def locationSource(self) -> Optional[str]:
+        return self.location_source
+
+    @property
+    def locationPending(self) -> bool:
+        return self.location_pending
+
+    @property
     def estimationContext(self) -> Dict[str, Any]:
         return self.estimation_context
 
@@ -123,4 +138,3 @@ class CanonicalUserRequest(BaseModel):
     @property
     def topicSwitch(self) -> bool:
         return self.topic_switch
-
