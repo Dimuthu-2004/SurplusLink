@@ -75,21 +75,39 @@ class QuantityNormalizer:
         "piece": "piece",
         "pieces": "piece",
         "pcs": "piece",
+        "tile": "piece",
+        "tiles": "piece",
         "cartridge": "cartridge",
         "cartridges": "cartridge",
+        "rs": "LKR",
+        "rs.": "LKR",
+        "lkr": "LKR",
     }
 
     @classmethod
-    def parse_k_number(cls, val_str: str) -> float:
-        """Parses numbers including 'k' or 'K' suffix, e.g., '10k' -> 10000.0, but NOT '50kg'."""
+    def parse_k_number(cls, val_str: str, is_reverse_suffix: bool = False) -> float:
+        """
+        Parses numbers including 'k' or 'K' suffix.
+        Disambiguates between numeric multiplier 'k' (e.g., 10k = 10,000 in '10k bags' or 'Rs 10k')
+        and Romanized Sinhala count suffix '-k' (e.g., 'bags 10k' = 10 bags, 'cans 3k' = 3 cans, 'tiles 4k' = 4 tiles).
+        """
         cleaned = val_str.strip().lower()
         if cleaned.endswith("kg"):
             cleaned = cleaned[:-2].strip()
         elif cleaned.endswith("g") and not cleaned.endswith("kg"):
             cleaned = cleaned[:-1].strip()
+
         if cleaned.endswith("k"):
+            val_part = cleaned[:-1].strip()
             try:
-                return float(cleaned[:-1]) * 1000.0
+                val_num = float(val_part)
+                if is_reverse_suffix:
+                    # In Romanized Sinhala reverse count syntax (e.g. "bags 10k", "cans 3k", "tiles 4k"),
+                    # 'k' is the Sinhala count suffix -k / -ak (meaning 10 bags, 3 cans, 4 tiles).
+                    return val_num
+                else:
+                    # Standard numeric multiplier (e.g. 10k = 10,000)
+                    return val_num * 1000.0
             except ValueError:
                 pass
         return float(cleaned)
@@ -170,14 +188,13 @@ class QuantityNormalizer:
     def parse_quantity_structure(cls, text: str) -> Optional[NormalizedQuantity]:
         """
         Parses complex quantity structures including noisy Sri Lankan inputs:
-        - '10k bags' -> 10,000 bags
-        - 'bags 10k' -> 10,000 bags
-        - '4L cans 3k' -> package_count=3000, package_size=4, package_unit=L, total=12000L
+        - '10k bags' -> 10,000 bags (multiplier k)
+        - 'bags 10k' -> 10 bags (Romanized Sinhala count suffix -k)
+        - 'cans 3k' -> 3 cans (Romanized Sinhala count suffix -k)
+        - '4L cans 3k' -> package_count=3, package_size=4L, total=12L
+        - 'tiles 4k' -> 4 tiles
+        - 'Rs 10k' / 'budget 50k' -> 10,000 / 50,000 LKR
         - '10 x 50kg bags' -> package_count=10, package_size=50kg, total=500kg
-        - '2 cans of 4L' -> package_count=2, package_size=4L, total=8L
-        - '50kg' -> value=50, unit=kg
-        - '6ltr' -> value=6, unit=L
-        - '12m2' -> value=12, unit=m2
         """
         if not text:
             return None
@@ -187,7 +204,26 @@ class QuantityNormalizer:
         area_res = cls.parse_area(text_str)
         cov_m2 = area_res[0] if area_res else None
 
-        # 0. Check "4L cans 3k" pattern
+        # 0. Check monetary expressions: "Rs 10k", "budget 50k", "10k LKR"
+        money_match = re.search(
+            r"(rs\.?|lkr|budget|price|cost)\s*(\d+(?:\.\d+)?\s*k?)|(\d+(?:\.\d+)?\s*k?)\s*(rs\.?|lkr)",
+            text_str,
+            re.IGNORECASE,
+        )
+        if money_match:
+            num_str = money_match.group(2) or money_match.group(3)
+            val = cls.parse_k_number(num_str, is_reverse_suffix=False)
+            return NormalizedQuantity(
+                value=val,
+                unit="LKR",
+                base_value=val,
+                base_unit="LKR",
+                coverage_area_m2=cov_m2,
+                dimensions=dims,
+                display_text=f"LKR {val:,.2f}",
+            )
+
+        # 1. Check "4L cans 3k" pattern (Reverse noun-first with package size)
         pkg_rev_sz_match = re.search(
             r"(\d+(?:\.\d+)?)\s*(L|ltr|litres?|liter?|kg|g)?\s*(cans?|bags?|boxes?|buckets?|packs?)\s*(\d+(?:\.\d+)?\s*k?)",
             text_str,
@@ -197,7 +233,7 @@ class QuantityNormalizer:
             size = float(pkg_rev_sz_match.group(1))
             u_raw = (pkg_rev_sz_match.group(2) or "L").lower()
             unit = cls.normalize_unit_name(u_raw)
-            count = int(cls.parse_k_number(pkg_rev_sz_match.group(4)))
+            count = int(cls.parse_k_number(pkg_rev_sz_match.group(4), is_reverse_suffix=True))
             total = count * size
             return NormalizedQuantity(
                 value=total,
@@ -213,14 +249,14 @@ class QuantityNormalizer:
                 display_text=f"{count} × {size:g}{unit} ({total:g}{unit})",
             )
 
-        # 1. Package structure: "10 x 50kg", "10 bags of 50kg", "2 cans of 4L"
+        # 2. Package structure: "10 x 50kg", "10 bags of 50kg", "2 cans of 4L"
         pkg_match = re.search(
             r"(\d+(?:\.\d+)?\s*k?)\s*(?:x|\*|×|bags?|cans?|boxes?|packs?|buckets?)\s*(?:of)?\s*(\d+(?:\.\d+)?)\s*(kg|g|l|litres?|liter?|ltrs?|m2|sqm|pcs|pieces)?",
             text_str,
             re.IGNORECASE,
         )
         if pkg_match:
-            count = int(cls.parse_k_number(pkg_match.group(1)))
+            count = int(cls.parse_k_number(pkg_match.group(1), is_reverse_suffix=False))
             size = cls.parse_k_number(pkg_match.group(2))
             u_raw = (pkg_match.group(3) or "kg").lower()
             unit = cls.normalize_unit_name(u_raw)
@@ -239,15 +275,15 @@ class QuantityNormalizer:
                 display_text=f"{count} × {size:g}{unit} ({total:g}{unit})",
             )
 
-        # 2. Reverse noisy syntax: "bags 10k", "cans 5"
+        # 3. Reverse noisy syntax: "bags 10k", "cans 3k", "tiles 4k" (Romanized Sinhala suffix -k)
         rev_match = re.search(
-            r"(bags?|cans?|boxes?|buckets?|pieces?|pcs)\s*(\d+(?:\.\d+)?\s*k?)",
+            r"(bags?|cans?|boxes?|buckets?|pieces?|pcs|tiles?)\s*(\d+(?:\.\d+)?\s*k?)",
             text_str,
             re.IGNORECASE,
         )
         if rev_match:
             u_name = cls.normalize_unit_name(rev_match.group(1))
-            val = cls.parse_k_number(rev_match.group(2))
+            val = cls.parse_k_number(rev_match.group(2), is_reverse_suffix=True)
             return NormalizedQuantity(
                 value=val,
                 unit=u_name,
@@ -260,14 +296,14 @@ class QuantityNormalizer:
                 display_text=f"{val:g} {u_name}",
             )
 
-        # 3. Simple quantity with unit or number: "10k bags", "50kg", "6ltr", "12m2", "10 bags"
+        # 4. Simple quantity with unit or number: "10k bags", "50kg", "6ltr", "12m2" (English number-first syntax)
         qty_match = re.search(
-            r"(\d+(?:\.\d+)?\s*k?)\s*(kg|g|l|litres?|liter?|ltrs?|m2|sqm|sqft|bags?|cans?|boxes?|pcs|pieces|buckets?|cartridges?)?",
+            r"(\d+(?:\.\d+)?\s*k?)\s*(kg|g|l|litres?|liter?|ltrs?|m2|sqm|sqft|bags?|cans?|boxes?|pcs|pieces|buckets?|cartridges?|tiles?)?",
             text_str,
             re.IGNORECASE,
         )
         if qty_match:
-            val = cls.parse_k_number(qty_match.group(1))
+            val = cls.parse_k_number(qty_match.group(1), is_reverse_suffix=False)
             u_raw = qty_match.group(2)
             base_unit = cls.normalize_unit_name(u_raw) if u_raw else ""
 

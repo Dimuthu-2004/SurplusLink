@@ -123,3 +123,4 @@ class CanonicalUserRequest(BaseModel):
     @property
     def topicSwitch(self) -> bool:
         return self.topic_switch
+

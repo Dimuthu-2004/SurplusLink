@@ -114,7 +114,7 @@ def test_invariant_unit_conversion():
 
 
 def test_invariant_noisy_k_suffix():
-    """Invariant 9: '10k bags' is normalized to 10,000 bags."""
+    """Invariant 9: '10k bags' is normalized to 10,000 bags (English multiplier syntax)."""
     qty = QuantityNormalizer.parse_quantity_structure("10k bags")
     assert qty is not None
     assert qty.package_count == 10000
@@ -179,11 +179,56 @@ def test_invariant_multi_draft_support():
     assert sm.drafts[1].item_name == "Water Pump"
 
 
-def test_invariant_4l_cans_3k_parsing():
-    """Invariant 13: '4L cans 3k' is normalized to 3,000 cans of 4L."""
-    qty = QuantityNormalizer.parse_quantity_structure("4L cans 3k")
-    assert qty is not None
-    assert qty.package_count == 3000
-    assert qty.package_size == 4.0
-    assert qty.value == 12000.0
+def test_sinhala_count_suffix_disambiguation():
+    """
+    Regression Test 1: Disambiguate Romanized Sinhala count suffix '-k' from multiplier 'k'.
+    Examples:
+    'bags 10k' -> 10 bags
+    'cans 3k' -> 3 cans
+    '4L cans 3k' -> 3 cans of 4L (12L)
+    'tiles 4k' -> 4 tiles
+    """
+    q1 = QuantityNormalizer.parse_quantity_structure("bags 10k")
+    assert q1 is not None
+    assert q1.package_count == 10
+    assert q1.value == 10.0
 
+    q2 = QuantityNormalizer.parse_quantity_structure("cans 3k")
+    assert q2 is not None
+    assert q2.package_count == 3
+    assert q2.value == 3.0
+
+    q3 = QuantityNormalizer.parse_quantity_structure("4L cans 3k")
+    assert q3 is not None
+    assert q3.package_count == 3
+    assert q3.package_size == 4.0
+    assert q3.value == 12.0
+
+    q4 = QuantityNormalizer.parse_quantity_structure("tiles 4k")
+    assert q4 is not None
+    assert q4.package_count == 4
+    assert q4.value == 4.0
+
+
+def test_monetary_k_multiplier_disambiguation():
+    """
+    Regression Test 2: Disambiguate monetary and multiplier 'k' (thousand).
+    Examples:
+    'Rs 10k' -> 10,000 LKR
+    'budget 50k' -> 50,000 LKR
+    '10k bags' -> 10,000 bags
+    """
+    m1 = QuantityNormalizer.parse_quantity_structure("Rs 10k")
+    assert m1 is not None
+    assert m1.value == 10000.0
+    assert m1.unit == "LKR"
+
+    m2 = QuantityNormalizer.parse_quantity_structure("budget 50k")
+    assert m2 is not None
+    assert m2.value == 50000.0
+    assert m2.unit == "LKR"
+
+    m3 = QuantityNormalizer.parse_quantity_structure("10k bags")
+    assert m3 is not None
+    assert m3.package_count == 10000
+    assert m3.value == 10000.0

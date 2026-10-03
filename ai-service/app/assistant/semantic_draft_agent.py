@@ -206,3 +206,4 @@ class CatalogDraftValidator:
         elif field == "delivery_location":
             return f"Where should the {item} be delivered?"
         return f"Please provide details for {field}."
+

@@ -320,3 +320,4 @@ class SurplusLinkSemanticAssistantEngine:
             "active_draft_id": state.active_draft_id,
             "suggested_actions": ["Review Requirement"] if state.active_requirement_draft and state.active_requirement_draft.ready_for_review else [],
         }
+
