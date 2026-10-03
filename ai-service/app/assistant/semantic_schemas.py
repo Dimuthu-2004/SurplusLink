@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import uuid
 from enum import Enum
 from typing import Any
 
@@ -42,6 +43,7 @@ class ExtractedSlots(BaseModel):
     quantity: QuantitySlots | None = None
     preferences: dict[str, str] = Field(default_factory=dict)
     location_text: str | None = None
+    structured_location: dict[str, Any] | None = None
     notes: str | None = None
     live_resource: str | None = None
     referenced_id: str | None = None
@@ -83,7 +85,6 @@ class SemanticIntent(BaseModel):
     def parse_intent_enum(cls, v):
         if isinstance(v, str):
             v_upper = v.upper().strip()
-            # Normalize enum names if model outputs minor variations
             aliases = {
                 "BUYER_REQUIREMENT": "CREATE_REQUIREMENT_DRAFT",
                 "REQUIREMENT_DRAFT": "CREATE_REQUIREMENT_DRAFT",
@@ -128,9 +129,12 @@ class SemanticRoutingResult(BaseModel):
 
 
 class RequirementDraft(BaseModel):
+    id: str = Field(default_factory=lambda: f"draft_{uuid.uuid4().hex[:8]}")
     template_id: str
     category_id: str
     item_name: str
+    display_name: str | None = None
+    is_custom_item: bool = False
     input_mode: str
     entered_quantity: float | None = None
     entered_unit: str | None = None
@@ -140,14 +144,19 @@ class RequirementDraft(BaseModel):
     normalized_base_unit: str
     preferences: dict[str, str] = Field(default_factory=dict)
     location_text: str | None = None
+    structured_location: dict[str, Any] | None = None
     notes: str | None = None
     missing_required_fields: list[str] = Field(default_factory=list)
     ready_for_review: bool = False
 
 
 class ConversationState(BaseModel):
+    drafts: list[RequirementDraft] = Field(default_factory=list)
+    active_draft_id: str | None = None
     active_requirement_draft: RequirementDraft | None = None
+    structured_location: dict[str, Any] | None = None
     awaiting_field: str | None = None
     last_resolved_intent: Intent | None = None
     last_referenced_item: str | None = None
     last_tool_context: dict[str, Any] | None = None
+

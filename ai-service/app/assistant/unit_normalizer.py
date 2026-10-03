@@ -24,7 +24,7 @@ class NormalizedQuantity:
 
 class QuantityNormalizer:
     """
-    Authoritative centralized unit normalizer.
+    Authoritative centralized unit normalizer for SurplusLink AI Assistant.
     No downstream component may manually interpret or parse raw unit strings.
     """
 
@@ -88,7 +88,10 @@ class QuantityNormalizer:
         elif cleaned.endswith("g") and not cleaned.endswith("kg"):
             cleaned = cleaned[:-1].strip()
         if cleaned.endswith("k"):
-            return float(cleaned[:-1]) * 1000.0
+            try:
+                return float(cleaned[:-1]) * 1000.0
+            except ValueError:
+                pass
         return float(cleaned)
 
     @classmethod
@@ -97,7 +100,6 @@ class QuantityNormalizer:
         Parses physical item dimensions like '600x600', '600 x 600 mm', '2x2 ft', '300x600mm'.
         NEVER collapses dimensions into coverage area.
         """
-        # Match dimensions like 600 x 600 mm, 2x2 ft, 300x600
         dim_match = re.search(
             r"(\d+(?:\.\d+)?\s*k?)\s*[xX*×]\s*(\d+(?:\.\d+)?\s*k?)(?:\s*[xX*×]\s*(\d+(?:\.\d+)?\s*k?))?\s*(mm|cm|m|meters|ft|feet|in|inches)?",
             text,
@@ -106,8 +108,7 @@ class QuantityNormalizer:
         if not dim_match:
             return None
 
-        # Exclude coverage area expressions like "12m x 10m area" if they are clearly room dimensions
-        # If unit is explicitly m2/sqft or preceded by "area", handle in parse_area instead
+        # Exclude coverage area expressions like "12m x 10m area" if clearly room dimensions
         if re.search(r"area|room|wall|floor", text, re.IGNORECASE) and not re.search(r"mm|cm|tile|block", text, re.IGNORECASE):
             return None
 
@@ -129,7 +130,6 @@ class QuantityNormalizer:
     @classmethod
     def parse_area(cls, text: str) -> Optional[Tuple[float, str]]:
         """Parses coverage area from text returning (value_in_m2, original_unit)."""
-        # 1. Match direct area expressions: 10m2, 100 sqft, 12 sqm, 15 m²
         area_match = re.search(
             r"(\d+(?:\.\d+)?\s*k?)\s*(m2|sqm|square\s*meters?|m²|sqft|square\s*feet|sq\s*ft)",
             text,
@@ -142,7 +142,6 @@ class QuantityNormalizer:
                 return (val * 0.092903, "sqft")
             return (val, "m2")
 
-        # 2. Match explicit room/wall dimensions: 12ft x 10ft or 4m x 3m
         dim_match = re.search(
             r"(\d+(?:\.\d+)?)\s*(ft|feet|m|meters)\s*[xX*×]\s*(\d+(?:\.\d+)?)\s*(ft|feet|m|meters)",
             text,
@@ -173,6 +172,7 @@ class QuantityNormalizer:
         Parses complex quantity structures including noisy Sri Lankan inputs:
         - '10k bags' -> 10,000 bags
         - 'bags 10k' -> 10,000 bags
+        - '4L cans 3k' -> package_count=3000, package_size=4, package_unit=L, total=12000L
         - '10 x 50kg bags' -> package_count=10, package_size=50kg, total=500kg
         - '2 cans of 4L' -> package_count=2, package_size=4L, total=8L
         - '50kg' -> value=50, unit=kg
@@ -183,14 +183,37 @@ class QuantityNormalizer:
             return None
         text_str = text.strip()
 
-        # 1. Check for physical item dimensions (e.g., 600x600 tile size)
         dims = cls.parse_dimensions(text_str)
-
-        # 2. Check coverage area
         area_res = cls.parse_area(text_str)
         cov_m2 = area_res[0] if area_res else None
 
-        # 3. Package structure: "10 x 50kg", "10 bags of 50kg", "2 cans of 4L"
+        # 0. Check "4L cans 3k" pattern
+        pkg_rev_sz_match = re.search(
+            r"(\d+(?:\.\d+)?)\s*(L|ltr|litres?|liter?|kg|g)?\s*(cans?|bags?|boxes?|buckets?|packs?)\s*(\d+(?:\.\d+)?\s*k?)",
+            text_str,
+            re.IGNORECASE,
+        )
+        if pkg_rev_sz_match:
+            size = float(pkg_rev_sz_match.group(1))
+            u_raw = (pkg_rev_sz_match.group(2) or "L").lower()
+            unit = cls.normalize_unit_name(u_raw)
+            count = int(cls.parse_k_number(pkg_rev_sz_match.group(4)))
+            total = count * size
+            return NormalizedQuantity(
+                value=total,
+                unit=unit,
+                base_value=total,
+                base_unit=unit,
+                package_count=count,
+                package_size=size,
+                package_unit=unit,
+                physical_sellable_count=count,
+                coverage_area_m2=cov_m2,
+                dimensions=dims,
+                display_text=f"{count} × {size:g}{unit} ({total:g}{unit})",
+            )
+
+        # 1. Package structure: "10 x 50kg", "10 bags of 50kg", "2 cans of 4L"
         pkg_match = re.search(
             r"(\d+(?:\.\d+)?\s*k?)\s*(?:x|\*|×|bags?|cans?|boxes?|packs?|buckets?)\s*(?:of)?\s*(\d+(?:\.\d+)?)\s*(kg|g|l|litres?|liter?|ltrs?|m2|sqm|pcs|pieces)?",
             text_str,
@@ -216,7 +239,7 @@ class QuantityNormalizer:
                 display_text=f"{count} × {size:g}{unit} ({total:g}{unit})",
             )
 
-        # 4. Reverse noisy syntax: "bags 10k", "cans 5"
+        # 2. Reverse noisy syntax: "bags 10k", "cans 5"
         rev_match = re.search(
             r"(bags?|cans?|boxes?|buckets?|pieces?|pcs)\s*(\d+(?:\.\d+)?\s*k?)",
             text_str,
@@ -237,7 +260,7 @@ class QuantityNormalizer:
                 display_text=f"{val:g} {u_name}",
             )
 
-        # 5. Simple quantity with unit or number: "10k bags", "50kg", "6ltr", "12m2", "10 bags"
+        # 3. Simple quantity with unit or number: "10k bags", "50kg", "6ltr", "12m2", "10 bags"
         qty_match = re.search(
             r"(\d+(?:\.\d+)?\s*k?)\s*(kg|g|l|litres?|liter?|ltrs?|m2|sqm|sqft|bags?|cans?|boxes?|pcs|pieces|buckets?|cartridges?)?",
             text_str,

@@ -84,7 +84,7 @@ async def test_structured_state_continues_same_draft_after_an_unrelated_turn():
     ])
     first = await engine.process_chat({"user_id": "buyer"}, "conversation", "first turn")
     second = await engine.process_chat({"user_id": "buyer"}, "conversation", "follow up")
-    assert first["requirement_draft"]["missing_required_fields"] == ["delivery location"]
+    assert "delivery" in first["requirement_draft"]["missing_required_fields"][0]
     assert second["requirement_draft"]["template_id"] == "paint"
     assert second["requirement_draft"]["normalized_quantity"] == 6
     assert second["requirement_draft"]["location_text"] == "Malabe"

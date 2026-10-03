@@ -1,6 +1,7 @@
 import pytest
 from app.assistant.canonical_request import CanonicalUserRequest, ItemDimensions
 from app.assistant.capability_registry import CapabilityRegistry
+from app.assistant.item_resolver import ItemResolver
 from app.assistant.semantic_schemas import Intent, QuantitySlots, RequirementDraft
 from app.assistant.state_machine import AssistantState, ConversationStateMachine
 from app.assistant.unit_normalizer import QuantityNormalizer
@@ -13,6 +14,7 @@ def test_invariant_area_preservation():
     assert res is not None
     m2_val, unit = res
     assert m2_val == pytest.approx(12.0)
+    assert unit in {"m2", "sqm"}
 
 
 def test_invariant_package_math():
@@ -126,3 +128,62 @@ def test_invariant_invalid_location_tokens_rejected():
     assert ValidationGate.validate_location("kohomada") is None
     assert ValidationGate.validate_location("Colombo") == "Colombo"
     assert ValidationGate.validate_location("Kandy") == "Kandy"
+
+
+def test_invariant_custom_item_candidate_accepted():
+    """Invariant 11: Open-vocabulary custom items (Water Pump, Generator) are accepted with null catalog ID."""
+    resolver = ItemResolver()
+    res1 = resolver.resolve("Water Pump")
+    assert res1 is not None
+    assert res1.is_custom_item is True
+    assert res1.catalog_item_id is None
+    assert res1.display_name == "Water Pump"
+
+    res2 = resolver.resolve("Generator")
+    assert res2 is not None
+    assert res2.is_custom_item is True
+    assert res2.display_name == "Generator"
+
+
+def test_invariant_multi_draft_support():
+    """Invariant 12: Additive requirement requests ('also need a water pump') create a new draft without destroying previous draft."""
+    sm = ConversationStateMachine()
+
+    # Draft 1: Generator
+    req1 = CanonicalUserRequest(
+        raw_message="I want a generator",
+        intent=Intent.CREATE_REQUIREMENT_DRAFT,
+        item_candidate="Generator",
+        resolved_item="Generator",
+        is_custom_item=True,
+    )
+    sm.process_request(req1)
+    draft1 = RequirementDraft(template_id="CUSTOM_ITEM", category_id="GENERAL", item_name="Generator", display_name="Generator", is_custom_item=True, input_mode="BASE_QUANTITY", entered_quantity=2.0, normalized_base_unit="piece", ready_for_review=True)
+    sm.set_active_draft(draft1)
+    assert len(sm.drafts) == 1
+
+    # Additive Draft 2: Water Pump
+    req2 = CanonicalUserRequest(
+        raw_message="also need a water pump",
+        intent=Intent.CREATE_REQUIREMENT_DRAFT,
+        item_candidate="Water Pump",
+        resolved_item="Water Pump",
+        is_custom_item=True,
+    )
+    sm.process_request(req2)
+    draft2 = RequirementDraft(template_id="CUSTOM_ITEM", category_id="GENERAL", item_name="Water Pump", display_name="Water Pump", is_custom_item=True, input_mode="BASE_QUANTITY", entered_quantity=1.0, normalized_base_unit="piece", ready_for_review=True)
+    sm.set_active_draft(draft2)
+
+    assert len(sm.drafts) == 2
+    assert sm.drafts[0].item_name == "Generator"
+    assert sm.drafts[1].item_name == "Water Pump"
+
+
+def test_invariant_4l_cans_3k_parsing():
+    """Invariant 13: '4L cans 3k' is normalized to 3,000 cans of 4L."""
+    qty = QuantityNormalizer.parse_quantity_structure("4L cans 3k")
+    assert qty is not None
+    assert qty.package_count == 3000
+    assert qty.package_size == 4.0
+    assert qty.value == 12000.0
+

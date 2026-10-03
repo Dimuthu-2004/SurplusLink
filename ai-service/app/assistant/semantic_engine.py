@@ -7,6 +7,7 @@ from app.assistant.backend_tools import BackendToolsClient
 from app.assistant.canonical_request import CanonicalUserRequest
 from app.assistant.capability_registry import CapabilityRegistry, CapabilityResult
 from app.assistant.conversation_state import ConversationStateStore
+from app.assistant.item_resolver import ItemResolver
 from app.assistant.llm_provider import GroqLLMProvider
 from app.assistant.match_explanation_agent import MatchExplanationAgent
 from app.assistant.material_estimation import MaterialEstimationEngine
@@ -20,9 +21,9 @@ from app.rag.retriever import KnowledgeRetriever
 
 logger = logging.getLogger(__name__)
 
+# Static RAG Knowledge Intents (Strictly Technical & Platform Guidance, NEVER live marketplace prices)
 KNOWLEDGE_INTENTS = {
     Intent.CONSTRUCTION_KNOWLEDGE,
-    Intent.PRICE_INFORMATION,
     Intent.PLATFORM_HELP,
 }
 
@@ -30,8 +31,9 @@ KNOWLEDGE_INTENTS = {
 class SurplusLinkSemanticAssistantEngine:
     """
     Stabilized architecture-level engine for SurplusLink AI Assistant.
-    Enforces CanonicalUserRequest intermediate representation, ConversationStateMachine state management,
-    CapabilityRegistry tool execution, ValidationGate output checks, and deterministic facts.
+    Enforces CanonicalUserRequest intermediate representation, ItemResolver open vocabulary,
+    ConversationStateMachine state management, CapabilityRegistry tool execution,
+    ValidationGate output checks, and deterministic calculations.
     """
 
     def __init__(
@@ -44,9 +46,10 @@ class SurplusLinkSemanticAssistantEngine:
         self.rag_retriever = rag_retriever or KnowledgeRetriever()
         self.tools_client = tools_client or BackendToolsClient()
         self.llm_provider = llm_provider or GroqLLMProvider()
-        self.router = SemanticRouter(self.llm_provider)
+        self.item_resolver = ItemResolver()
+        self.router = SemanticRouter(self.llm_provider, item_resolver=self.item_resolver)
         self.states = state_store or ConversationStateStore()
-        self.validator = CatalogDraftValidator()
+        self.validator = CatalogDraftValidator(item_resolver=self.item_resolver)
         self.match_agent = MatchExplanationAgent()
         self.capability_registry = CapabilityRegistry()
         self.validation_gate = ValidationGate()
@@ -55,26 +58,34 @@ class SurplusLinkSemanticAssistantEngine:
         key = f"{user_context.get('user_id', '')}:{conversation_id}"
         state = self.states.get(key)
 
+        # Retain structured location from user_context if provided by Flutter
+        if user_context.get("current_location") and not state.structured_location:
+            state.structured_location = user_context["current_location"]
+
         logger.info(
-            "Processing chat message: '%s', conversation_id=%s, GROQ_KEY_CONFIGURED=%s, GROQ_MODEL=%s",
+            "Processing chat message: '%s', conversation_id=%s, GROQ_KEY_CONFIGURED=%s",
             message,
             conversation_id,
             bool(self.llm_provider.api_key),
-            self.llm_provider.model,
         )
 
         # 1. Parse into CanonicalUserRequest
         if hasattr(self.router, "to_canonical"):
             canonical_req = self.router.to_canonical(message.strip(), state)
         else:
-            routing = self.router.classify(message.strip(), state)
-            primary = routing.intents[0] if routing and routing.intents else SemanticIntent(intent=Intent.UNKNOWN)
+            routing_res = self.router.classify(message.strip(), state)
+            primary = routing_res.intents[0] if routing_res and routing_res.intents else SemanticIntent(intent=Intent.UNKNOWN)
+            item_cand = primary.extracted_slots.item or primary.referenced_item
+            resolved = self.item_resolver.resolve(item_cand) if item_cand else None
             canonical_req = CanonicalUserRequest(
                 raw_message=message,
                 intent=primary.intent,
                 confidence=primary.confidence,
                 language=primary.response_language,
-                item_candidate=primary.extracted_slots.item or primary.referenced_item,
+                item_candidate=item_cand,
+                resolved_item=resolved.display_name if resolved else item_cand,
+                catalog_item_id=resolved.catalog_item_id if resolved else None,
+                is_custom_item=resolved.is_custom_item if resolved else True,
                 location=primary.extracted_slots.location_text,
                 quantity=primary.extracted_slots.quantity,
                 preferences=primary.extracted_slots.preferences,
@@ -83,49 +94,57 @@ class SurplusLinkSemanticAssistantEngine:
                 is_purchase_request=primary.is_purchase_request,
                 retrieval_query=primary.retrieval_query,
             )
+
         logger.info(
-            "Canonical request parsed: intent=%s, confidence=%.2f, item=%s, location=%s",
+            "Canonical request parsed: intent=%s, confidence=%.2f, item=%s, location=%s, custom=%s",
             canonical_req.intent.value,
             canonical_req.confidence,
-            canonical_req.item_candidate,
-            canonical_req.location,
+            canonical_req.resolved_item or canonical_req.item_candidate,
+            canonical_req.location_text,
+            canonical_req.is_custom_item,
         )
 
         # 2. Drive Conversation State Machine
         state_machine = ConversationStateMachine(
             current_state=AssistantState.IDLE,
+            drafts=state.drafts,
+            active_draft_id=state.active_draft_id,
             active_requirement_draft=state.active_requirement_draft,
+            structured_location=state.structured_location,
             last_item_candidate=state.last_referenced_item,
             last_intent=state.last_resolved_intent,
             last_tool_context=state.last_tool_context,
         )
         current_state = state_machine.process_request(canonical_req)
-        state.active_requirement_draft = state_machine.active_requirement_draft
-        state.last_resolved_intent = state_machine.last_intent
-        state.last_referenced_item = state_machine.last_item_candidate
 
         parts: List[str] = []
         citations: List[Dict[str, Any]] = []
 
         # 3. Capability Selection & Execution
-        # A. Requirement creation / continuation
+        # A. Requirement creation / continuation (Catalog or Custom Item)
         if canonical_req.intent in {Intent.CREATE_REQUIREMENT_DRAFT, Intent.CONTINUE_REQUIREMENT_DRAFT}:
             catalog = await self.tools_client.get_catalog_item(user_context)
             extracted_slots = ExtractedSlots(
-                item=canonical_req.item_candidate,
+                item=canonical_req.resolved_item or canonical_req.item_candidate,
                 quantity=canonical_req.quantity,
                 preferences=canonical_req.preferences,
-                location_text=canonical_req.location,
+                location_text=canonical_req.location_text,
+                structured_location=canonical_req.structured_location,
             )
-            draft, error = self.validator.build_or_update(extracted_slots, catalog, state.active_requirement_draft)
+            draft, error = self.validator.build_or_update(
+                extracted_slots, catalog, state_machine.active_requirement_draft
+            )
             if error:
                 parts.append(error)
             elif draft:
                 # Run Validation Gate on draft
                 val_report = self.validation_gate.validate_requirement_draft(canonical_req, draft)
-                if val_report.sanitized_location is not None or draft.location_text != val_report.sanitized_location:
+                if val_report.sanitized_location is not None:
                     draft.location_text = val_report.sanitized_location
 
+                state_machine.set_active_draft(draft)
+                state.drafts = state_machine.drafts
+                state.active_draft_id = draft.id
                 state.active_requirement_draft = draft
                 state.awaiting_field = draft.missing_required_fields[0] if draft.missing_required_fields else None
                 summary = self._draft_summary(draft, canonical_req.language)
@@ -136,15 +155,15 @@ class SurplusLinkSemanticAssistantEngine:
             estimation_response = await self._handle_material_estimation(canonical_req, state_machine)
             parts.append(estimation_response)
 
-        # C. Live Marketplace Queries
-        elif canonical_req.intent == Intent.LIVE_MARKETPLACE_QUERY:
+        # C. Live Marketplace Queries & Price Information (Live ASP.NET Tool Provenance Required!)
+        elif canonical_req.intent in {Intent.LIVE_MARKETPLACE_QUERY, Intent.PRICE_INFORMATION}:
             live_response, tool_data = await self._handle_live_marketplace_query(user_context, canonical_req)
             if self.validation_gate.validate_marketplace_provenance(canonical_req.intent, tool_data, live_response):
                 parts.append(live_response)
             else:
                 parts.append("I couldn't verify active seller listings for that material right now.")
 
-        # D. RAG Knowledge & Platform Help
+        # D. Technical Knowledge & Platform Help (Static RAG)
         elif canonical_req.intent in KNOWLEDGE_INTENTS:
             answer, found = self._knowledge_answer(canonical_req.raw_message, canonical_req)
             parts.append(answer)
@@ -164,6 +183,14 @@ class SurplusLinkSemanticAssistantEngine:
         elif canonical_req.intent in {Intent.CLARIFICATION, Intent.UNKNOWN} or canonical_req.confidence < 0.68:
             parts.append(canonical_req.clarification_question or self._generic_clarification(canonical_req.language))
 
+        # Sync state
+        state.drafts = state_machine.drafts
+        state.active_draft_id = state_machine.active_draft_id
+        state.active_requirement_draft = state_machine.active_requirement_draft
+        state.structured_location = state_machine.structured_location
+        state.last_resolved_intent = state_machine.last_intent
+        state.last_referenced_item = state_machine.last_item_candidate
+
         self.states.put(key, state)
         final_message = "\n\n".join(part for part in parts if part) or self._generic_clarification(canonical_req.language)
 
@@ -176,7 +203,7 @@ class SurplusLinkSemanticAssistantEngine:
         )
 
     async def _handle_material_estimation(self, req: CanonicalUserRequest, state_machine: ConversationStateMachine) -> str:
-        item = (req.item_candidate or req.last_item_candidate or "paint").lower()
+        item = (req.resolved_item or req.item_candidate or state_machine.last_item_candidate or "paint").lower()
 
         # Capability lookup: estimate.paint, estimate.tiles, estimate.cement, estimate.sealant
         cap_name = f"estimate.{item}" if f"estimate.{item}" in self.capability_registry._capabilities else "estimate.paint"
@@ -195,10 +222,10 @@ class SurplusLinkSemanticAssistantEngine:
             params["tile_width_mm"] = req.dimensions.width
             params["tile_length_mm"] = req.dimensions.length
 
-        # Check if paint specific options specified
+        # Check if paint-specific options specified
         if "paint" in item:
             msg_lower = req.raw_message.lower()
-            if "coats" in msg_lower:
+            if "coat" in msg_lower:
                 m_coats = re.search(r"(\d+)\s*coats?", msg_lower)
                 if m_coats:
                     params["coats"] = int(m_coats.group(1))
@@ -211,7 +238,7 @@ class SurplusLinkSemanticAssistantEngine:
         return est_result.explanation
 
     async def _handle_live_marketplace_query(self, user_context: dict[str, Any], req: CanonicalUserRequest) -> tuple[str, list[dict[str, Any]]]:
-        item = req.item_candidate or "paint"
+        item = req.resolved_item or req.item_candidate or "material"
         listings = await self.tools_client.search_active_listings(user_context, query=item)
         stats = await self.tools_client.get_price_statistics(user_context, query=item)
 
@@ -270,9 +297,10 @@ class SurplusLinkSemanticAssistantEngine:
     def _draft_summary(draft, language: str) -> str:
         qty = f"{draft.package_count} × {draft.package_size}{draft.normalized_base_unit}" if draft.input_mode == "PACKAGE_COUNT" else (f"{draft.normalized_quantity:g}{draft.normalized_base_unit}" if draft.normalized_quantity is not None else draft.item_name)
         prefs = " ".join(draft.preferences.values())
+        name = draft.display_name or draft.item_name
         if language == "si-Latn":
-            return f"{qty} {prefs} {draft.item_name} requirement draft ekata ekathu kala.".replace("  ", " ")
-        return f"Draft updated: {qty} {prefs} {draft.item_name}.".replace("  ", " ")
+            return f"{qty} {prefs} {name} requirement draft ekata ekathu kala.".replace("  ", " ")
+        return f"Draft updated: {qty} {prefs} {name}.".replace("  ", " ")
 
     @staticmethod
     def _generic_clarification(language: str) -> str:
@@ -288,5 +316,7 @@ class SurplusLinkSemanticAssistantEngine:
             "intent": intent.value,
             "citations": citations or [],
             "requirement_draft": state.active_requirement_draft.model_dump() if state.active_requirement_draft else None,
+            "drafts": [d.model_dump() for d in state.drafts],
+            "active_draft_id": state.active_draft_id,
             "suggested_actions": ["Review Requirement"] if state.active_requirement_draft and state.active_requirement_draft.ready_for_review else [],
         }
