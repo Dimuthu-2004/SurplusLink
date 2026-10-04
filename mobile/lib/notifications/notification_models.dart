@@ -58,22 +58,21 @@ class NotificationItem {
 
   factory NotificationItem.fromJson(Map<String, dynamic> json) {
     return NotificationItem(
-      id: json['id'] as String? ?? '',
-      type: json['type'] as String? ?? '',
-      title: json['title'] as String? ?? '',
-      message: json['message'] as String? ?? '',
-      context: NotificationContext.fromApi(json['context'] as String? ?? 'SYSTEM'),
-      priority: NotificationPriority.fromApi(json['priority'] as String? ?? 'INFO'),
-      entityType: json['entityType'] as String?,
-      entityId: json['entityId'] as String?,
-      actionRoute: json['actionRoute'] as String?,
+      // Older persisted notification rows may expose numeric IDs/references.
+      // Convert scalar identifiers and text fields at the boundary so a valid
+      // database record cannot make the entire notification page fail.
+      id: _stringValue(json['id']),
+      type: _stringValue(json['type']),
+      title: _stringValue(json['title']),
+      message: _stringValue(json['message']),
+      context: NotificationContext.fromApi(_stringValue(json['context'], fallback: 'SYSTEM')),
+      priority: NotificationPriority.fromApi(_stringValue(json['priority'], fallback: 'INFO')),
+      entityType: _optionalStringValue(json['entityType']),
+      entityId: _optionalStringValue(json['entityId']),
+      actionRoute: _optionalStringValue(json['actionRoute']),
       isRead: json['isRead'] as bool? ?? false,
-      createdAt: json['createdAt'] != null
-          ? DateTime.tryParse(json['createdAt'] as String)?.toLocal() ?? DateTime.now()
-          : DateTime.now(),
-      readAt: json['readAt'] != null
-          ? DateTime.tryParse(json['readAt'] as String)?.toLocal()
-          : null,
+      createdAt: _dateValue(json['createdAt']) ?? DateTime.now(),
+      readAt: _dateValue(json['readAt']),
     );
   }
 
@@ -119,6 +118,20 @@ class NotificationItem {
       readAt: readAt ?? this.readAt,
     );
   }
+}
+
+String _stringValue(dynamic value, {String fallback = ''}) =>
+    value == null ? fallback : value.toString();
+
+String? _optionalStringValue(dynamic value) =>
+    value == null ? null : value.toString();
+
+DateTime? _dateValue(dynamic value) {
+  if (value is String) return DateTime.tryParse(value)?.toLocal();
+  if (value is num) {
+    return DateTime.fromMillisecondsSinceEpoch(value.toInt(), isUtc: true).toLocal();
+  }
+  return null;
 }
 
 class NotificationPage {

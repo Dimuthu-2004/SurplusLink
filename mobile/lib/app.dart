@@ -20,6 +20,8 @@ import 'package:mobile/theme/surplus_link_theme.dart';
 import 'package:mobile/core/api_client.dart';
 import 'package:mobile/l10n/app_localizations.dart';
 import 'package:mobile/l10n/locale_controller.dart';
+import 'package:mobile/notifications/notification_controller.dart';
+import 'package:mobile/notifications/notification_gateway.dart';
 
 class SurplusLinkApp extends StatefulWidget {
   const SurplusLinkApp({
@@ -33,6 +35,7 @@ class SurplusLinkApp extends StatefulWidget {
     this.requirementLocation = const DeviceRequirementLocation(),
     this.locationLookup,
     this.addressSearch,
+    this.notificationGateway,
     this.initialLocation = AppRoutes.splash,
     this.localeController,
     super.key,
@@ -48,6 +51,7 @@ class SurplusLinkApp extends StatefulWidget {
   final RequirementLocationSource requirementLocation;
   final AddressLookup? locationLookup;
   final AddressSearch? addressSearch;
+  final NotificationGateway? notificationGateway;
   final String initialLocation;
   final LocaleController? localeController;
 
@@ -60,10 +64,14 @@ class _SurplusLinkAppState extends State<SurplusLinkApp> {
   late final LocaleController _localeController;
   late int _modeRevision;
   late String _routePath;
+  late final NotificationController? _notificationController;
 
   @override
   void initState() {
     super.initState();
+    _notificationController = widget.notificationGateway == null
+        ? null
+        : NotificationController(gateway: widget.notificationGateway!);
     _localeController = widget.localeController ?? LocaleController();
     if (widget.localeController == null) unawaited(_localeController.load());
     _router = createAppRouter(
@@ -83,7 +91,15 @@ class _SurplusLinkAppState extends State<SurplusLinkApp> {
     _router.routeInformationProvider.addListener(_routeChanged);
     _modeRevision = widget.authController.marketplace.revision;
     widget.authController.marketplace.addListener(_modeChanged);
+    widget.authController.addListener(_authChanged);
+    _authChanged();
     unawaited(widget.authController.initialize());
+  }
+
+  void _authChanged() {
+    _notificationController?.bindUser(
+      widget.authController.isAuthenticated ? widget.authController.user : null,
+    );
   }
 
   void _modeChanged() {
@@ -111,6 +127,8 @@ class _SurplusLinkAppState extends State<SurplusLinkApp> {
   @override
   void dispose() {
     widget.authController.marketplace.removeListener(_modeChanged);
+    widget.authController.removeListener(_authChanged);
+    _notificationController?.dispose();
     _router.routeInformationProvider.removeListener(_routeChanged);
     _router.dispose();
     super.dispose();
@@ -127,9 +145,10 @@ class _SurplusLinkAppState extends State<SurplusLinkApp> {
     debugShowCheckedModeBanner: false,
     theme: SurplusLinkTheme.light,
     routerConfig: _router,
-    builder: (context, child) => MarketplaceModeScope(
-      controller: widget.authController.marketplace,
-      child: Stack(children: [
+    builder: (context, child) {
+      final content = MarketplaceModeScope(
+        controller: widget.authController.marketplace,
+        child: Stack(children: [
         ListenableBuilder(
           listenable: widget.authController,
           builder: (context, _) => StartupTransition(
@@ -140,6 +159,11 @@ class _SurplusLinkAppState extends State<SurplusLinkApp> {
         if (_showLanguageSelector)
           Positioned(top: 2, left: 2, child: SafeArea(child: LanguageSelector(controller: _localeController))),
       ]),
-    ),
+      );
+      final controller = _notificationController;
+      return controller == null
+          ? content
+          : NotificationScope(controller: controller, child: content);
+    },
   ));
 }

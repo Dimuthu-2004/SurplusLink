@@ -1,11 +1,13 @@
 import 'notification_models.dart';
 
 String resolveNotificationRoute(NotificationItem notification) {
-  // If specific action route was provided by backend
+  // Action routes are shared with the web client. Only use values that are
+  // routes registered by the Flutter application; web-only manager routes
+  // would otherwise invoke GoRouter's Page not found fallback.
   if (notification.actionRoute != null && notification.actionRoute!.isNotEmpty) {
     final route = notification.actionRoute!;
     final cleaned = route.replaceAll('/app/', '/');
-    if (cleaned.startsWith('/')) {
+    if (_isRegisteredMobileRoute(cleaned)) {
       return cleaned;
     }
   }
@@ -88,6 +90,26 @@ String resolveNotificationRoute(NotificationItem notification) {
   }
 
   return '/home';
+}
+
+bool _isRegisteredMobileRoute(String route) {
+  if (route == '/home' || route == '/offers' || route == '/requirements' || route == '/materials') {
+    return true;
+  }
+
+  final segments = Uri.tryParse(route)?.pathSegments;
+  if (segments == null || segments.isEmpty) return false;
+
+  if (segments.first == 'requirements' && segments.length >= 2) {
+    return segments.length == 2 ||
+        (segments.length == 3 && {'matches', 'status', 'history', 'edit'}.contains(segments[2])) ||
+        (segments.length == 4 && segments[2] == 'matches');
+  }
+  if (segments.first == 'materials' && segments.length >= 2) {
+    return segments.length == 2 || (segments.length == 3 && segments[2] == 'edit');
+  }
+  if (segments.first == 'handoff' && segments.length == 2) return true;
+  return false;
 }
 
 String getNotificationActionLabel(NotificationItem notification) {

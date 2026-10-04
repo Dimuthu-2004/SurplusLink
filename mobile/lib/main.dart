@@ -15,6 +15,7 @@ import 'package:mobile/location/location_lookup.dart';
 import 'package:mobile/requirements/requirement_repository.dart';
 import 'package:mobile/offers/offer_repository.dart';
 import 'package:mobile/l10n/locale_controller.dart';
+import 'package:mobile/notifications/notification_repository.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -53,6 +54,7 @@ void main() {
       handoffGateway: MobileHandoffRepository(apiClient),
       locationLookup: ApiLocationLookup(apiClient).lookup,
       addressSearch: ApiLocationLookup(apiClient).search,
+      notificationGateway: NotificationRepository(apiClient),
       localeController: localeController,
     ),
   );
