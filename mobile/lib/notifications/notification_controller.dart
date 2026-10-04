@@ -196,41 +196,37 @@ class NotificationController extends ChangeNotifier {
 
   Future<void> markRead(NotificationItem item) async {
     if (item.isRead) return;
-
-    // Optimistic update
-    final index = _items.indexWhere((it) => it.id == item.id);
-    if (index != -1) {
-      final updated = item.copyWith(isRead: true, readAt: DateTime.now());
-      final updatedList = List<NotificationItem>.from(_items);
-      updatedList[index] = updated;
-      _items = updatedList;
-      if (_unreadCount > 0) {
-        _unreadCount--;
-      }
-      _notify();
-    }
-
     try {
-      await gateway.markRead(item.id);
+      final persisted = await gateway.markRead(item.id);
+      if (!_disposed) {
+        final index = _items.indexWhere((it) => it.id == item.id);
+        if (index != -1) {
+          final updatedList = List<NotificationItem>.from(_items);
+          updatedList[index] = persisted;
+          _items = updatedList;
+          _notify();
+        }
+      }
+      await refreshUnreadCount();
     } catch (_) {
-      // Refresh count on failure
+      // Keep the screen unchanged when persistence fails, then refresh the
+      // server-owned count in case another device changed it.
       unawaited(refreshUnreadCount());
     }
   }
 
   Future<void> markAllRead() async {
     if (_unreadCount == 0 && _items.every((it) => it.isRead)) return;
-
-    // Optimistic update
-    final updatedList = _items
-        .map((it) => it.copyWith(isRead: true, readAt: DateTime.now()))
-        .toList();
-    _items = updatedList;
-    _unreadCount = 0;
-    _notify();
-
     try {
       await gateway.markAllRead();
+      if (!_disposed) {
+        final readAt = DateTime.now();
+        _items = _items
+            .map((it) => it.isRead ? it : it.copyWith(isRead: true, readAt: readAt))
+            .toList();
+        _notify();
+      }
+      await refreshUnreadCount();
     } catch (_) {
       unawaited(refreshUnreadCount());
       unawaited(load(reset: true));

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile/auth/auth_models.dart';
+import 'package:mobile/app.dart';
+import 'package:mobile/auth/auth_controller.dart';
 import 'package:mobile/notifications/notification_banner.dart';
 import 'package:mobile/notifications/notification_bell.dart';
 import 'package:mobile/notifications/notification_card.dart';
@@ -10,6 +12,8 @@ import 'package:mobile/notifications/notification_gateway.dart';
 import 'package:mobile/notifications/notification_models.dart';
 import 'package:mobile/notifications/notification_navigation.dart';
 import 'package:mobile/screens/notifications_screen.dart';
+
+import 'support/fakes.dart';
 
 class FakeNotificationGateway implements NotificationGateway {
   FakeNotificationGateway({
@@ -78,6 +82,16 @@ class FakeNotificationGateway implements NotificationGateway {
   }
 }
 
+class FailingReadNotificationGateway extends FakeNotificationGateway {
+  FailingReadNotificationGateway({required super.initialItems, super.initialUnread});
+
+  @override
+  Future<NotificationItem> markRead(String id) async {
+    markReadCalls++;
+    throw StateError('The notification service is unavailable.');
+  }
+}
+
 void main() {
   group('Notification Models & Navigation', () {
     test('NotificationItem.fromJson parses correctly', () {
@@ -103,6 +117,24 @@ void main() {
       expect(item.entityType, 'Transaction');
       expect(item.entityId, 'tx-100');
       expect(item.isRead, isFalse);
+    });
+
+    test('NotificationItem.fromJson accepts numeric legacy identifiers', () {
+      final item = NotificationItem.fromJson({
+        'id': 70,
+        'type': 'MATCHES_READY',
+        'title': 'Matches ready',
+        'message': 'A notification stored with a numeric identifier.',
+        'context': 'BUYER',
+        'priority': 'INFO',
+        'entityId': 23,
+        'isRead': false,
+        'createdAt': '2026-10-04T00:00:00Z',
+      });
+
+      expect(item.id, '70');
+      expect(item.entityId, '23');
+      expect(item.title, 'Matches ready');
     });
 
     test('resolveNotificationRoute routes correctly to existing screens', () {
@@ -175,6 +207,24 @@ void main() {
         createdAt: DateTime.now(),
       );
       expect(resolveNotificationRoute(completedNotif), '/offers');
+    });
+
+    test('resolveNotificationRoute ignores web-only action routes', () {
+      final notification = NotificationItem(
+        id: 'manager-1',
+        type: 'SELECTION_AVAILABILITY_CHANGED',
+        title: 'Selection changed',
+        message: 'Review the selection.',
+        context: NotificationContext.manager,
+        priority: NotificationPriority.warning,
+        entityType: 'AgentWorkflow',
+        entityId: 'workflow-1',
+        actionRoute: '/app/manager/workflows/workflow-1',
+        isRead: false,
+        createdAt: DateTime.now(),
+      );
+
+      expect(resolveNotificationRoute(notification), '/offers');
     });
 
     test('getNotificationActionLabel provides context-specific action labels', () {
@@ -266,7 +316,7 @@ void main() {
       controller.dispose();
     });
 
-    test('optimistic markRead updates item and decrements unread count', () async {
+    test('markRead updates the item after backend persistence succeeds', () async {
       final item = NotificationItem(
         id: 'n-1',
         type: 'SELLER_CONFIRMED_HANDOVER',
@@ -291,6 +341,30 @@ void main() {
       expect(controller.items.first.isRead, isTrue);
       expect(gateway.markReadCalls, 1);
 
+      controller.dispose();
+    });
+
+    test('markRead keeps the persisted unread state when the API rejects it', () async {
+      final item = NotificationItem(
+        id: 'n-failed-read',
+        type: 'MATCHES_READY',
+        title: 'Matches ready',
+        message: 'Message',
+        context: NotificationContext.buyer,
+        priority: NotificationPriority.info,
+        isRead: false,
+        createdAt: DateTime.now(),
+      );
+      final gateway = FailingReadNotificationGateway(initialItems: [item], initialUnread: 1);
+      final controller = NotificationController(gateway: gateway);
+      await controller.load();
+      await controller.refreshUnreadCount();
+
+      await controller.markRead(item);
+
+      expect(controller.items.single.isRead, isFalse);
+      expect(controller.unreadCount, 1);
+      expect(gateway.markReadCalls, 1);
       controller.dispose();
     });
 
@@ -358,6 +432,36 @@ void main() {
   });
 
   group('Widget Tests', () {
+    testWidgets('the application bell route loads the authenticated user notifications', (tester) async {
+      final item = NotificationItem(
+        id: 'persisted-notification',
+        type: 'MATCHES_READY',
+        title: 'Matches ready',
+        message: 'A real API response is rendered by this shared screen.',
+        context: NotificationContext.buyer,
+        priority: NotificationPriority.info,
+        isRead: false,
+        createdAt: DateTime.now(),
+      );
+      final notifications = FakeNotificationGateway(initialItems: [item], initialUnread: 1);
+      final auth = AuthController(FakeAuthGateway()..restoredUser = buyerUser);
+
+      await tester.pumpWidget(SurplusLinkApp(
+        authController: auth,
+        notificationGateway: notifications,
+        initialLocation: '/notifications',
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Notifications'), findsOneWidget);
+      expect(find.text('Matches ready'), findsOneWidget);
+      expect(find.text('Page not found: /notifications'), findsNothing);
+      expect(notifications.lastQuery?.page, 1);
+
+      await tester.pumpWidget(const SizedBox());
+      auth.dispose();
+    });
+
     testWidgets('NotificationBell renders unread badge and responds to taps', (tester) async {
       final gateway = FakeNotificationGateway(initialUnread: 4);
       final controller = NotificationController(gateway: gateway);

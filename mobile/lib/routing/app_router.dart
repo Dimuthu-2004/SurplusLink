@@ -29,6 +29,7 @@ import 'package:mobile/screens/material_details_screen.dart';
 import 'package:mobile/screens/my_materials_screen.dart';
 import 'package:mobile/offers/offer_gateway.dart';
 import 'package:mobile/screens/my_offers_screen.dart';
+import 'package:mobile/screens/notifications_screen.dart';
 import 'package:mobile/screens/register_screen.dart';
 import 'package:mobile/screens/email_verification_screen.dart';
 import 'package:mobile/screens/forgot_password_screen.dart';
@@ -41,6 +42,7 @@ abstract final class AppRoutes {
   static const verifyEmail = '/verify-email';
   static const forgotPassword = '/forgot-password';
   static const home = '/home';
+  static const notifications = '/notifications';
   static const aiAssistant = '/ai-assistant';
   static const requirements = '/requirements';
   static const materials = '/materials';
@@ -179,6 +181,10 @@ GoRouter createAppRouter({
               ? null
               : () => context.push(AppRoutes.addMaterial),
         ),
+      ),
+      GoRoute(
+        path: AppRoutes.notifications,
+        builder: (_, _) => const NotificationsScreen(),
       ),
       if (matchGateway != null) ...[
         GoRoute(
