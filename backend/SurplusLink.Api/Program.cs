@@ -98,7 +98,8 @@ builder.Services.AddOptions<CorsOptions>()
         options.AddPolicy(ApiCorsOptions.PolicyName, policy =>
             policy.WithOrigins(configuredOrigins.Value.AllowedOrigins)
                 .AllowAnyHeader()
-                .AllowAnyMethod());
+                .AllowAnyMethod()
+                .AllowCredentials());
     });
 
 builder.Services.AddOptions<DatabaseOptions>()
@@ -140,6 +141,8 @@ builder.Services.AddScoped<SurplusLink.Api.Transactions.TransactionConfirmationP
 builder.Services.AddScoped<SurplusLink.Api.Workflows.AgentWorkflowService>();
 builder.Services.AddScoped<SurplusLink.Api.Handoffs.IMobileHandoffService, SurplusLink.Api.Handoffs.MobileHandoffService>();
 builder.Services.AddScoped<SurplusLink.Api.Notifications.INotificationService, SurplusLink.Api.Notifications.NotificationService>();
+builder.Services.AddSignalR();
+builder.Services.AddSingleton<Microsoft.AspNetCore.SignalR.IUserIdProvider, SurplusLink.Api.Notifications.CustomUserIdProvider>();
 builder.Services.AddOptions<SurplusLink.Api.Workflows.WorkflowExecutionOptions>()
     .BindConfiguration("AgentWorkflow")
     .Configure(options =>
@@ -187,6 +190,19 @@ builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSc
             ValidateLifetime = true,
             ClockSkew = TimeSpan.Zero,
             RoleClaimType = System.Security.Claims.ClaimTypes.Role
+        };
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                var path = context.HttpContext.Request.Path;
+                if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs"))
+                {
+                    context.Token = accessToken;
+                }
+                return Task.CompletedTask;
+            }
         };
     });
 builder.Services.AddAuthorization();
@@ -260,6 +276,7 @@ app.MapHealthChecks("/health", new HealthCheckOptions
     AllowCachingResponses = false
 }).AllowAnonymous();
 app.MapControllers();
+app.MapHub<SurplusLink.Api.Notifications.NotificationHub>("/hubs/notifications");
 
 app.Lifetime.ApplicationStarted.Register(() =>
 {

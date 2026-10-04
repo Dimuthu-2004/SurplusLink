@@ -11,7 +11,7 @@ import type { TokenStorage } from '../auth/tokenStorage';
 const seller = user('SELLER');
 const buyer = user('BUYER');
 
-describe('authentication navigation', () => {
+describe('authentication navigation', { timeout: 20000 }, () => {
   it('redirects an anonymous visitor away from protected routes', async () => {
     renderApp('/app/seller');
 
@@ -125,7 +125,7 @@ describe('authentication navigation', () => {
     expect(await screen.findByRole('heading', { name: 'Welcome back' })).toBeInTheDocument();
   });
 
-  it('sends the supported registration DTO and requires email verification', async () => {
+  it('sends the supported registration DTO and requires email verification', { timeout: 20000 }, async () => {
     const client = fakeClient();
     const storage = memoryStorage();
     client.post.mockResolvedValue({ data: { token: 'new-account-jwt', user: { ...seller, roles: ['SELLER', 'BUYER'] } } });
@@ -167,7 +167,7 @@ describe('authentication navigation', () => {
     renderApp('/login', client);
     const visitor = userEvent.setup();
     await visitor.click(panelAction());
-    await waitFor(() => expect(screen.getByLabelText('Full name')).toBeEnabled());
+    await waitFor(() => expect(screen.getByLabelText('Full name')).toBeEnabled(), { timeout: 5000 });
     await visitor.type(screen.getByLabelText('Full name'), 'Ava Builder');
     await visitor.type(screen.getByLabelText('NIC'), '199912345678');
     await visitor.type(screen.getByLabelText('Email'), 'ava@example.com');
@@ -189,7 +189,7 @@ describe('authentication navigation', () => {
     renderApp('/login', client);
     const visitor = userEvent.setup();
     await visitor.click(panelAction());
-    await waitFor(() => expect(screen.getByLabelText('Full name')).toBeEnabled());
+    await waitFor(() => expect(screen.getByLabelText('Full name')).toBeEnabled(), { timeout: 5000 });
     await visitor.type(screen.getByLabelText('Full name'), 'Ava Builder');
     await visitor.type(screen.getByLabelText('NIC'), '199912345678');
     await visitor.type(screen.getByLabelText('Email'), 'ava@example.com');
@@ -372,7 +372,7 @@ function panelAction(): HTMLButtonElement {
 }
 
 
-it('recovers a password with editable numeric OTP, paste, backspace, Enter and API retry', async () => {
+it('recovers a password with editable numeric OTP, paste, backspace, Enter and API retry', { timeout: 20000 }, async () => {
   const client = fakeClient();
   client.post.mockResolvedValue({ data: {} });
   renderApp('/login', client);

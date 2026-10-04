@@ -234,7 +234,14 @@ export function MobileHandoffModal({
                 >
                   Regenerate QR Code
                 </button>
-              ) : null}
+              ) : (
+                <a
+                  href={`surpluslink://handoff/${handoff.code}`}
+                  className="button button-primary handoff-deep-link"
+                >
+                  Open in Mobile App
+                </a>
+              )}
 
               <button
                 type="button"

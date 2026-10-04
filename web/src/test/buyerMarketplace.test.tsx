@@ -122,7 +122,7 @@ describe('Buyer React Marketplace & Handoff', () => {
 
     // Categories render
     expect(await screen.findByRole('button', { name: 'All Materials' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Cement' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Cement' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Steel' })).toBeInTheDocument();
 
     // Listings render

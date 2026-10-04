@@ -27,7 +27,8 @@ it('real API adapter keeps failed routes visible with metadata, auth, sort, filt
     else if (config.url === '/api/matches/requirement/r1') {
       calls.push(config.params);
       data = { items: [raw], total: 21, totalPages: 2, page: config.params.page, pageSize: config.params.pageSize };
-    } else throw new Error('Unexpected endpoint: ' + config.url);
+    } else if (config.url === '/api/notifications/unread-count') data = 0;
+    else throw new Error('Unexpected endpoint: ' + config.url);
     return { data, config, status: 200, statusText: 'OK', headers: {} };
   };
   render(<MemoryRouter initialEntries={['/app/manager/requirements/r1/matches']}><AuthProvider><App /></AuthProvider></MemoryRouter>);

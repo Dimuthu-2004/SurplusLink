@@ -6,6 +6,11 @@ export interface AuthUser {
   id: string;
   email: string;
   roles: UserRole[];
+  fullName?: string | null;
+  phoneNumber?: string | null;
+  businessName?: string | null;
+  address?: string | null;
+  profilePhotoUrl?: string | null;
 }
 
 export interface AuthResponse {
@@ -29,7 +34,7 @@ export function parseUser(value: unknown): AuthUser {
   if (!isRecord(value)) {
     throw new Error('The server returned an invalid user.');
   }
-  const { id, email, roles: assignedRoles } = value;
+  const { id, email, roles: assignedRoles, fullName, phoneNumber, businessName, address, profilePhotoUrl } = value;
   if (
     typeof id !== 'string' ||
     typeof email !== 'string' ||
@@ -39,7 +44,16 @@ export function parseUser(value: unknown): AuthUser {
   ) {
     throw new Error('The server returned an invalid user.');
   }
-  return { id, email, roles: assignedRoles as UserRole[] };
+  return {
+    id,
+    email,
+    roles: assignedRoles as UserRole[],
+    fullName: typeof fullName === 'string' ? fullName : null,
+    phoneNumber: typeof phoneNumber === 'string' ? phoneNumber : null,
+    businessName: typeof businessName === 'string' ? businessName : null,
+    address: typeof address === 'string' ? address : null,
+    profilePhotoUrl: typeof profilePhotoUrl === 'string' ? profilePhotoUrl : null,
+  };
 }
 
 export function parseAuthResponse(value: unknown): AuthResponse {

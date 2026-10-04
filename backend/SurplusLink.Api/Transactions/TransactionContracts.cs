@@ -76,6 +76,23 @@ public sealed class ManagerTransactionResolutionRequest
 }
 public sealed record TransactionAnalyticsSummary(int PendingApprovalCount, int ApprovedCount, int RejectedCount,
     decimal ReservedQuantity, int CompletionCount, decimal CompletedValue, double? CompletionRate);
+
+public sealed record TransactionTimeSeriesPoint(
+    string Period,
+    string Label,
+    int TransactionCount,
+    decimal TotalValue,
+    decimal TotalQuantity);
+
+public sealed record TransactionTimeSeriesResponse(
+    int? Year,
+    int? Month,
+    int TotalTransactions,
+    decimal TotalValue,
+    decimal TotalQuantity,
+    decimal AverageValue,
+    IReadOnlyList<TransactionTimeSeriesPoint> Points);
+
 public sealed class TransactionOperationException(int statusCode, string message) : Exception(message)
 {
     public int StatusCode { get; } = statusCode;

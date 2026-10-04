@@ -873,7 +873,7 @@ public sealed class MaterialInventoryService(
             .Select(photo => new ListingPhotoResponse(photo.Id, photo.PhotoUrl, photo.SortOrder))
             .ToList(),
         listing.Seller is null ? null : new SellerContactResponse(listing.Seller.FullName,
-            listing.Seller.BusinessName, listing.Seller.Email, listing.Seller.PhoneNumber),
+            listing.Seller.BusinessName, listing.Seller.Email, listing.Seller.PhoneNumber, listing.Seller.Address, listing.Seller.ProfilePhotoUrl),
         listing.ConstructionItemTemplateId,
         listing.ConstructionItemTemplate?.Name,
         listing.SpecificationsJson,

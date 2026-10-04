@@ -7,6 +7,7 @@ import {
 } from '../../api/buyerMarketplaceApi';
 import { MobileHandoffModal } from './MobileHandoffModal';
 import { resolveImageUrl, handleImageError } from '../../utils/imageUrl';
+import { ListingMap } from '../../components/ListingMap';
 import './buyerMarketplace.css';
 
 export function BuyerListingDetailsPage() {
@@ -198,6 +199,13 @@ export function BuyerListingDetailsPage() {
             <div className="details-section-label">Description</div>
             <p className="details-description-text">{listing.description}</p>
           </div>
+
+          <ListingMap
+            latitude={listing.latitude}
+            longitude={listing.longitude}
+            title={listing.title}
+            address={listing.seller?.address}
+          />
 
           {/* AI Mobile CTA Section - NO direct buy flow */}
           <div className="ai-mobile-cta-section">

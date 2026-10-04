@@ -12,6 +12,7 @@ import { ManagerRequirementHistoryPage } from '../pages/manager/ManagerRequireme
 import { ManagerMatchComparisonPage } from '../pages/manager/ManagerMatchComparisonPage';
 import { ManagerApprovalsPage } from '../pages/manager/ManagerApprovalsPage';
 import { ManagerWorkflowDetailsPage } from '../pages/manager/ManagerWorkflowDetailsPage';
+import { ManagerCommunityPage } from '../pages/manager/ManagerCommunityPage';
 import { NotFoundPage } from '../pages/NotFoundPage';
 import { RoleHomePage } from '../pages/RoleHomePage';
 import { MyOffersPage } from '../pages/MyOffersPage';
@@ -19,6 +20,8 @@ import { OfferDetailsPage } from '../pages/OfferDetailsPage';
 import { LandingPage } from '../pages/LandingPage';
 import { BuyerMarketplacePage } from '../pages/buyer/BuyerMarketplacePage';
 import { BuyerListingDetailsPage } from '../pages/buyer/BuyerListingDetailsPage';
+import { NotificationsPage } from '../features/notifications/NotificationsPage';
+import { ProfileSettingsPage } from '../pages/ProfileSettingsPage';
 import {
   GuestRoute,
   ProtectedRoute,
@@ -46,6 +49,8 @@ export function App() {
       <Route element={<ProtectedRoute />}>
         <Route path="/app" element={<AppLayout />}>
           <Route index element={<RoleHomeRedirect />} />
+          <Route path="notifications" element={<NotificationsPage />} />
+          <Route path="profile" element={<ProfileSettingsPage />} />
           <Route element={<RoleRoute role="SELLER" />}>
             <Route path="seller" element={<RoleHomePage role="SELLER" />} />
           </Route>
@@ -73,10 +78,11 @@ export function App() {
             <Route path="manager/listing-approvals" element={<ManagerListingsPage key="listing-approvals" approvalsOnly />} />
             <Route path="manager/requirement-approvals" element={<ManagerApprovalsPage />} />
             <Route path="manager/workflows/:workflowId" element={<ManagerWorkflowDetailsPage />} />
+            <Route path="manager/community" element={<ManagerCommunityPage />} />
           </Route>
         </Route>
       </Route>
       <Route path="*" element={<NotFoundPage />} />
-      </Routes>
+    </Routes>
   );
 }

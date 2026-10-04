@@ -9,4 +9,5 @@ public interface IAuthService
     Task<string?> VerifyEmailAsync(VerifyEmailRequest request, CancellationToken cancellationToken);
     Task<string?> ForgotPasswordAsync(string email, CancellationToken cancellationToken);
     Task<string?> ResetPasswordAsync(ResetPasswordRequest request, CancellationToken cancellationToken);
+    Task<string?> DeleteAccountAsync(Guid userId, CancellationToken cancellationToken);
 }

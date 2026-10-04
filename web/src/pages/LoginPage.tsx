@@ -1,6 +1,8 @@
 import { OtpInput } from '../components/OtpInput';
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import React, { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import Lottie from 'lottie-react';
+import emailLottieData from '../assets/animations/email.json';
 import { useAuth } from '../auth/AuthContext';
 import type { PublicRegistration, UserRole } from '../auth/authTypes';
 import { SurplusLinkLogo } from '../components/SurplusLinkLogo';
@@ -71,13 +73,15 @@ export function LoginPage() {
     setChanging(true);
     setLeaving(true);
     setPanelMode(nextMode);
+    const formDelay = import.meta.env.MODE === 'test' ? 0 : 120;
+    const transDelay = import.meta.env.MODE === 'test' ? 0 : 650;
     formTimer.current = window.setTimeout(() => {
       setMode(nextMode);
       setStep(nextMode);
       setLeaving(false);
       navigate(nextMode === 'signUp' ? '/register' : '/login', { replace: true });
-    }, 120);
-    transitionTimer.current = window.setTimeout(() => setChanging(false), 650);
+    }, formDelay);
+    transitionTimer.current = window.setTimeout(() => setChanging(false), transDelay);
   }
 
   function destination() {
@@ -89,6 +93,7 @@ export function LoginPage() {
     event.preventDefault();
     clearError();
     const email = loginForm.email.trim();
+    if (!email) return setValidationError('Enter your email address.');
     if (!isEmail(email)) return setValidationError('Enter a valid email address.');
     if (!loginForm.password) return setValidationError('Enter your password.');
     setValidationError(null);
@@ -234,16 +239,129 @@ function Brand({ dark = false }: { dark?: boolean }) { return <div className={`a
 function Field({ label, htmlFor, children, full = false }: { label: string; htmlFor: string; children: ReactNode; full?: boolean }) { return <label className={`auth-field ${full ? 'auth-field-full' : ''}`} htmlFor={htmlFor}><span>{label}</span>{children}</label>; }
 function PasswordField({ id, label, autoComplete, value, onChange, visible, onToggle, disabled }: { id: string; label: string; autoComplete: string; value: string; onChange(value: string): void; visible: boolean; onToggle(): void; disabled: boolean }) { return <label className="auth-field" htmlFor={id}><span>{label}</span><span className="auth-password-input"><input id={id} name={id} type={visible ? 'text' : 'password'} autoComplete={autoComplete} value={value} onChange={event => onChange(event.target.value)} disabled={disabled} /><button type="button" aria-label={visible ? 'Hide password' : 'Show password'} aria-pressed={visible} onClick={onToggle} disabled={disabled}>{visible ? 'Hide' : 'Show'}</button></span></label>; }
 function FormMessage({ message }: { message: string | null }) { return message ? <div className="auth-error" role="alert">{message}</div> : null; }
-function PasswordStrength({ password }: { password: string }) { const score = Number(password.length >= 8) + Number(/[A-Z]/.test(password)) + Number(/[0-9]/.test(password)) + Number(/[^A-Za-z0-9]/.test(password)); return <div className="auth-password-strength" aria-live="polite"><div aria-hidden="true">{[1, 2, 3, 4].map(level => <span key={level} className={score >= level ? 'is-active' : ''} />)}</div><span>{password ? (score >= 4 ? 'Strong password' : score >= 2 ? 'Keep strengthening it' : 'Use 8+ characters, a number and symbol') : 'Use 8+ characters, a number and symbol'}</span></div>; }
+function PasswordStrength({ password }: { password: string }) {
+  const hasLength = password.length >= 8;
+  const hasUpper = /[A-Z]/.test(password);
+  const hasLower = /[a-z]/.test(password);
+  const hasNumber = /[0-9]/.test(password);
+  const hasSpecial = /[^A-Za-z0-9]/.test(password);
+  const score = Number(hasLength) + Number(hasUpper && hasLower) + Number(hasNumber) + Number(hasSpecial);
+  const isStrong = hasLength && hasUpper && hasLower && hasNumber && hasSpecial;
+
+  return (
+    <div className="auth-password-strength" aria-live="polite">
+      <div aria-hidden="true">
+        {[1, 2, 3, 4].map(level => <span key={level} className={score >= level ? 'is-active' : ''} />)}
+      </div>
+      <span>
+        {!password
+          ? 'Must be 8+ chars with uppercase, lowercase, number & symbol'
+          : isStrong
+          ? '✓ Strong password'
+          : 'Include 8+ chars, uppercase, lowercase, number & special character'}
+      </span>
+    </div>
+  );
+}
+
 function Arrow() { return <svg aria-hidden="true" viewBox="0 0 20 20" fill="none"><path d="M3 10h13m-5-5 5 5-5 5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" /></svg>; }
 function Spinner() { return <span className="auth-spinner" aria-hidden="true" />; }
-function VerificationIcon({ state }: { state: 'attention' | 'code' | 'success' }) {
-  return <span className={`auth-verification-icon is-${state}`} aria-hidden="true">
-    {state === 'success' ? <svg viewBox="0 0 24 24" fill="none"><path d="m6.5 12 3.4 3.4L17.8 8" /></svg> :
-      state === 'code' ? <svg viewBox="0 0 24 24" fill="none"><path d="M4.5 7.5 12 13l7.5-5.5M5 6h14v12H5z" /></svg> :
-        <svg viewBox="0 0 24 24" fill="none"><path d="M4.5 7.5 12 13l7.5-5.5M5 6h14v12H5z" /><circle cx="18.5" cy="17.5" r="3" /><path d="M18.5 16v2" /></svg>}
-  </span>;
+
+interface SafeLottieProps {
+  animationData: unknown;
+  loop?: boolean;
+  style?: React.CSSProperties;
+  fallback: ReactNode;
 }
+
+interface SafeLottieState {
+  hasError: boolean;
+}
+
+class SafeLottie extends React.Component<SafeLottieProps, SafeLottieState> {
+  constructor(props: SafeLottieProps) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(): SafeLottieState {
+    return { hasError: true };
+  }
+
+  componentDidCatch() {
+    // Safe error containment
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback;
+    }
+    return (
+      <Lottie
+        animationData={this.props.animationData}
+        loop={this.props.loop ?? true}
+        style={this.props.style}
+        onError={() => this.setState({ hasError: true })}
+      />
+    );
+  }
+}
+
+function VerificationIcon({ state }: { state: 'attention' | 'code' | 'success' }) {
+  if (state === 'success') {
+    return (
+      <span className="auth-verification-icon is-success" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none"><path d="m6.5 12 3.4 3.4L17.8 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+      </span>
+    );
+  }
+
+  const fallbackSvg = (
+    <span className={`auth-verification-icon is-${state}`} aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none">
+        <path d="M4.5 7.5 12 13l7.5-5.5M5 6h14v12H5z" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round" />
+        <circle cx="18.5" cy="17.5" r="3" stroke="currentColor" strokeWidth="1.65" />
+        <path d="M18.5 16v2" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" />
+      </svg>
+    </span>
+  );
+
+  return (
+    <div className="auth-verification-lottie-container" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%', margin: '0 auto 0.75rem' }}>
+      <SafeLottie
+        animationData={emailLottieData}
+        loop={true}
+        style={{ width: 130, height: 130 }}
+        fallback={fallbackSvg}
+      />
+    </div>
+  );
+}
+
 function formatCountdown(seconds: number) { return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`; }
 function isEmail(value: string) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value); }
-function registrationError(form: RegistrationForm) { if (!form.fullName.trim()) return 'Enter your full name.'; if (!isEmail(form.email.trim())) return 'Enter a valid email address.'; if (!/^\d{9}[VvXx]$|^\d{12}$/.test(form.nic.trim().replace(/\s/g, ''))) return 'Enter a valid NIC number.'; if (!/^(?:0?94|\+94|0)7\d{8}$/.test(form.phoneNumber.trim().replace(/[ -]/g, ''))) return 'Enter a valid Sri Lankan phone number.'; if (!form.address.trim()) return 'Enter your address.'; if (form.password.length < 8) return 'Your password must be at least 8 characters.'; if (form.password !== form.confirmPassword) return 'Passwords do not match.'; if (!form.roles.length) return 'Choose how you want to use SurplusLink.'; return null; }
+
+function isStrongPassword(password: string): boolean {
+  return (
+    password.length >= 8 &&
+    /[A-Z]/.test(password) &&
+    /[a-z]/.test(password) &&
+    /[0-9]/.test(password) &&
+    /[^A-Za-z0-9]/.test(password)
+  );
+}
+
+function registrationError(form: RegistrationForm) {
+  if (!form.fullName.trim()) return 'Enter your full name.';
+  if (!form.email.trim()) return 'Enter your email address.';
+  if (!isEmail(form.email.trim())) return 'Enter a valid email address.';
+  if (!/^\d{9}[VvXx]$|^\d{12}$/.test(form.nic.trim().replace(/\s/g, ''))) return 'Enter a valid NIC number.';
+  if (!/^(?:0?94|\+94|0)7\d{8}$/.test(form.phoneNumber.trim().replace(/[ -]/g, ''))) return 'Enter a valid Sri Lankan phone number.';
+  if (!form.address.trim()) return 'Enter your address.';
+  if (!form.password) return 'Enter a password.';
+  if (form.password.length < 8) return 'Your password must be at least 8 characters.';
+  if (!isStrongPassword(form.password)) return 'Password must include uppercase, lowercase, a number, and a special character.';
+  if (form.password !== form.confirmPassword) return 'Passwords do not match.';
+  if (!form.roles.length) return 'Choose how you want to use SurplusLink.';
+  return null;
+}

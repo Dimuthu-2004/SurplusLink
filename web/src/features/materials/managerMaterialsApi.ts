@@ -4,7 +4,7 @@ import { apiClient, normalizeApiError } from '../../api/apiClient';
 export interface MaterialListing {
   id: string;
   sellerId: string;
-  seller?: { fullName: string | null; businessName: string | null; email: string; phoneNumber: string | null } | null;
+  seller?: { fullName: string | null; businessName: string | null; email: string; phoneNumber: string | null; address?: string | null } | null;
   categoryId: string;
   categoryName: string;
   title: string;

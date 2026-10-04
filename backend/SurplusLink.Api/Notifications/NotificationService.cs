@@ -1,10 +1,11 @@
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using SurplusLink.Api.Data;
 using SurplusLink.Api.Models;
 
 namespace SurplusLink.Api.Notifications;
 
-public sealed class NotificationService(SurplusLinkDbContext db) : INotificationService
+public sealed class NotificationService(SurplusLinkDbContext db, IHubContext<NotificationHub>? hubContext = null) : INotificationService
 {
     public async Task<NotificationResponse> CreateAsync(
         CreateNotification input,
@@ -40,7 +41,20 @@ public sealed class NotificationService(SurplusLinkDbContext db) : INotification
         try
         {
             await db.SaveChangesAsync(cancellationToken);
-            return ToResponse(notification);
+            var response = ToResponse(notification);
+            if (hubContext is not null)
+            {
+                try
+                {
+                    await hubContext.Clients.User(notification.UserId.ToString())
+                        .SendAsync("ReceiveNotification", response, cancellationToken);
+                }
+                catch
+                {
+                    // Real-time broadcast failure should not break notification persistence
+                }
+            }
+            return response;
         }
         catch (DbUpdateException) when (deduplicationKey is not null)
         {

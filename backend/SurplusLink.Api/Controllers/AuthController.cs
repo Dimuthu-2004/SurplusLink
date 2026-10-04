@@ -74,6 +74,32 @@ public sealed class AuthController(IAuthService authService, SurplusLinkDbContex
         await dbContext.SaveChangesAsync(ct);
         return Ok(UserResponse.From(user));
     }
+    [Authorize]
+    [HttpDelete("me")]
+    public async Task<IActionResult> DeleteAccount(CancellationToken ct)
+    {
+        var subject = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue(ClaimTypes.Name) ?? User.FindFirstValue("sub");
+        if (!Guid.TryParse(subject, out var userId)) return Unauthorized();
+        var error = await authService.DeleteAccountAsync(userId, ct);
+        return error is null ? Ok(new { message = "Your account has been deleted successfully." }) : Error(error, error == "USER_NOT_FOUND" ? 404 : 400);
+    }
     private ObjectResult Error(string code, int status) => StatusCode(status, new { code, message = FriendlyMessage(code) });
-    private static string FriendlyMessage(string code) => code switch { "INVALID_NIC" => "Enter a valid Sri Lankan NIC number.", "INVALID_PHONE" => "Enter a valid Sri Lankan phone number.", "EMAIL_NOT_VERIFIED" => "Your email has not been verified.", "EMAIL_ALREADY_EXISTS" => "An account with that email already exists.", "NIC_ALREADY_EXISTS" => "An account with that NIC already exists.", "EMAIL_DELIVERY_FAILED" => "We could not send the email. Please try again shortly.", "EMAIL_VERIFICATION_RESEND_TOO_SOON" or "PASSWORD_RESET_RESEND_TOO_SOON" => "Please wait before requesting another code.", "EMAIL_VERIFICATION_CODE_EXPIRED" or "PASSWORD_RESET_CODE_EXPIRED" => "This code has expired.", "EMAIL_VERIFICATION_TOO_MANY_ATTEMPTS" or "PASSWORD_RESET_TOO_MANY_ATTEMPTS" => "Too many attempts. Request a new code.", "EMAIL_VERIFICATION_CODE_INVALID" or "PASSWORD_RESET_CODE_INVALID" => "The code is invalid. Please try again.", _ => "Authentication request could not be completed." };
+    private static string FriendlyMessage(string code) => code switch {
+        "INVALID_CREDENTIALS" => "Invalid email or password.",
+        "WEAK_PASSWORD" => "Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character.",
+        "PASSWORD_REQUIRED" => "Password is required.",
+        "INVALID_EMAIL" => "Enter a valid email address.",
+        "USER_NOT_FOUND" => "User account not found.",
+        "INVALID_NIC" => "Enter a valid Sri Lankan NIC number.",
+        "INVALID_PHONE" => "Enter a valid Sri Lankan phone number.",
+        "EMAIL_NOT_VERIFIED" => "Your email has not been verified.",
+        "EMAIL_ALREADY_EXISTS" => "An account with that email already exists.",
+        "NIC_ALREADY_EXISTS" => "An account with that NIC already exists.",
+        "EMAIL_DELIVERY_FAILED" => "We could not send the email. Please try again shortly.",
+        "EMAIL_VERIFICATION_RESEND_TOO_SOON" or "PASSWORD_RESET_RESEND_TOO_SOON" => "Please wait before requesting another code.",
+        "EMAIL_VERIFICATION_CODE_EXPIRED" or "PASSWORD_RESET_CODE_EXPIRED" => "This code has expired.",
+        "EMAIL_VERIFICATION_TOO_MANY_ATTEMPTS" or "PASSWORD_RESET_TOO_MANY_ATTEMPTS" => "Too many attempts. Request a new code.",
+        "EMAIL_VERIFICATION_CODE_INVALID" or "PASSWORD_RESET_CODE_INVALID" => "The code is invalid. Please try again.",
+        _ => "Authentication request could not be completed."
+    };
 }

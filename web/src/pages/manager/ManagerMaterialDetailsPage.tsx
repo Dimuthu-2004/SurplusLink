@@ -10,6 +10,7 @@ import {
   type MaterialListing,
 } from '../../features/materials/managerMaterialsApi';
 import { SuccessOverlay } from '../../components/StatusAnimation';
+import { ListingMap } from '../../components/ListingMap';
 
 export function ManagerMaterialDetailsPage({
   api = managerMaterialsApi,
@@ -112,7 +113,12 @@ export function ManagerMaterialDetailsPage({
           <Detail label="Created" value={formatDate(listing.createdAtUtc)} />
           <Detail label="Updated" value={formatDate(listing.updatedAtUtc)} />
         </dl>
-        {listing.latitude != null && listing.longitude != null && <a className="back-link" href={`https://www.google.com/maps/search/?api=1&query=${listing.latitude},${listing.longitude}`} target="_blank" rel="noreferrer">View material location in Google Maps</a>}
+        <ListingMap
+          latitude={listing.latitude}
+          longitude={listing.longitude}
+          title={listing.title}
+          address={listing.seller?.address}
+        />
         {specificationRows(listing.specificationsJson).length > 0 && <dl className="detail-grid">{specificationRows(listing.specificationsJson).map(([label, value]) => <Detail key={label} label={label} value={value} />)}</dl>}
         {listing.photos.length > 0 && (
           <div className="photo-grid" aria-label="Listing photos">
