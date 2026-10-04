@@ -10,10 +10,14 @@ final class AiAssistantService {
   Future<AiChatMessage> sendMessage({
     String? conversationId,
     required String message,
+    Map<String, dynamic>? structuredLocation,
   }) async {
     final payload = <String, dynamic>{'message': message.trim()};
     if (conversationId != null && conversationId.isNotEmpty) {
       payload['conversationId'] = conversationId;
+    }
+    if (structuredLocation != null) {
+      payload['structured_location'] = structuredLocation;
     }
 
     final json = await apiClient.postJson(
@@ -41,6 +45,13 @@ final class AiAssistantService {
       );
     }
 
+    AiClientAction? clientAction;
+    if (json['client_action'] is Map) {
+      clientAction = AiClientAction.fromJson(
+        json['client_action'] as Map<String, dynamic>,
+      );
+    }
+
     List<String> actions = [];
     if (json['suggested_actions'] is List) {
       actions = (json['suggested_actions'] as List)
@@ -56,6 +67,7 @@ final class AiAssistantService {
       intent: intent,
       citations: citations,
       draft: draft,
+      clientAction: clientAction,
       suggestedActions: actions,
       timestamp: DateTime.now(),
     );

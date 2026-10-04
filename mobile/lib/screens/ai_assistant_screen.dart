@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:mobile/core/api_client.dart';
+import 'package:mobile/location/location_lookup.dart';
 import 'package:mobile/requirements/requirement_gateway.dart';
+import 'package:mobile/requirements/requirement_location.dart';
 import 'package:mobile/screens/requirement_form_screen.dart';
 import 'package:mobile/widgets/surplus_link_logo.dart';
 
@@ -14,10 +16,14 @@ final class AiAssistantService {
   Future<AiChatMessage> sendMessage({
     String? conversationId,
     required String message,
+    Map<String, dynamic>? structuredLocation,
   }) async {
     final payload = <String, dynamic>{'message': message.trim()};
     if (conversationId != null && conversationId.isNotEmpty) {
       payload['conversationId'] = conversationId;
+    }
+    if (structuredLocation != null) {
+      payload['structured_location'] = structuredLocation;
     }
 
     final json = await apiClient.postJson(
@@ -40,6 +46,7 @@ final class AiAssistantService {
       _ => <String>[],
     };
     final draftJson = json['requirement_draft'];
+    final clientActionJson = json['client_action'];
 
     return AiChatMessage(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -51,6 +58,9 @@ final class AiAssistantService {
       citations: citations,
       draft: draftJson is Map
           ? AiRequirementDraft.fromJson(Map<String, dynamic>.from(draftJson))
+          : null,
+      clientAction: clientActionJson is Map
+          ? AiClientAction.fromJson(Map<String, dynamic>.from(clientActionJson))
           : null,
       suggestedActions: actions,
       timestamp: DateTime.now(),
@@ -160,6 +170,10 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
           _isLoading = false;
         });
         _scrollToBottom();
+
+        if (assistantMsg.clientAction?.type == 'REQUEST_DEVICE_LOCATION') {
+          _handleDeviceLocationRequest();
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -177,6 +191,49 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
           _isLoading = false;
         });
         _scrollToBottom();
+      }
+    }
+  }
+
+  Future<void> _handleDeviceLocationRequest() async {
+    try {
+      const locationSource = DeviceRequirementLocation();
+      final loc = await locationSource.capture();
+      String? address;
+      try {
+        final lookup = ApiLocationLookup(widget.apiClient);
+        address = await lookup.lookup(loc.latitude, loc.longitude);
+      } catch (_) {
+        // Retain coordinates even if reverse geocode fails!
+      }
+
+      final structuredLoc = <String, dynamic>{
+        'latitude': loc.latitude,
+        'longitude': loc.longitude,
+        'resolved_address': address,
+        'location_source': 'CURRENT_DEVICE_LOCATION',
+      };
+
+      if (!mounted) return;
+      setState(() => _isLoading = true);
+
+      final assistantMsg = await _assistantService.sendMessage(
+        conversationId: _conversationId,
+        message: 'Location acquired',
+        structuredLocation: structuredLoc,
+      );
+
+      if (mounted) {
+        setState(() {
+          _conversationId = assistantMsg.conversationId;
+          _messages.add(assistantMsg);
+          _isLoading = false;
+        });
+        _scrollToBottom();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
       }
     }
   }

@@ -165,6 +165,28 @@ final class AiRequirementPrefill {
   String? get notes => draft.notes;
 }
 
+final class AiClientAction {
+  const AiClientAction({
+    required this.type,
+    this.draftId,
+    this.params,
+  });
+
+  final String type;
+  final String? draftId;
+  final Map<String, dynamic>? params;
+
+  factory AiClientAction.fromJson(Map<String, dynamic> json) {
+    return AiClientAction(
+      type: json['type'] as String? ?? '',
+      draftId: json['draft_id'] as String?,
+      params: json['params'] is Map<String, dynamic>
+          ? json['params'] as Map<String, dynamic>
+          : null,
+    );
+  }
+}
+
 enum ChatRole { user, assistant }
 
 final class AiChatMessage {
@@ -176,6 +198,7 @@ final class AiChatMessage {
     this.intent,
     this.citations = const [],
     this.draft,
+    this.clientAction,
     this.suggestedActions = const [],
     required this.timestamp,
     this.isError = false,
@@ -188,7 +211,9 @@ final class AiChatMessage {
   final String? intent;
   final List<AiCitation> citations;
   final AiRequirementDraft? draft;
+  final AiClientAction? clientAction;
   final List<String> suggestedActions;
   final DateTime timestamp;
   final bool isError;
 }
+

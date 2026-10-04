@@ -112,6 +112,7 @@ class InternalChatPayload(BaseModel):
     user_context: Dict[str, Any]
     conversation_id: str
     message: str
+    structured_location: Optional[Dict[str, Any]] = None
     backend_api_url: Optional[str] = None
 
 
@@ -127,4 +128,5 @@ async def internal_chat(payload: InternalChatPayload):
         user_context=payload.user_context,
         conversation_id=payload.conversation_id,
         message=payload.message,
-    )
+        structured_location=payload.structured_location,
+    )

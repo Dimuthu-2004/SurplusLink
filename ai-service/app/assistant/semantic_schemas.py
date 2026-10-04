@@ -46,6 +46,8 @@ class ExtractedSlots(BaseModel):
     structured_location: dict[str, Any] | None = None
     location_source: str | None = None
     location_pending: bool = False
+    dimensions: dict[str, Any] | None = None
+    coverage_area: float | None = None
     notes: str | None = None
     live_resource: str | None = None
     referenced_id: str | None = None
@@ -138,6 +140,15 @@ class RequirementDraft(BaseModel):
     notes: str | None = None
     missing_required_fields: list[str] = Field(default_factory=list)
     ready_for_review: bool = False
+
+
+class ClientAction(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    type: str
+    draft_id: str | None = None
+    params: dict[str, Any] = Field(default_factory=dict)
+
 
 
 class ConversationState(BaseModel):

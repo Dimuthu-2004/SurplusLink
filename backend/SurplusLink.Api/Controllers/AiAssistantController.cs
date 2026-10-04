@@ -11,9 +11,17 @@ using SurplusLink.Api.Models;
 
 namespace SurplusLink.Api.Controllers;
 
+public sealed record AiStructuredLocationDto(
+    [property: JsonPropertyName("latitude")] double? Latitude,
+    [property: JsonPropertyName("longitude")] double? Longitude,
+    [property: JsonPropertyName("resolved_address")] string? ResolvedAddress,
+    [property: JsonPropertyName("location_source")] string? LocationSource
+);
+
 public sealed record AiChatRequest(
     Guid? ConversationId,
-    string Message
+    string Message,
+    [property: JsonPropertyName("structured_location")] AiStructuredLocationDto? StructuredLocation = null
 );
 
 public sealed record AiCitationResponse(
@@ -21,6 +29,12 @@ public sealed record AiCitationResponse(
     [property: JsonPropertyName("source")] string Source,
     [property: JsonPropertyName("url")] string Url,
     [property: JsonPropertyName("section")] string Section
+);
+
+public sealed record AiClientActionDto(
+    [property: JsonPropertyName("type")] string Type,
+    [property: JsonPropertyName("draft_id")] string? DraftId,
+    [property: JsonPropertyName("params")] Dictionary<string, object>? Params
 );
 
 public sealed record AiRequirementDraftResponse(
@@ -47,6 +61,7 @@ public sealed record AiChatResponse(
     [property: JsonPropertyName("intent")] string Intent,
     [property: JsonPropertyName("citations")] IReadOnlyList<AiCitationResponse> Citations,
     [property: JsonPropertyName("requirement_draft")] AiRequirementDraftResponse? RequirementDraft,
+    [property: JsonPropertyName("client_action")] AiClientActionDto? ClientAction,
     [property: JsonPropertyName("suggested_actions")] IReadOnlyList<string> SuggestedActions
 );
 
@@ -99,6 +114,7 @@ public sealed class AiAssistantController(
             },
             conversation_id = conversationId.ToString(),
             message = request.Message.Trim(),
+            structured_location = request.StructuredLocation,
             backend_api_url = aspNetBaseUrl,
         };
 
@@ -140,6 +156,7 @@ public sealed class AiAssistantController(
             Intent: "SERVICE_UNAVAILABLE",
             Citations: Array.Empty<AiCitationResponse>(),
             RequirementDraft: null,
+            ClientAction: null,
             SuggestedActions: new[] { "Find materials", "How does matching work?", "My transactions" }
         ));
     }

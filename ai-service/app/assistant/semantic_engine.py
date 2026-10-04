@@ -54,12 +54,20 @@ class SurplusLinkSemanticAssistantEngine:
         self.capability_registry = CapabilityRegistry()
         self.validation_gate = ValidationGate()
 
-    async def process_chat(self, user_context: dict[str, Any], conversation_id: str, message: str) -> dict[str, Any]:
+    async def process_chat(
+        self,
+        user_context: dict[str, Any],
+        conversation_id: str,
+        message: str,
+        structured_location: Optional[dict[str, Any]] = None,
+    ) -> dict[str, Any]:
         key = f"{user_context.get('user_id', '')}:{conversation_id}"
         state = self.states.get(key)
 
-        # Retain structured location from user_context if provided by Flutter
-        if user_context.get("current_location") and not state.structured_location:
+        # Retain structured location from user_context or parameter if provided by Flutter
+        if structured_location:
+            state.structured_location = structured_location
+        elif user_context.get("current_location") and not state.structured_location:
             state.structured_location = user_context["current_location"]
 
         logger.info(
@@ -95,6 +103,17 @@ class SurplusLinkSemanticAssistantEngine:
                 retrieval_query=primary.retrieval_query,
             )
 
+        if structured_location:
+            canonical_req.structured_location = structured_location
+            if structured_location.get("latitude"):
+                canonical_req.latitude = float(structured_location["latitude"])
+            if structured_location.get("longitude"):
+                canonical_req.longitude = float(structured_location["longitude"])
+            if structured_location.get("resolved_address") or structured_location.get("address"):
+                canonical_req.resolved_address = str(structured_location.get("resolved_address") or structured_location.get("address"))
+            canonical_req.location_source = "CURRENT_DEVICE_LOCATION"
+            canonical_req.location_pending = False
+
         logger.info(
             "Canonical request parsed: intent=%s, confidence=%.2f, item=%s, location=%s, custom=%s",
             canonical_req.intent.value,
@@ -129,7 +148,11 @@ class SurplusLinkSemanticAssistantEngine:
                 quantity=canonical_req.quantity,
                 preferences=canonical_req.preferences,
                 location_text=canonical_req.location_text,
-                structured_location=canonical_req.structured_location,
+                structured_location=canonical_req.structured_location or structured_location,
+                location_source=canonical_req.location_source,
+                location_pending=canonical_req.location_pending,
+                dimensions=canonical_req.dimensions.model_dump() if canonical_req.dimensions else None,
+                coverage_area=canonical_req.coverage_area,
             )
             draft, error = self.validator.build_or_update(
                 extracted_slots, catalog, state_machine.active_requirement_draft
@@ -201,6 +224,7 @@ class SurplusLinkSemanticAssistantEngine:
             state,
             citations,
         )
+
 
     async def _handle_material_estimation(self, req: CanonicalUserRequest, state_machine: ConversationStateMachine) -> str:
         item = (req.resolved_item or req.item_candidate or state_machine.last_item_candidate or "paint").lower()
@@ -310,14 +334,24 @@ class SurplusLinkSemanticAssistantEngine:
 
     @staticmethod
     def _response(conversation_id: str, message: str, intent: Intent, state, citations=None):
+        draft = state.active_requirement_draft
+        client_action = None
+        if draft and draft.location_pending:
+            client_action = {
+                "type": "REQUEST_DEVICE_LOCATION",
+                "draft_id": draft.id,
+            }
+
         return {
             "conversation_id": conversation_id,
             "message": message,
-            "intent": intent.value,
+            "intent": intent.value if hasattr(intent, "value") else str(intent),
             "citations": citations or [],
-            "requirement_draft": state.active_requirement_draft.model_dump() if state.active_requirement_draft else None,
+            "requirement_draft": draft.model_dump() if draft else None,
+            "client_action": client_action,
             "drafts": [d.model_dump() for d in state.drafts],
             "active_draft_id": state.active_draft_id,
-            "suggested_actions": ["Review Requirement"] if state.active_requirement_draft and state.active_requirement_draft.ready_for_review else [],
+            "suggested_actions": ["Review Requirement"] if draft and draft.ready_for_review else [],
         }
+
 
