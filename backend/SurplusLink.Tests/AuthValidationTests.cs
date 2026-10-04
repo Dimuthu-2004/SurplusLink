@@ -1,6 +1,8 @@
 using System.ComponentModel.DataAnnotations;
 using System.Net;
 using System.Net.Http.Json;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using SurplusLink.Api.Auth;
 
 namespace SurplusLink.Tests;
@@ -143,7 +145,12 @@ public sealed class AuthValidationTests
     [Fact]
     public async Task Api_login_with_invalid_credentials_returns_unauthorized_with_friendly_message()
     {
-        using var app = new ApiWebApplicationFactory();
+        using var factory = new ApiWebApplicationFactory();
+        using var app = factory.WithWebHostBuilder(builder => builder.ConfigureServices(services =>
+        {
+            services.RemoveAll<IAuthService>();
+            services.AddScoped<IAuthService, InvalidCredentialsAuthService>();
+        }));
         using var client = app.CreateClient();
 
         var response = await client.PostAsJsonAsync("/api/auth/login", new
@@ -170,6 +177,7 @@ public sealed class AuthDatabaseTests(RequirementsDatabase fixture) : IClassFixt
         {
             fullName = "Auth Test User",
             phoneNumber = "0771234567",
+            nic = $"2000000000{Random.Shared.Next(10, 100):D2}",
             address = "Colombo 03",
             email,
             password = "StrongPassword123!",
@@ -182,4 +190,20 @@ public sealed class AuthDatabaseTests(RequirementsDatabase fixture) : IClassFixt
         var response2 = await client.PostAsJsonAsync("/api/auth/register", registrationPayload);
         Assert.Equal(HttpStatusCode.Conflict, response2.StatusCode);
     }
+
+}
+
+internal sealed class InvalidCredentialsAuthService : IAuthService
+{
+    public Task<(RegistrationResponse? Response, string? ErrorCode)> RegisterAsync(RegisterRequest request, CancellationToken cancellationToken) =>
+        throw new NotSupportedException();
+
+    public Task<(AuthResponse? Response, string? ErrorCode)> LoginAsync(LoginRequest request, CancellationToken cancellationToken) =>
+        Task.FromResult<(AuthResponse?, string?)>((null, "INVALID_CREDENTIALS"));
+
+    public Task<string?> SendEmailVerificationAsync(string email, CancellationToken cancellationToken) => throw new NotSupportedException();
+    public Task<string?> VerifyEmailAsync(VerifyEmailRequest request, CancellationToken cancellationToken) => throw new NotSupportedException();
+    public Task<string?> ForgotPasswordAsync(string email, CancellationToken cancellationToken) => throw new NotSupportedException();
+    public Task<string?> ResetPasswordAsync(ResetPasswordRequest request, CancellationToken cancellationToken) => throw new NotSupportedException();
+    public Task<string?> DeleteAccountAsync(Guid userId, CancellationToken cancellationToken) => throw new NotSupportedException();
 }
