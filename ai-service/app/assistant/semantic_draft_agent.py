@@ -124,6 +124,9 @@ class CatalogDraftValidator:
                 })
                 draft.calculated_physical_quantity = est.calculated_physical_quantity
                 draft.calculated_package_count = est.calculated_package_count
+                if est.calculated_package_count:
+                    draft.package_count = est.calculated_package_count
+                    draft.package_unit = "box"
                 draft.input_mode = "BASE_QUANTITY"
                 draft.entered_quantity = float(est.calculated_physical_quantity or 37)
                 draft.entered_unit = "piece"

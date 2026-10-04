@@ -129,4 +129,4 @@ async def internal_chat(payload: InternalChatPayload):
         conversation_id=payload.conversation_id,
         message=payload.message,
         structured_location=payload.structured_location,
-    )
+    )

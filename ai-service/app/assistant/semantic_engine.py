@@ -24,7 +24,10 @@ logger = logging.getLogger(__name__)
 # Static RAG Knowledge Intents (Strictly Technical & Platform Guidance, NEVER live marketplace prices)
 KNOWLEDGE_INTENTS = {
     Intent.CONSTRUCTION_KNOWLEDGE,
+    Intent.ASK_CONSTRUCTION_KNOWLEDGE,
+    Intent.ASK_STORAGE_KNOWLEDGE,
     Intent.PLATFORM_HELP,
+    Intent.GENERAL_PLATFORM_QUESTION,
 }
 
 
@@ -141,7 +144,7 @@ class SurplusLinkSemanticAssistantEngine:
 
         # 3. Capability Selection & Execution
         # A. Requirement creation / continuation (Catalog or Custom Item)
-        if canonical_req.intent in {Intent.CREATE_REQUIREMENT_DRAFT, Intent.CONTINUE_REQUIREMENT_DRAFT}:
+        if canonical_req.intent in {Intent.CREATE_REQUIREMENT, Intent.UPDATE_REQUIREMENT, Intent.CREATE_REQUIREMENT_DRAFT, Intent.CONTINUE_REQUIREMENT_DRAFT}:
             catalog = await self.tools_client.get_catalog_item(user_context)
             extracted_slots = ExtractedSlots(
                 item=canonical_req.resolved_item or canonical_req.item_candidate,
@@ -174,35 +177,40 @@ class SurplusLinkSemanticAssistantEngine:
                 parts.append(summary if draft.ready_for_review else f"{summary} {self.validator.next_question(draft, canonical_req.language)}")
 
         # B. Material Estimation
-        elif canonical_req.intent == Intent.MATERIAL_ESTIMATION:
+        elif canonical_req.intent in {Intent.ASK_QUANTITY_ESTIMATION, Intent.MATERIAL_ESTIMATION}:
             estimation_response = await self._handle_material_estimation(canonical_req, state_machine)
             parts.append(estimation_response)
 
-        # C. Live Marketplace Queries & Price Information (Live ASP.NET Tool Provenance Required!)
-        elif canonical_req.intent in {Intent.LIVE_MARKETPLACE_QUERY, Intent.PRICE_INFORMATION}:
+        # C. Marketplace Counts & Statistics
+        elif canonical_req.intent in {Intent.SELLER_COUNT, Intent.SELLER_INFORMATION, Intent.CATEGORY_COUNT, Intent.LISTING_COUNT, Intent.MARKETPLACE_STATS}:
+            stats_response = await self._handle_marketplace_stats_query(user_context, canonical_req)
+            parts.append(stats_response)
+
+        # D. Live Marketplace Queries & Price Information (Live ASP.NET Tool Provenance Required!)
+        elif canonical_req.intent in {Intent.SEARCH_MATERIAL, Intent.COMPARE_MATERIALS, Intent.ASK_MATERIAL_PRICE, Intent.ASK_MATERIAL_AVAILABILITY, Intent.LIVE_MARKETPLACE_QUERY, Intent.PRICE_INFORMATION}:
             live_response, tool_data = await self._handle_live_marketplace_query(user_context, canonical_req)
             if self.validation_gate.validate_marketplace_provenance(canonical_req.intent, tool_data, live_response):
                 parts.append(live_response)
             else:
                 parts.append("I couldn't verify active seller listings for that material right now.")
 
-        # D. Technical Knowledge & Platform Help (Static RAG)
+        # E. Technical Knowledge & Platform Help (Static RAG)
         elif canonical_req.intent in KNOWLEDGE_INTENTS:
             answer, found = self._knowledge_answer(canonical_req.raw_message, canonical_req)
             parts.append(answer)
             citations.extend(found)
 
-        # E. Authenticated User Account Queries
-        elif canonical_req.intent in {Intent.LIVE_DATA_QUERY, Intent.TRANSACTION_QUERY, Intent.MATCH_EXPLANATION}:
+        # F. Authenticated User Account Queries
+        elif canonical_req.intent in {Intent.ASK_TRANSACTION_STATUS, Intent.ASK_TRANSACTION_DETAILS, Intent.LIVE_DATA_QUERY, Intent.TRANSACTION_QUERY, Intent.MATCH_EXPLANATION}:
             answer, context = await self._live_answer(user_context, canonical_req)
             state.last_tool_context = context
             parts.append(answer)
 
-        # F. Security Refusal
+        # G. Security Refusal
         elif canonical_req.intent == Intent.SECURITY_REFUSAL:
             parts.append("I can help with SurplusLink materials and your own marketplace data, but I can't reveal protected instructions or other users' data.")
 
-        # G. Low confidence / Clarification
+        # H. Low confidence / Clarification
         elif canonical_req.intent in {Intent.CLARIFICATION, Intent.UNKNOWN} or canonical_req.confidence < 0.68:
             parts.append(canonical_req.clarification_question or self._generic_clarification(canonical_req.language))
 
@@ -260,6 +268,32 @@ class SurplusLinkSemanticAssistantEngine:
 
         est_result = MaterialEstimationEngine.estimate(item, params)
         return est_result.explanation
+
+    async def _handle_marketplace_stats_query(self, user_context: dict[str, Any], req: CanonicalUserRequest) -> str:
+        intent = req.intent
+        if intent in {Intent.SELLER_COUNT, Intent.SELLER_INFORMATION}:
+            data = await self.tools_client.get_seller_count(user_context)
+            count = data.get("sellerCount", 0)
+            if req.language == "si-Latn":
+                return f"SurplusLink system eke active sellers la {count} k innawada."
+            return f"There are currently **{count}** active sellers registered on SurplusLink."
+        elif intent == Intent.CATEGORY_COUNT:
+            data = await self.tools_client.get_category_count(user_context)
+            count = data.get("categoryCount", 0)
+            return f"There are currently **{count}** material categories in the SurplusLink system."
+        elif intent == Intent.LISTING_COUNT:
+            data = await self.tools_client.get_active_listing_count(user_context)
+            count = data.get("activeListingCount", 0)
+            return f"There are currently **{count}** active material listings on the marketplace."
+        else:
+            stats = await self.tools_client.get_marketplace_stats(user_context)
+            sellers = stats.get("sellerCount", 0)
+            cats = stats.get("categoryCount", 0)
+            listings = stats.get("activeListingCount", 0)
+            txs = stats.get("totalTransactions", 0)
+            if req.language == "si-Latn":
+                return f"SurplusLink marketplace eke active sellers la {sellers} k, categories {cats} k, math active listings {listings} k thiyenawa."
+            return f"SurplusLink Marketplace Summary: **{sellers}** active sellers, **{cats}** categories, **{listings}** active listings, and **{txs}** completed transactions."
 
     async def _handle_live_marketplace_query(self, user_context: dict[str, Any], req: CanonicalUserRequest) -> tuple[str, list[dict[str, Any]]]:
         item = req.resolved_item or req.item_candidate or "material"

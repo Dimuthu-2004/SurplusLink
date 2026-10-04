@@ -426,4 +426,59 @@ public sealed class AiInternalToolsController(
 
         return Ok(categories);
     }
+
+    [HttpGet("seller-count")]
+    public async Task<IActionResult> GetSellerCount(CancellationToken ct)
+    {
+        if (!ValidateInternalToken()) return Unauthorized(new { error = "Invalid internal token" });
+        var sellerCount = await db.Users.Where(u => u.RoleAssignments.Any(r => r.Role == UserRole.SELLER))
+            .CountAsync(ct);
+
+        if (sellerCount == 0)
+        {
+            sellerCount = await db.Listings.Select(l => l.SellerId).Distinct().CountAsync(ct);
+            if (sellerCount == 0) sellerCount = await db.Users.CountAsync(ct);
+        }
+
+        return Ok(new { sellerCount });
+    }
+
+    [HttpGet("category-count")]
+    public async Task<IActionResult> GetCategoryCount(CancellationToken ct)
+    {
+        if (!ValidateInternalToken()) return Unauthorized(new { error = "Invalid internal token" });
+        var count = await db.Categories.CountAsync(ct);
+        return Ok(new { categoryCount = count });
+    }
+
+    [HttpGet("active-listing-count")]
+    public async Task<IActionResult> GetActiveListingCount(CancellationToken ct)
+    {
+        if (!ValidateInternalToken()) return Unauthorized(new { error = "Invalid internal token" });
+        var count = await db.Listings.CountAsync(l => l.Status == ListingStatus.ACTIVE, ct);
+        return Ok(new { activeListingCount = count });
+    }
+
+    [HttpGet("marketplace-stats")]
+    public async Task<IActionResult> GetMarketplaceStats(CancellationToken ct)
+    {
+        if (!ValidateInternalToken()) return Unauthorized(new { error = "Invalid internal token" });
+        var sellerCount = await db.Users.Where(u => u.RoleAssignments.Any(r => r.Role == UserRole.SELLER)).CountAsync(ct);
+        if (sellerCount == 0) sellerCount = await db.Listings.Select(l => l.SellerId).Distinct().CountAsync(ct);
+        if (sellerCount == 0) sellerCount = await db.Users.CountAsync(ct);
+
+        var categoryCount = await db.Categories.CountAsync(ct);
+        var activeListingCount = await db.Listings.CountAsync(l => l.Status == ListingStatus.ACTIVE, ct);
+        var totalTransactions = await db.Transactions.CountAsync(ct);
+        var totalMatches = await db.Matches.CountAsync(ct);
+
+        return Ok(new
+        {
+            sellerCount,
+            categoryCount,
+            activeListingCount,
+            totalTransactions,
+            totalMatches
+        });
+    }
 }
