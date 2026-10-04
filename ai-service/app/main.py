@@ -1,15 +1,59 @@
-﻿from fastapi import FastAPI
-
 import hmac
 import os
+from pathlib import Path
+from typing import Any, Dict, Optional
 
-from fastapi import Depends, Header, HTTPException
+from dotenv import load_dotenv
+
+# ---------------------------------------------------------
+# Load environment variables from the project root .env.local
+#
+# Structure:
+#
+# SurplusLink/
+# ├── .env.local
+# ├── ai-service/
+# │   └── app/
+# │       └── main.py
+# ├── backend/
+# ├── mobile/
+# └── web/
+# ---------------------------------------------------------
+
+AI_SERVICE_DIR = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = AI_SERVICE_DIR.parent
+ENV_FILE = PROJECT_ROOT / ".env.local"
+
+if ENV_FILE.exists():
+    load_dotenv(dotenv_path=ENV_FILE, override=True)
+
+# Temporary debug output.
+# Never print the actual API key.
+print("ENV file:", ENV_FILE)
+print("ENV exists:", ENV_FILE.exists())
+print("Groq configured:", bool(os.getenv("GROQ_API_KEY")))
+print("Groq model:", os.getenv("GROQ_MODEL"))
+
+from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
-from app.workflows.orchestration import Limits, WorkflowOrchestrator, WorkflowRequest, WorkflowResponse
+from app.assistant.semantic_engine import SurplusLinkSemanticAssistantEngine
+from app.workflows.orchestration import (
+    Limits,
+    WorkflowOrchestrator,
+    WorkflowRequest,
+    WorkflowResponse,
+)
 
-app = FastAPI(title="SurplusLink AI Service", docs_url=None, redoc_url=None)
+app = FastAPI(
+    title="SurplusLink AI Service",
+    docs_url=None,
+    redoc_url=None,
+)
+
+assistant_engine = SurplusLinkSemanticAssistantEngine()
 
 
 @app.get("/internal/health", tags=["operations"])
@@ -18,24 +62,71 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-async def require_internal_token(x_internal_token: str = Header(default="")):
+async def require_internal_token(
+    x_internal_token: str = Header(default=""),
+):
     expected = os.getenv("AI_SERVICE_SHARED_TOKEN", "")
+
     if len(expected) < 32:
-        raise HTTPException(503, "Internal authentication is not configured.")
-    if not hmac.compare_digest(expected.encode(), x_internal_token.encode()):
-        raise HTTPException(401, "Invalid internal credentials.")
+        raise HTTPException(
+            status_code=503,
+            detail="Internal authentication is not configured.",
+        )
+
+    if not hmac.compare_digest(
+        expected.encode(),
+        x_internal_token.encode(),
+    ):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid internal credentials.",
+        )
 
 
 @app.exception_handler(RequestValidationError)
 async def invalid_request(request, error):
-    return JSONResponse(status_code=422, content={"detail": "Invalid workflow request."})
+    return JSONResponse(
+        status_code=422,
+        content={"detail": "Invalid request parameters."},
+    )
 
 
-@app.post("/internal/workflows/run", response_model=WorkflowResponse,
-          dependencies=[Depends(require_internal_token)])
+@app.post(
+    "/internal/workflows/run",
+    response_model=WorkflowResponse,
+    dependencies=[Depends(require_internal_token)],
+)
 async def run_workflow(request: WorkflowRequest):
     try:
         limits = Limits.from_env()
     except ValueError:
-        raise HTTPException(503, "Workflow execution limits are invalid.") from None
+        raise HTTPException(
+            status_code=503,
+            detail="Workflow execution limits are invalid.",
+        ) from None
+
     return await WorkflowOrchestrator(limits).run(request)
+
+
+class InternalChatPayload(BaseModel):
+    user_context: Dict[str, Any]
+    conversation_id: str
+    message: str
+    structured_location: Optional[Dict[str, Any]] = None
+    backend_api_url: Optional[str] = None
+
+
+@app.post(
+    "/internal/chat",
+    dependencies=[Depends(require_internal_token)],
+)
+async def internal_chat(payload: InternalChatPayload):
+    if payload.backend_api_url:
+        assistant_engine.tools_client.base_url = payload.backend_api_url
+
+    return await assistant_engine.process_chat(
+        user_context=payload.user_context,
+        conversation_id=payload.conversation_id,
+        message=payload.message,
+        structured_location=payload.structured_location,
+    )

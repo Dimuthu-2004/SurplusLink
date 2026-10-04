@@ -254,7 +254,9 @@ final class ApiClient {
         final field = item['field'] as String? ?? item['property'] as String?;
         if (field == null || field.isEmpty) continue;
         final code = item['code'] as String?;
-        final message = item['message'] as String? ?? _friendlyValidationMessage(code, field);
+        final message =
+            item['message'] as String? ??
+            _friendlyValidationMessage(code, field);
         validationErrors[field] = [message];
       }
     }
@@ -275,10 +277,12 @@ final class ApiClient {
     );
   }
 
-  static String _friendlyValidationMessage(String? code, String field) => switch (code) {
-    'PRICE_REQUIRED' => 'Enter the price for this item.',
-    'LOCATION_REQUIRED' => 'Enter the pickup or delivery location.',
-    'QUANTITY_REQUIRED' => 'Enter the quantity currently available or needed.',
-    _ => 'Check $field.',
-  };
+  static String _friendlyValidationMessage(String? code, String field) =>
+      switch (code) {
+        'PRICE_REQUIRED' => 'Enter the price for this item.',
+        'LOCATION_REQUIRED' => 'Enter the pickup or delivery location.',
+        'QUANTITY_REQUIRED' =>
+          'Enter the quantity currently available or needed.',
+        _ => 'Check $field.',
+      };
 }

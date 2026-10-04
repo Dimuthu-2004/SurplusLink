@@ -179,6 +179,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ),
             ),
           ),
+          floatingActionButton: FloatingActionButton.extended(
+            key: const Key('ai-assistant-fab'),
+            onPressed: () => context.push('/ai-assistant'),
+            icon: const Icon(Icons.smart_toy_rounded),
+            label: const Text('AI Assistant'),
+            backgroundColor: SurplusLinkTheme.amber,
+            foregroundColor: SurplusLinkTheme.slate900,
+          ),
           bottomNavigationBar: RoleNavigation(
             user: user,
             mode: mode,
