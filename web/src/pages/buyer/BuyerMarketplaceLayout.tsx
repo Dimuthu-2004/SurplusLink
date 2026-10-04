@@ -4,6 +4,8 @@ import { useAuth } from '../../auth/AuthContext';
 import { LogoutConfirmation } from '../../components/LogoutConfirmation';
 import { SurplusLinkLogo } from '../../components/SurplusLinkLogo';
 import { LanguageSelector } from '../../i18n/LanguageContext';
+import { NotificationBell } from '../../features/notifications/NotificationBell';
+import { UserAvatar } from '../../components/UserAvatar';
 import './buyerMarketplace.css';
 
 export interface BuyerMarketplaceLayoutProps {
@@ -51,13 +53,15 @@ export function BuyerMarketplaceLayout({ children }: BuyerMarketplaceLayoutProps
           </nav>
 
           {/* Desktop User Section */}
-          <div className="marketplace-nav-user">
+          <div className="marketplace-nav-user" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             {location.pathname === '/app/buyer' && <LanguageSelector />}
+            <NotificationBell />
             {user && (
-              <div className="marketplace-user-pill">
-                <span title={user.email}>{user.email}</span>
+              <Link to="/app/profile" className="marketplace-user-pill" title="View profile settings" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', textDecoration: 'none' }}>
+                <UserAvatar user={user} size={28} />
+                <span title={user.email}>{user.fullName || user.email}</span>
                 <span className="marketplace-role-tag">Buyer</span>
-              </div>
+              </Link>
             )}
             <LogoutConfirmation className="marketplace-logout-btn" onLogout={logout}>Log out</LogoutConfirmation>
 

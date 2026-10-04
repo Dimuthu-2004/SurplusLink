@@ -115,6 +115,72 @@ public sealed class TransactionService(SurplusLinkDbContext db, INotificationSer
             totalDecisions == 0 ? null : (double)completed / totalDecisions);
     }
 
+    public async Task<TransactionTimeSeriesResponse> TimeSeriesAnalyticsAsync(int? year, int? month, CancellationToken ct)
+    {
+        var targetYear = year ?? DateTime.UtcNow.Year;
+        var query = db.Transactions.AsNoTracking().Where(x => x.Status == TransactionStatus.COMPLETED);
+
+        if (month.HasValue && month.Value >= 1 && month.Value <= 12)
+        {
+            var targetMonth = month.Value;
+            var from = new DateTime(targetYear, targetMonth, 1, 0, 0, 0, DateTimeKind.Utc);
+            var daysInMonth = DateTime.DaysInMonth(targetYear, targetMonth);
+            var to = new DateTime(targetYear, targetMonth, daysInMonth, 23, 59, 59, 999, DateTimeKind.Utc);
+
+            var transactions = await query
+                .Where(x => (x.CompletedAtUtc ?? x.CreatedAtUtc) >= from && (x.CompletedAtUtc ?? x.CreatedAtUtc) <= to)
+                .ToListAsync(ct);
+
+            var points = new List<TransactionTimeSeriesPoint>();
+            for (int d = 1; d <= daysInMonth; d++)
+            {
+                var dayTx = transactions.Where(x => (x.CompletedAtUtc ?? x.CreatedAtUtc).Day == d).ToList();
+                points.Add(new TransactionTimeSeriesPoint(
+                    $"{targetYear:D4}-{targetMonth:D2}-{d:D2}",
+                    $"{targetMonth}/{d}",
+                    dayTx.Count,
+                    dayTx.Sum(x => x.TotalValue),
+                    dayTx.Sum(x => x.Quantity)));
+            }
+
+            var totalCount = transactions.Count;
+            var totalVal = transactions.Sum(x => x.TotalValue);
+            var totalQty = transactions.Sum(x => x.Quantity);
+            var avgVal = totalCount == 0 ? 0m : Math.Round(totalVal / totalCount, 2);
+
+            return new TransactionTimeSeriesResponse(targetYear, targetMonth, totalCount, totalVal, totalQty, avgVal, points);
+        }
+        else
+        {
+            var from = new DateTime(targetYear, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            var to = new DateTime(targetYear, 12, 31, 23, 59, 59, 999, DateTimeKind.Utc);
+
+            var transactions = await query
+                .Where(x => (x.CompletedAtUtc ?? x.CreatedAtUtc) >= from && (x.CompletedAtUtc ?? x.CreatedAtUtc) <= to)
+                .ToListAsync(ct);
+
+            var monthNames = new[] { "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
+            var points = new List<TransactionTimeSeriesPoint>();
+            for (int m = 1; m <= 12; m++)
+            {
+                var monthTx = transactions.Where(x => (x.CompletedAtUtc ?? x.CreatedAtUtc).Month == m).ToList();
+                points.Add(new TransactionTimeSeriesPoint(
+                    $"{targetYear:D4}-{m:D2}",
+                    monthNames[m - 1],
+                    monthTx.Count,
+                    monthTx.Sum(x => x.TotalValue),
+                    monthTx.Sum(x => x.Quantity)));
+            }
+
+            var totalCount = transactions.Count;
+            var totalVal = transactions.Sum(x => x.TotalValue);
+            var totalQty = transactions.Sum(x => x.Quantity);
+            var avgVal = totalCount == 0 ? 0m : Math.Round(totalVal / totalCount, 2);
+
+            return new TransactionTimeSeriesResponse(targetYear, null, totalCount, totalVal, totalQty, avgVal, points);
+        }
+    }
+
     public Task DecideOfferAsync(Guid id, Guid actor, OfferStatus status, CancellationToken ct) =>
         UpdateOfferAsync(id, actor, status, ct);
 

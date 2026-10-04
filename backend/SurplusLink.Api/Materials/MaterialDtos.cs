@@ -67,7 +67,7 @@ public sealed class VerifyListingRequest
 
 public sealed record ListingPhotoResponse(Guid Id, string PhotoUrl, int SortOrder);
 
-public sealed record SellerContactResponse(string? FullName, string? BusinessName, string Email, string? PhoneNumber);
+public sealed record SellerContactResponse(string? FullName, string? BusinessName, string Email, string? PhoneNumber, string? ProfilePhotoUrl = null);
 
 public sealed record MaterialListingResponse(
     Guid Id,

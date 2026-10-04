@@ -51,7 +51,9 @@ apiClient.interceptors.response.use(
   (response) => response,
   (error: unknown) => {
     const normalized = normalizeApiError(error);
-    if (normalized.status === 401) {
+    const url = axios.isAxiosError(error) ? error.config?.url : undefined;
+    const isLogin = typeof url === 'string' && url.includes('/api/auth/login');
+    if (normalized.status === 401 && !isLogin) {
       unauthorizedHandler?.();
     }
     return Promise.reject(normalized);
@@ -73,23 +75,29 @@ export function normalizeApiError(error: unknown): ApiError {
     return new ApiError('The server took too long to respond.');
   }
   if (!axiosError.response) {
-    return new ApiError('Unable to connect to the SurplusLink API.');
+    return new ApiError('Unable to connect to the server. Please check your network connection.');
   }
 
   const payload = axiosError.response.data;
   const validationErrors = parseValidationErrors(payload?.errors);
   const validationMessage = Object.values(validationErrors).flat().join(' ');
+  const code = stringValue(payload?.code);
+
+  if (axiosError.response.status === 401 && (code === 'INVALID_CREDENTIALS' || !payload?.message)) {
+    return new ApiError('Invalid email or password.', 401, undefined, 'INVALID_CREDENTIALS');
+  }
+
   const message =
     stringValue(payload?.message) ??
     stringValue(payload?.detail) ??
     stringValue(payload?.title) ??
-    (validationMessage || `Request failed with status ${axiosError.response.status}.`);
+    (validationMessage || (axiosError.response.status >= 500 ? 'A server error occurred. Please try again later.' : `Request failed with status ${axiosError.response.status}.`));
 
   return new ApiError(
     message,
     axiosError.response.status,
     Object.keys(validationErrors).length ? validationErrors : undefined,
-    stringValue(payload?.code),
+    code,
   );
 }
 

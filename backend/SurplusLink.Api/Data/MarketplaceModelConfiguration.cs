@@ -77,6 +77,7 @@ public static class MarketplaceModelConfiguration
             entity.Property(user => user.Nic).HasMaxLength(12);
             entity.Property(user => user.EmailVerificationCodeHash).HasMaxLength(256);
             entity.Property(user => user.PasswordResetCodeHash).HasMaxLength(256);
+            entity.Property(user => user.ProfilePhotoUrl).HasMaxLength(2048);
         });
         modelBuilder.Entity<UserRoleAssignment>(entity =>
         {

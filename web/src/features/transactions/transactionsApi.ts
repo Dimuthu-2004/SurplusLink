@@ -17,12 +17,36 @@ export function createTransactionsApi(client: Pick<AxiosInstance, 'get'> = apiCl
   return { offer: id => read(client.get<Offer>('/api/offers/' + encodeURIComponent(id))), offers: query => read(client.get<Page<Offer>>('/api/offers', { params: compact(query) })), transactions: query => read(client.get<Page<Transaction>>('/api/transactions', { params: compact(query) })), history: (id, page) => read(client.get<Page<TransactionHistoryEntry>>(`/api/transactions/${encodeURIComponent(id)}/history`, { params: { page, pageSize: 20, sortBy: 'createdAt', sortDir: 'asc' } })) };
 }
 export const transactionsApi = createTransactionsApi();
+export interface TransactionTimeSeriesPoint {
+  period: string;
+  label: string;
+  transactionCount: number;
+  totalValue: number;
+  totalQuantity: number;
+}
+
+export interface TransactionTimeSeriesResponse {
+  year: number | null;
+  month: number | null;
+  totalTransactions: number;
+  totalValue: number;
+  totalQuantity: number;
+  averageValue: number;
+  points: TransactionTimeSeriesPoint[];
+}
+
 export const transactionConfirmationsApi = {
   handover: async (id: string) => read(apiClient.post<Transaction>(`/api/transactions/${encodeURIComponent(id)}/handover`, {})),
   confirmReceipt: async (id: string) => read(apiClient.post<Transaction>(`/api/transactions/${encodeURIComponent(id)}/confirm-receipt`, {})),
   followUps: async () => read(apiClient.get<TransactionFollowUp[]>('/api/transactions/follow-ups')),
   resolveCompleted: async (id: string, note?: string) => read(apiClient.post<Transaction>(`/api/transactions/${encodeURIComponent(id)}/resolve-completed`, { note: note || null })),
   resolveNotCompleted: async (id: string, note: string) => read(apiClient.post<Transaction>(`/api/transactions/${encodeURIComponent(id)}/resolve-not-completed`, { note })),
+  timeseries: async (year?: number, month?: number) => {
+    const params: Record<string, number> = {};
+    if (year) params.year = year;
+    if (month) params.month = month;
+    return read(apiClient.get<TransactionTimeSeriesResponse>('/api/transactions/analytics/timeseries', { params }));
+  },
 };
 async function read<T>(request: Promise<{ data: T }>): Promise<T> { try { return (await request).data; } catch (error) { throw normalizeApiError(error); } }
 function compact(query: TransactionQuery): Record<string, string | number> { return Object.fromEntries(Object.entries(query).filter(([, value]) => value !== '' && value !== undefined)) as Record<string, string | number>; }

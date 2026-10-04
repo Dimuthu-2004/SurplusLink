@@ -11,6 +11,7 @@ export interface SellerContact {
   businessName?: string;
   email: string;
   phoneNumber?: string;
+  address?: string | null;
 }
 
 export interface MaterialListingItem {

@@ -76,6 +76,16 @@ it('loads the manager dashboard from authenticated summaries, isolates errors, r
         return respond(empty ? { ...transactions, pendingApprovalCount: 0, approvedCount: 0, rejectedCount: 0, completionCount: 0 } : transactions);
       case '/api/users/summary':
         return respond(empty ? { totalUsers: 0, sellers: 0, buyers: 0, dualRoleUsers: 0, managers: 0 } : users);
+      case '/api/transactions/analytics/timeseries':
+        return respond(empty ? { totalTransactions: 0, totalValue: 0, averageValue: 0, points: [] } : {
+          totalTransactions: 10,
+          totalValue: 500000,
+          averageValue: 50000,
+          points: [
+            { period: '2026-10-01', label: 'Oct 01', transactionCount: 4, totalValue: 200000, totalQuantity: 10 },
+            { period: '2026-10-02', label: 'Oct 02', transactionCount: 6, totalValue: 300000, totalQuantity: 15 },
+          ],
+        });
       default: throw new Error('Unexpected dashboard request: ' + config.url);
     }
   };
@@ -86,13 +96,14 @@ it('loads the manager dashboard from authenticated summaries, isolates errors, r
   expect(screen.queryByText('Active listings')).not.toBeInTheDocument();
   expect(screen.getByRole('link', { name: 'Manager Dashboard' })).toHaveAttribute('aria-current', 'page');
   expect(screen.getByRole('link', { name: 'Material listings' })).toHaveAttribute('href', '/app/manager/materials');
-  await waitFor(() => expect(calls).toHaveLength(6));
+  await waitFor(() => expect(calls).toHaveLength(7));
   await act(async () => { release(); await gate; });
 
   expect(await screen.findByRole('alert')).toHaveTextContent('Match analytics is temporarily unavailable.');
   expect(calls.slice().sort()).toEqual([
     '/api/workflows', '/api/materials/analytics/summary', '/api/requirements/analytics/summary',
-    '/api/matches/analytics/summary', '/api/transactions/analytics/summary', '/api/users/summary'
+    '/api/matches/analytics/summary', '/api/transactions/analytics/summary', '/api/users/summary',
+    '/api/transactions/analytics/timeseries'
   ].sort());
   expect(screen.queryByText('Average match score')).not.toBeInTheDocument();
   expect(screen.queryByText('Rejected transactions')).not.toBeInTheDocument();
@@ -125,8 +136,8 @@ it('loads the manager dashboard from authenticated summaries, isolates errors, r
   metric('Valid matches', '15');
   metric('Rejected matches', '8');
   expect(screen.getByRole('row', { name: 'Budget Exceeded 6' })).toBeInTheDocument();
-  expect(calls).toHaveLength(7);
-  expect(calls[6]).toBe('/api/matches/analytics/summary');
+  expect(calls).toHaveLength(8);
+  expect(calls[7]).toBe('/api/matches/analytics/summary');
   expect(screen.queryByRole('alert')).not.toBeInTheDocument();
 
   empty = true;

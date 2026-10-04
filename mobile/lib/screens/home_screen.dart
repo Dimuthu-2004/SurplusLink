@@ -1,6 +1,7 @@
 import 'package:mobile/marketplace/marketplace_mode.dart';
 import 'package:mobile/widgets/marketplace_mode_switcher.dart';
 import 'package:flutter/material.dart';
+import 'package:lottie/lottie.dart';
 import 'package:mobile/widgets/logout_confirmation.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile/auth/auth_controller.dart';
@@ -182,7 +183,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           floatingActionButton: FloatingActionButton.extended(
             key: const Key('ai-assistant-fab'),
             onPressed: () => context.push('/ai-assistant'),
-            icon: const Icon(Icons.smart_toy_rounded),
+            icon: SizedBox(
+              width: 28,
+              height: 28,
+              child: Lottie.asset(
+                'assets/animations/male_call_center.json',
+                fit: BoxFit.contain,
+                errorBuilder: (_, _, _) => const Icon(Icons.smart_toy_rounded, size: 24),
+              ),
+            ),
             label: const Text('AI Assistant'),
             backgroundColor: SurplusLinkTheme.amber,
             foregroundColor: SurplusLinkTheme.slate900,

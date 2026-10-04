@@ -20,6 +20,9 @@ public sealed class AuthService(SurplusLinkDbContext dbContext, IPasswordHasher<
     public async Task<(RegistrationResponse? Response, string? ErrorCode)> RegisterAsync(RegisterRequest request, CancellationToken ct)
     {
         System.ComponentModel.DataAnnotations.Validator.ValidateObject(request, new System.ComponentModel.DataAnnotations.ValidationContext(request), true);
+        if (string.IsNullOrWhiteSpace(request.Password)) return (null, "PASSWORD_REQUIRED");
+        if (!StrongPasswordAttribute.IsStrong(request.Password)) return (null, "WEAK_PASSWORD");
+        if (string.IsNullOrWhiteSpace(request.Email) || !new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(request.Email)) return (null, "INVALID_EMAIL");
         if (!SriLankanContact.TryNormalizeNic(request.Nic, out var nic)) return (null, "INVALID_NIC");
         if (!SriLankanContact.TryNormalizePhone(request.PhoneNumber, out var phone)) return (null, "INVALID_PHONE");
         var email = request.Email.Trim().ToLowerInvariant();
@@ -96,6 +99,8 @@ public sealed class AuthService(SurplusLinkDbContext dbContext, IPasswordHasher<
 
     public async Task<string?> ResetPasswordAsync(ResetPasswordRequest request, CancellationToken ct)
     {
+        if (string.IsNullOrWhiteSpace(request.NewPassword)) return "PASSWORD_REQUIRED";
+        if (!StrongPasswordAttribute.IsStrong(request.NewPassword)) return "WEAK_PASSWORD";
         var user = await FindUser(request.Email, ct);
         if (user is null || user.PasswordResetCodeHash is null) return "PASSWORD_RESET_CODE_INVALID";
         if (user.PasswordResetExpiresAtUtc is null || user.PasswordResetExpiresAtUtc < DateTime.UtcNow) return "PASSWORD_RESET_CODE_EXPIRED";
@@ -103,6 +108,74 @@ public sealed class AuthService(SurplusLinkDbContext dbContext, IPasswordHasher<
         if (!VerifyCode(user.PasswordResetCodeHash, request.Code)) { user.PasswordResetAttempts++; await dbContext.SaveChangesAsync(ct); return user.PasswordResetAttempts >= MaxAttempts ? "PASSWORD_RESET_TOO_MANY_ATTEMPTS" : "PASSWORD_RESET_CODE_INVALID"; }
         user.PasswordHash = passwordHasher.HashPassword(user, request.NewPassword);
         ClearResetCode(user, clearLastSent: false);
+        await dbContext.SaveChangesAsync(ct);
+        return null;
+    }
+
+    public async Task<string?> DeleteAccountAsync(Guid userId, CancellationToken ct)
+    {
+        var user = await dbContext.Users
+            .Include(u => u.RoleAssignments)
+            .SingleOrDefaultAsync(u => u.Id == userId, ct);
+        if (user is null) return "USER_NOT_FOUND";
+
+        var hasListings = await dbContext.Listings.AnyAsync(l => l.SellerId == userId, ct);
+        var hasRequests = await dbContext.BuyerRequests.AnyAsync(r => r.BuyerId == userId, ct);
+        var hasOffers = await dbContext.Offers.AnyAsync(o => o.BuyerId == userId || o.SellerId == userId, ct);
+        var hasTransactions = await dbContext.Transactions.AnyAsync(t => t.BuyerId == userId || t.SellerId == userId, ct);
+
+        var handoffs = await dbContext.MobileHandoffs.Where(h => h.UserId == userId).ToListAsync(ct);
+        if (handoffs.Count > 0) dbContext.MobileHandoffs.RemoveRange(handoffs);
+
+        var notifications = await dbContext.Notifications.Where(n => n.UserId == userId).ToListAsync(ct);
+        if (notifications.Count > 0) dbContext.Notifications.RemoveRange(notifications);
+
+        if (!hasListings && !hasRequests && !hasOffers && !hasTransactions)
+        {
+            dbContext.Users.Remove(user);
+        }
+        else
+        {
+            user.Email = $"deleted_{user.Id:N}@deleted.local";
+            user.PasswordHash = string.Empty;
+            user.FullName = "Deleted User";
+            user.PhoneNumber = null;
+            user.BusinessName = null;
+            user.Address = "Deleted";
+            user.Nic = null;
+            user.ProfilePhotoUrl = null;
+            user.EmailVerified = false;
+            user.EmailVerificationCodeHash = null;
+            user.PasswordResetCodeHash = null;
+            user.RoleAssignments.Clear();
+
+            var activeListings = await dbContext.Listings
+                .Where(l => l.SellerId == userId && l.Status != ListingStatus.CLOSED && l.Status != ListingStatus.SOLD)
+                .ToListAsync(ct);
+            foreach (var l in activeListings)
+            {
+                l.Status = ListingStatus.CLOSED;
+            }
+
+            var openRequests = await dbContext.BuyerRequests
+                .Where(r => r.BuyerId == userId && r.Status != BuyerRequestStatus.COMPLETED && r.Status != BuyerRequestStatus.CANCELLED)
+                .ToListAsync(ct);
+            foreach (var r in openRequests)
+            {
+                r.Status = BuyerRequestStatus.CANCELLED;
+            }
+        }
+
+        dbContext.AuditLogs.Add(new AuditLog
+        {
+            Id = Guid.NewGuid(),
+            ActorUserId = null,
+            EntityType = nameof(User),
+            EntityId = userId,
+            Action = "ACCOUNT_DELETED",
+            CreatedAtUtc = DateTime.UtcNow
+        });
+
         await dbContext.SaveChangesAsync(ct);
         return null;
     }

@@ -123,8 +123,7 @@ class NotificationItem {
 String _stringValue(dynamic value, {String fallback = ''}) =>
     value == null ? fallback : value.toString();
 
-String? _optionalStringValue(dynamic value) =>
-    value == null ? null : value.toString();
+String? _optionalStringValue(dynamic value) => value?.toString();
 
 DateTime? _dateValue(dynamic value) {
   if (value is String) return DateTime.tryParse(value)?.toLocal();

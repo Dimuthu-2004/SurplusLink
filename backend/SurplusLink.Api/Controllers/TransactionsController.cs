@@ -52,6 +52,11 @@ public sealed class TransactionsController(TransactionService service) : Control
     public Task<ActionResult<TransactionAnalyticsSummary>> Analytics(CancellationToken ct) =>
         Execute(() => service.AnalyticsAsync(ct));
 
+    [HttpGet("transactions/analytics/timeseries")]
+    [Authorize(Roles = "MANAGER")]
+    public Task<ActionResult<TransactionTimeSeriesResponse>> TimeSeries([FromQuery] int? year, [FromQuery] int? month, CancellationToken ct) =>
+        Execute(() => service.TimeSeriesAnalyticsAsync(year, month, ct));
+
     [HttpGet("transactions/follow-ups")]
     [Authorize(Roles = "MANAGER")]
     public Task<ActionResult<IReadOnlyList<TransactionFollowUpResponse>>> FollowUps(CancellationToken ct) =>

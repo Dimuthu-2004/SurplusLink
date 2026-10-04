@@ -33,7 +33,7 @@ public sealed class User : AuditableEntity
     public string? PhoneNumber { get; set; }
     public string? BusinessName { get; set; }
     public string? Address { get; set; }
-
+    public string? ProfilePhotoUrl { get; set; }
 }
 
 public sealed class UserRoleAssignment
