@@ -4,7 +4,7 @@ param([string]$Path = (Join-Path (Split-Path $PSScriptRoot -Parent) '.env.local'
 if (Test-Path -LiteralPath $Path) {
     foreach ($line in Get-Content -LiteralPath $Path) {
         if ($line -match '^\s*(#|$)') { continue }
-        if ($line -notmatch '^\s*(Routing__[A-Za-z][A-Za-z0-9_]*|SMTP_(?:HOST|PORT|USERNAME|PASSWORD|FROM_EMAIL|FROM_NAME)|GROQ_(?:API_KEY|MODEL|TIMEOUT)|AI_[A-Za-z0-9_]+)\s*=(.*)$') { continue }
+        if ($line -notmatch '^\s*(Routing__[A-Za-z][A-Za-z0-9_]*|SMTP_(?:HOST|PORT|USERNAME|PASSWORD|FROM_EMAIL|FROM_NAME)|AI_[A-Za-z0-9_]+)\s*=(.*)$') { continue }
         $settingName = $Matches[1]
         $settingValue = $Matches[2].Trim()
         if ($settingValue.Length -ge 2 -and

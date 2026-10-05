@@ -2,7 +2,6 @@ import hmac
 import logging
 import os
 from pathlib import Path
-from typing import Any, Dict, Optional
 
 from dotenv import load_dotenv
 
@@ -36,7 +35,6 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from app.assistant.semantic_engine import SurplusLinkSemanticAssistantEngine
 from app.workflows.orchestration import (
     Limits,
     WorkflowOrchestrator,
@@ -51,9 +49,6 @@ app = FastAPI(
 )
 
 logger.info("ai_workflow_trace_logging_enabled module=app.workflows.orchestration")
-
-assistant_engine = SurplusLinkSemanticAssistantEngine()
-
 
 @app.get("/internal/health", tags=["operations"])
 async def health() -> dict[str, str]:
@@ -105,27 +100,3 @@ async def run_workflow(request: WorkflowRequest):
         ) from None
 
     return await WorkflowOrchestrator(limits).run(request)
-
-
-class InternalChatPayload(BaseModel):
-    user_context: Dict[str, Any]
-    conversation_id: str
-    message: str
-    structured_location: Optional[Dict[str, Any]] = None
-    backend_api_url: Optional[str] = None
-
-
-@app.post(
-    "/internal/chat",
-    dependencies=[Depends(require_internal_token)],
-)
-async def internal_chat(payload: InternalChatPayload):
-    if payload.backend_api_url:
-        assistant_engine.tools_client.base_url = payload.backend_api_url
-
-    return await assistant_engine.process_chat(
-        user_context=payload.user_context,
-        conversation_id=payload.conversation_id,
-        message=payload.message,
-        structured_location=payload.structured_location,
-    )

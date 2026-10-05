@@ -1,7 +1,7 @@
-"""Authoritative Construction Item Template Catalog for SurplusLink AI Subsystem.
+"""Authoritative Construction Item Template Catalog for SurplusLink matching workflows.
 
-Provides structured tool data and phrase mapping so LLMs (such as Groq)
-do not invent invalid quantity modes, units, or classifications.
+Provides deterministic item definitions and phrase mapping for valid quantity
+modes, units, and classifications.
 """
 
 from __future__ import annotations
@@ -319,7 +319,7 @@ def resolve_phrase_to_template(phrase: str) -> ItemTemplateDefinition | None:
 
 
 def get_catalog_tool_definitions() -> list[dict[str, Any]]:
-    """Export catalog templates formatted as structured tool definitions for LLMs/Groq."""
+    """Export catalog templates for deterministic workflow consumers."""
     return [
         {
             "id": t.id,
