@@ -46,6 +46,9 @@ final class AiRequirementDraft {
     this.latitude,
     this.longitude,
     this.resolvedAddress,
+    this.maximumBudget,
+    this.deadline,
+    this.deliveryRequired = true,
     this.notes,
     required this.missingRequiredFields,
     required this.readyForReview,
@@ -74,6 +77,9 @@ final class AiRequirementDraft {
   final double? latitude;
   final double? longitude;
   final String? resolvedAddress;
+  final double? maximumBudget;
+  final String? deadline;
+  final bool deliveryRequired;
   final String? notes;
   final List<String> missingRequiredFields;
   final bool readyForReview;
@@ -120,6 +126,9 @@ final class AiRequirementDraft {
       latitude: (json['latitude'] as num?)?.toDouble(),
       longitude: (json['longitude'] as num?)?.toDouble(),
       resolvedAddress: json['resolved_address'] as String?,
+      maximumBudget: (json['maximum_budget'] as num?)?.toDouble(),
+      deadline: json['deadline'] as String?,
+      deliveryRequired: json['delivery_required'] as bool? ?? true,
       notes: json['notes'] as String?,
       missingRequiredFields: missing,
       readyForReview: json['ready_for_review'] as bool? ?? false,
@@ -217,3 +226,79 @@ final class AiChatMessage {
   final bool isError;
 }
 
+final class AiWorkflowStepProgress {
+  const AiWorkflowStepProgress({
+    required this.stage,
+    required this.status,
+    required this.retryCount,
+    required this.toolCallCount,
+    this.errorCode,
+    this.durationMilliseconds,
+  });
+
+  final String stage;
+  final String status;
+  final int retryCount;
+  final int toolCallCount;
+  final String? errorCode;
+  final int? durationMilliseconds;
+
+  factory AiWorkflowStepProgress.fromJson(Map<String, dynamic> json) =>
+      AiWorkflowStepProgress(
+        stage: json['stage'] as String? ?? '',
+        status: json['status'] as String? ?? '',
+        errorCode: json['errorCode'] as String?,
+        retryCount: (json['retryCount'] as num?)?.toInt() ?? 0,
+        durationMilliseconds: (json['durationMilliseconds'] as num?)?.toInt(),
+        toolCallCount: (json['toolCallCount'] as num?)?.toInt() ?? 0,
+      );
+}
+
+final class AiWorkflowProgress {
+  const AiWorkflowProgress({
+    required this.workflowId,
+    required this.requirementId,
+    required this.status,
+    required this.currentStage,
+    required this.matchResultsReady,
+    required this.steps,
+    required this.startedAtUtc,
+    this.errorCode,
+    this.completedAtUtc,
+  });
+
+  final String workflowId;
+  final String requirementId;
+  final String status;
+  final String currentStage;
+  final bool matchResultsReady;
+  final String? errorCode;
+  final List<AiWorkflowStepProgress> steps;
+  final DateTime startedAtUtc;
+  final DateTime? completedAtUtc;
+
+  bool get isRunning => status == 'RUNNING';
+  bool get hasFailed => status == 'FAILED';
+
+  factory AiWorkflowProgress.fromJson(Map<String, dynamic> json) =>
+      AiWorkflowProgress(
+        workflowId: json['workflowId'] as String,
+        requirementId: json['requirementId'] as String,
+        status: json['status'] as String,
+        currentStage: json['currentStage'] as String,
+        matchResultsReady: json['matchResultsReady'] as bool? ?? false,
+        errorCode: json['errorCode'] as String?,
+        steps: (json['steps'] as List<dynamic>? ?? const [])
+            .whereType<Map>()
+            .map(
+              (step) => AiWorkflowStepProgress.fromJson(
+                Map<String, dynamic>.from(step),
+              ),
+            )
+            .toList(growable: false),
+        startedAtUtc: DateTime.parse(json['startedAtUtc'] as String),
+        completedAtUtc: json['completedAtUtc'] == null
+            ? null
+            : DateTime.parse(json['completedAtUtc'] as String),
+      );
+}

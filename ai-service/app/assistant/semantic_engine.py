@@ -8,7 +8,7 @@ from app.assistant.canonical_request import CanonicalUserRequest
 from app.assistant.capability_registry import CapabilityRegistry, CapabilityResult
 from app.assistant.conversation_state import ConversationStateStore
 from app.assistant.item_resolver import ItemResolver
-from app.assistant.llm_provider import GroqLLMProvider
+from app.assistant.llm_provider import GeminiLLMProvider
 from app.assistant.match_explanation_agent import MatchExplanationAgent
 from app.assistant.material_estimation import MaterialEstimationEngine
 from app.assistant.semantic_draft_agent import CatalogDraftValidator
@@ -43,12 +43,12 @@ class SurplusLinkSemanticAssistantEngine:
         self,
         rag_retriever: Optional[KnowledgeRetriever] = None,
         tools_client: Optional[BackendToolsClient] = None,
-        llm_provider: Optional[GroqLLMProvider] = None,
+        llm_provider: Optional[GeminiLLMProvider] = None,
         state_store: Optional[ConversationStateStore] = None,
     ):
         self.rag_retriever = rag_retriever or KnowledgeRetriever()
         self.tools_client = tools_client or BackendToolsClient()
-        self.llm_provider = llm_provider or GroqLLMProvider()
+        self.llm_provider = llm_provider or GeminiLLMProvider()
         self.item_resolver = ItemResolver()
         self.router = SemanticRouter(self.llm_provider, item_resolver=self.item_resolver)
         self.states = state_store or ConversationStateStore()
@@ -74,7 +74,7 @@ class SurplusLinkSemanticAssistantEngine:
             state.structured_location = user_context["current_location"]
 
         logger.info(
-            "Processing chat message: '%s', conversation_id=%s, GROQ_KEY_CONFIGURED=%s",
+            "Processing chat message: '%s', conversation_id=%s, GEMINI_CONFIGURED=%s",
             message,
             conversation_id,
             bool(self.llm_provider.api_key),
@@ -151,6 +151,9 @@ class SurplusLinkSemanticAssistantEngine:
                 quantity=canonical_req.quantity,
                 preferences=canonical_req.preferences,
                 location_text=canonical_req.location_text,
+                maximum_budget=canonical_req.maximum_budget,
+                deadline=canonical_req.deadline,
+                delivery_required=canonical_req.delivery_required,
                 structured_location=canonical_req.structured_location or structured_location,
                 location_source=canonical_req.location_source,
                 location_pending=canonical_req.location_pending,
@@ -273,20 +276,24 @@ class SurplusLinkSemanticAssistantEngine:
         intent = req.intent
         if intent in {Intent.SELLER_COUNT, Intent.SELLER_INFORMATION}:
             data = await self.tools_client.get_seller_count(user_context)
+            if not data: return "Sorry, I couldn't retrieve the current seller information right now. Please try again."
             count = data.get("sellerCount", 0)
             if req.language == "si-Latn":
                 return f"SurplusLink system eke active sellers la {count} k innawada."
             return f"There are currently **{count}** active sellers registered on SurplusLink."
         elif intent == Intent.CATEGORY_COUNT:
             data = await self.tools_client.get_category_count(user_context)
+            if not data: return "Sorry, I couldn't retrieve the current category information right now. Please try again."
             count = data.get("categoryCount", 0)
             return f"There are currently **{count}** material categories in the SurplusLink system."
         elif intent == Intent.LISTING_COUNT:
             data = await self.tools_client.get_active_listing_count(user_context)
+            if not data: return "Sorry, I couldn't retrieve the current listing information right now. Please try again."
             count = data.get("activeListingCount", 0)
             return f"There are currently **{count}** active material listings on the marketplace."
         else:
             stats = await self.tools_client.get_marketplace_stats(user_context)
+            if not stats: return "Sorry, I couldn't retrieve current marketplace information right now. Please try again."
             sellers = stats.get("sellerCount", 0)
             cats = stats.get("categoryCount", 0)
             listings = stats.get("activeListingCount", 0)
@@ -358,6 +365,11 @@ class SurplusLinkSemanticAssistantEngine:
         name = draft.display_name or draft.item_name
         if language == "si-Latn":
             return f"{qty} {prefs} {name} requirement draft ekata ekathu kala.".replace("  ", " ")
+        if draft.ready_for_review:
+            delivery = "required" if draft.delivery_required else "not required"
+            return (f"Here is what I understood: {qty} {prefs} {name}; delivery to "
+                    f"{draft.location_text or draft.resolved_address}; maximum budget LKR {draft.maximum_budget:,.2f}; "
+                    f"delivery {delivery}; needed by {draft.deadline}. Is this correct?").replace("  ", " ")
         return f"Draft updated: {qty} {prefs} {name}.".replace("  ", " ")
 
     @staticmethod
@@ -370,7 +382,7 @@ class SurplusLinkSemanticAssistantEngine:
     def _response(conversation_id: str, message: str, intent: Intent, state, citations=None):
         draft = state.active_requirement_draft
         client_action = None
-        if draft and draft.location_pending:
+        if draft and (draft.location_pending or (draft.latitude is None or draft.longitude is None)):
             client_action = {
                 "type": "REQUEST_DEVICE_LOCATION",
                 "draft_id": draft.id,
@@ -385,7 +397,7 @@ class SurplusLinkSemanticAssistantEngine:
             "client_action": client_action,
             "drafts": [d.model_dump() for d in state.drafts],
             "active_draft_id": state.active_draft_id,
-            "suggested_actions": ["Review Requirement"] if draft and draft.ready_for_review else [],
+            "suggested_actions": ["Yes, find matches", "Edit requirement"] if draft and draft.ready_for_review else [],
         }
 
 

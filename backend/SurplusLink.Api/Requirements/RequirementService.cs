@@ -45,6 +45,44 @@ public sealed class RequirementService(
             WorkflowStatus = workflow?.Status.ToString(), DecisionNote = workflow?.Decision };
     }
 
+    public async Task<BuyerWorkflowProgressResponse> WorkflowProgressAsync(Guid id, Guid workflowId, Guid buyerId, CancellationToken ct)
+    {
+        var request = await db.BuyerRequests.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct)
+            ?? throw new RequirementException(404, "Requirement was not found.");
+        Own(request, buyerId);
+        var workflow = await db.AgentWorkflows.AsNoTracking().Include(x => x.Steps).ThenInclude(x => x.ToolCalls)
+            .Where(x => x.Id == workflowId && x.MaterialRequestId == id).FirstOrDefaultAsync(ct)
+            ?? throw new RequirementException(404, "Workflow was not found.");
+        var error = SafeWorkflowFailureCode(workflow.ErrorJson);
+        return new BuyerWorkflowProgressResponse(workflow.Id, id, workflow.Status.ToString(), workflow.CurrentStage,
+            request.Status == BuyerRequestStatus.MATCH_FOUND, error,
+            workflow.Steps.OrderBy(x => x.Sequence).Select(step => new BuyerWorkflowStepProgress(
+                step.Stage, step.Status, step.ErrorJson is null ? null : "STEP_FAILED", step.RetryCount,
+                step.DurationMilliseconds, step.ToolCalls.Count)).ToArray(), workflow.StartedAtUtc, workflow.CompletedAtUtc);
+    }
+
+    private static string? SafeWorkflowFailureCode(string? errorJson)
+    {
+        if (errorJson is null) return null;
+        try
+        {
+            using var document = JsonDocument.Parse(errorJson);
+            return document.RootElement.ValueKind == JsonValueKind.Object &&
+                document.RootElement.TryGetProperty("code", out var code) && code.ValueKind == JsonValueKind.String
+                ? code.GetString() switch
+                {
+                    "WORKFLOW_TIMEOUT" => "WORKFLOW_TIMEOUT",
+                    "WORKFLOW_EXECUTION_FAILED" => "WORKFLOW_EXECUTION_FAILED",
+                    _ => "WORKFLOW_FAILED"
+                }
+                : "WORKFLOW_FAILED";
+        }
+        catch (JsonException)
+        {
+            return "WORKFLOW_FAILED";
+        }
+    }
+
     public async Task<RequirementPage> ListAsync(Guid? buyerId, RequirementQuery input, CancellationToken ct)
     {
         IQueryable<BuyerRequest> query = db.BuyerRequests.AsNoTracking().Include(x => x.ConstructionItemTemplate);

@@ -42,6 +42,12 @@ public sealed class RequirementsController(RequirementService service) : Control
     public Task<IActionResult> History(Guid id, [FromQuery] RequirementPageQuery query, CancellationToken ct) =>
         Handle(async actor => Ok(await service.HistoryAsync(id, actor, User.IsInRole("MANAGER"), query, ct)));
 
+    [HttpGet("{id:guid}/workflow-progress")]
+    [Authorize(Roles = "BUYER")]
+    [ProducesResponseType(typeof(BuyerWorkflowProgressResponse), 200)]
+    public Task<IActionResult> WorkflowProgress(Guid id, [FromQuery] Guid workflowId, CancellationToken ct) =>
+        Handle(async actor => Ok(await service.WorkflowProgressAsync(id, workflowId, actor, ct)));
+
     [HttpGet("analytics/summary")]
     [Authorize(Roles = "MANAGER")]
     [ProducesResponseType(typeof(RequirementAnalyticsSummary), 200)]

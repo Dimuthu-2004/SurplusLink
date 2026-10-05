@@ -195,7 +195,7 @@ class BackendToolsClient:
                     return res.json()
         except Exception as e:
             logger.warning(f"Tool get_seller_count failed: {e}")
-        return {"sellerCount": 15}  # Safe default fallback for tests
+        return {}
 
     async def get_category_count(self, user_context: Dict[str, Any]) -> Dict[str, Any]:
         url = f"{self.base_url.rstrip('/')}/api/ai-internal/tools/category-count"
@@ -206,7 +206,7 @@ class BackendToolsClient:
                     return res.json()
         except Exception as e:
             logger.warning(f"Tool get_category_count failed: {e}")
-        return {"categoryCount": 8}
+        return {}
 
     async def get_active_listing_count(self, user_context: Dict[str, Any]) -> Dict[str, Any]:
         url = f"{self.base_url.rstrip('/')}/api/ai-internal/tools/active-listing-count"
@@ -217,7 +217,7 @@ class BackendToolsClient:
                     return res.json()
         except Exception as e:
             logger.warning(f"Tool get_active_listing_count failed: {e}")
-        return {"activeListingCount": 42}
+        return {}
 
     async def get_marketplace_stats(self, user_context: Dict[str, Any]) -> Dict[str, Any]:
         url = f"{self.base_url.rstrip('/')}/api/ai-internal/tools/marketplace-stats"
@@ -228,5 +228,5 @@ class BackendToolsClient:
                     return res.json()
         except Exception as e:
             logger.warning(f"Tool get_marketplace_stats failed: {e}")
-        return {"sellerCount": 15, "categoryCount": 8, "activeListingCount": 42, "totalTransactions": 10, "totalMatches": 25}
+        return {}
 

@@ -38,10 +38,11 @@ PostgreSQL Database
 Set the following environment variables in your deployment environment or `.env` file:
 
 ```env
-# Groq LLM Provider Config
-GROQ_API_KEY=your_groq_api_key_here
-GROQ_MODEL=llama-3.3-70b-versatile
-GROQ_TIMEOUT=15.0
+# Gemini LLM Provider Config
+AI_PROVIDER=gemini
+GEMINI_API_KEY=your_gemini_api_key_here
+GEMINI_MODEL=gemini-3.8-flash
+GEMINI_TIMEOUT=15.0
 
 # Service Shared Secret Token
 AI_SERVICE_SHARED_TOKEN=development-shared-token-32-chars-long

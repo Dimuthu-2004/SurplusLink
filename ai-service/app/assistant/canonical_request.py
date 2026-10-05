@@ -53,6 +53,9 @@ class CanonicalUserRequest(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     resolved_address: Optional[str] = None
+    maximum_budget: Optional[float] = Field(default=None, gt=0)
+    deadline: Optional[str] = None
+    delivery_required: Optional[bool] = None
 
     preferences: Dict[str, str] = Field(default_factory=dict)
     estimation_context: Dict[str, Any] = Field(default_factory=dict)

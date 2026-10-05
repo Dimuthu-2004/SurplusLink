@@ -63,6 +63,9 @@ class ExtractedSlots(BaseModel):
     quantity: QuantitySlots | None = None
     preferences: dict[str, str] = Field(default_factory=dict)
     location_text: str | None = None
+    maximum_budget: float | None = Field(default=None, gt=0)
+    deadline: str | None = None
+    delivery_required: bool | None = None
     structured_location: dict[str, Any] | None = None
     location_source: str | None = None
     location_pending: bool = False
@@ -165,6 +168,9 @@ class RequirementDraft(BaseModel):
     latitude: float | None = None
     longitude: float | None = None
     resolved_address: str | None = None
+    maximum_budget: float | None = None
+    deadline: str | None = None
+    delivery_required: bool = True
     preferences: dict[str, str] = Field(default_factory=dict)
     notes: str | None = None
     missing_required_fields: list[str] = Field(default_factory=list)

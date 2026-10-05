@@ -111,6 +111,59 @@ public sealed class RequirementQueriesAndHistoryTests(RequirementsDatabase fixtu
     }
 
     [PostgresFact]
+    public async Task Workflow_progress_is_owned_and_bound_to_the_requested_workflow()
+    {
+        var category = await Category("Workflow progress " + Guid.NewGuid());
+        var request = await Seed(category.Id, "", DateTime.UtcNow.Date.AddDays(3), 100,
+            BuyerRequestStatus.MATCHING);
+        var workflowId = Guid.NewGuid();
+        var started = DateTime.UtcNow;
+        using (var db = fixture.Context())
+        {
+            db.AgentWorkflows.Add(new AgentWorkflow
+            {
+                Id = workflowId,
+                MaterialRequestId = request.Id,
+                Status = AgentWorkflowStatus.RUNNING,
+                CurrentStage = "MATCHING",
+                StartedAtUtc = started,
+                Steps =
+                {
+                    new AgentStep
+                    {
+                        Id = Guid.NewGuid(),
+                        Sequence = 1,
+                        Stage = "PLANNER",
+                        Status = "COMPLETED",
+                        StartedAtUtc = started,
+                        CompletedAtUtc = started.AddSeconds(1),
+                        DurationMilliseconds = 1000
+                    }
+                }
+            });
+            await db.SaveChangesAsync();
+        }
+
+        using var app = fixture.App();
+        using var buyer = fixture.Client(app, fixture.Buyer);
+        using var other = fixture.Client(app, fixture.OtherBuyer);
+        var route = $"/api/requirements/{request.Id}/workflow-progress?workflowId={workflowId}";
+        var response = await buyer.GetAsync(route);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var progress = (await response.Content.ReadFromJsonAsync<BuyerWorkflowProgressResponse>())!;
+        Assert.Equal(workflowId, progress.WorkflowId);
+        Assert.Equal(request.Id, progress.RequirementId);
+        Assert.Equal("RUNNING", progress.Status);
+        Assert.Equal("MATCHING", progress.CurrentStage);
+        Assert.False(progress.MatchResultsReady);
+        Assert.Equal("PLANNER", Assert.Single(progress.Steps).Stage);
+        Assert.Equal(1000, progress.Steps[0].DurationMilliseconds);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await buyer.GetAsync($"/api/requirements/{request.Id}/workflow-progress?workflowId={Guid.NewGuid()}")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await other.GetAsync(route)).StatusCode);
+    }
+
+    [PostgresFact]
     public async Task History_records_operations_and_status_pairs_and_enforces_access()
     {
         using var app = fixture.App();

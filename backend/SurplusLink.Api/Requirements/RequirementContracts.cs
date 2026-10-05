@@ -75,6 +75,12 @@ public sealed record RequirementResponse(
 
 public sealed record RequirementPage(IReadOnlyList<RequirementResponse> Items, int Total, int Page, int PageSize);
 public sealed record StartMatchingResponse(RequirementResponse Requirement, Guid WorkflowId);
+/// <summary>Buyer-safe, persisted execution view for the chat progress indicator.</summary>
+public sealed record BuyerWorkflowStepProgress(string Stage, string Status, string? ErrorCode,
+    int RetryCount, long? DurationMilliseconds, int ToolCallCount);
+public sealed record BuyerWorkflowProgressResponse(Guid WorkflowId, Guid RequirementId, string Status,
+    string CurrentStage, bool MatchResultsReady, string? ErrorCode,
+    IReadOnlyList<BuyerWorkflowStepProgress> Steps, DateTime StartedAtUtc, DateTime? CompletedAtUtc);
 public sealed record SelectMatchRequest(Guid MatchId, decimal? Quantity = null);
 
 public sealed class MatchAllocationRequest

@@ -3,7 +3,7 @@ import re
 from typing import Any, Dict, List, Optional
 
 from app.assistant.backend_tools import BackendToolsClient
-from app.assistant.llm_provider import GroqLLMProvider
+from app.assistant.llm_provider import GeminiLLMProvider
 from app.assistant.match_explanation_agent import MatchExplanationAgent
 from app.assistant.requirement_draft_agent import RequirementDraft, RequirementDraftAgent
 from app.rag.retriever import Citation, KnowledgeRetriever
@@ -16,11 +16,11 @@ class SurplusLinkAssistantEngine:
         self,
         rag_retriever: Optional[KnowledgeRetriever] = None,
         tools_client: Optional[BackendToolsClient] = None,
-        llm_provider: Optional[GroqLLMProvider] = None,
+        llm_provider: Optional[GeminiLLMProvider] = None,
     ):
         self.rag_retriever = rag_retriever or KnowledgeRetriever()
         self.tools_client = tools_client or BackendToolsClient()
-        self.llm_provider = llm_provider or GroqLLMProvider()
+        self.llm_provider = llm_provider or GeminiLLMProvider()
         self.draft_agent = RequirementDraftAgent()
         self.match_agent = MatchExplanationAgent()
 

@@ -26,6 +26,10 @@ def test_catalog_validator_package_arithmetic_and_dynamic_preferences():
         quantity=QuantitySlots(package_count=7, package_size=50, package_unit="kg"),
         preferences={"grade": "opc"},
         location_text="SLIIT laga",
+        structured_location={"latitude": 6.9147, "longitude": 79.9729},
+        maximum_budget=100000,
+        deadline="2030-01-01T00:00:00Z",
+        delivery_required=True,
     )
     draft, error = CatalogDraftValidator().build_or_update(slots, catalog)
     assert error is None
@@ -79,8 +83,15 @@ def _decision(intent, **kwargs):
 async def test_structured_state_continues_same_draft_after_an_unrelated_turn():
     engine = SurplusLinkSemanticAssistantEngine(tools_client=_Tools())
     engine.router = _Router([
-        _decision(Intent.CREATE_REQUIREMENT_DRAFT, extracted_slots=ExtractedSlots(item="Paint", quantity=QuantitySlots(value=6, unit="L"))),
-        _decision(Intent.CONTINUE_REQUIREMENT_DRAFT, extracted_slots=ExtractedSlots(location_text="Malabe"), response_language="si-Latn"),
+        _decision(Intent.CREATE_REQUIREMENT_DRAFT, extracted_slots=ExtractedSlots(
+            item="Paint", quantity=QuantitySlots(value=6, unit="L"),
+            maximum_budget=100000, deadline="2030-01-01T00:00:00Z",
+            delivery_required=True,
+        )),
+        _decision(Intent.CONTINUE_REQUIREMENT_DRAFT, extracted_slots=ExtractedSlots(
+            location_text="Malabe",
+            structured_location={"latitude": 6.9147, "longitude": 79.9729},
+        ), response_language="si-Latn"),
     ])
     first = await engine.process_chat({"user_id": "buyer"}, "conversation", "first turn")
     second = await engine.process_chat({"user_id": "buyer"}, "conversation", "follow up")

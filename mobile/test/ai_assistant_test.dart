@@ -28,6 +28,9 @@ void main() {
         'normalized_base_unit': 'L',
         'preferences': {'colour': 'Yellow'},
         'location_text': 'Negombo',
+        'maximum_budget': 100000,
+        'deadline': '2030-01-01T00:00:00Z',
+        'delivery_required': true,
         'notes': null,
         'missing_required_fields': [],
         'ready_for_review': true,
@@ -42,6 +45,9 @@ void main() {
       expect(draft.normalizedBaseUnit, equals('L'));
       expect(draft.preferences?['colour'], equals('Yellow'));
       expect(draft.locationText, equals('Negombo'));
+      expect(draft.maximumBudget, equals(100000));
+      expect(draft.deadline, equals('2030-01-01T00:00:00Z'));
+      expect(draft.deliveryRequired, isTrue);
       expect(draft.readyForReview, isTrue);
     });
 
@@ -58,5 +64,48 @@ void main() {
       expect(msg.role, equals(ChatRole.assistant));
       expect(msg.content, contains('how can I help'));
     });
+
+    test(
+      'workflow progress parses the persisted four-agent execution state',
+      () {
+        final progress = AiWorkflowProgress.fromJson({
+          'workflowId': 'workflow-1',
+          'requirementId': 'requirement-1',
+          'status': 'RUNNING',
+          'currentStage': 'LOGISTICS',
+          'matchResultsReady': false,
+          'errorCode': null,
+          'startedAtUtc': '2030-01-01T00:00:00Z',
+          'completedAtUtc': null,
+          'steps': [
+            {
+              'stage': 'PLANNER',
+              'status': 'COMPLETED',
+              'errorCode': null,
+              'retryCount': 0,
+              'durationMilliseconds': 120,
+              'toolCallCount': 0,
+            },
+            {
+              'stage': 'MATCHING',
+              'status': 'COMPLETED',
+              'errorCode': null,
+              'retryCount': 1,
+              'durationMilliseconds': 340,
+              'toolCallCount': 2,
+            },
+          ],
+        });
+
+        expect(progress.workflowId, 'workflow-1');
+        expect(progress.requirementId, 'requirement-1');
+        expect(progress.currentStage, 'LOGISTICS');
+        expect(progress.isRunning, isTrue);
+        expect(progress.matchResultsReady, isFalse);
+        expect(progress.steps, hasLength(2));
+        expect(progress.steps.last.toolCallCount, 2);
+        expect(progress.steps.last.retryCount, 1);
+      },
+    );
   });
 }

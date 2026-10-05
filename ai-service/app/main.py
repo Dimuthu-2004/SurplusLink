@@ -27,12 +27,10 @@ ENV_FILE = PROJECT_ROOT / ".env.local"
 if ENV_FILE.exists():
     load_dotenv(dotenv_path=ENV_FILE, override=True)
 
-# Temporary debug output.
-# Never print the actual API key.
-print("ENV file:", ENV_FILE)
-print("ENV exists:", ENV_FILE.exists())
-print("Groq configured:", bool(os.getenv("GROQ_API_KEY")))
-print("Groq model:", os.getenv("GROQ_MODEL"))
+import logging
+logger = logging.getLogger(__name__)
+if not os.getenv("GEMINI_API_KEY"):
+    logger.error("Gemini configuration error: GEMINI_API_KEY is missing. AI chat will safely report unavailable.")
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.exceptions import RequestValidationError

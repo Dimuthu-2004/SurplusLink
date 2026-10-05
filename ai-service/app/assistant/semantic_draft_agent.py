@@ -141,6 +141,12 @@ class CatalogDraftValidator:
             missing.append("package_size")
         if (not draft.location_text and not draft.location_source) or draft.location_pending:
             missing.append("delivery_location")
+        if draft.latitude is None or draft.longitude is None:
+            missing.append("delivery_coordinates")
+        if draft.maximum_budget is None:
+            missing.append("maximum_budget")
+        if not draft.deadline:
+            missing.append("deadline")
 
         draft.missing_required_fields = missing
         draft.ready_for_review = len(missing) == 0
@@ -275,6 +281,17 @@ class CatalogDraftValidator:
         elif current and current.notes:
             draft.notes = current.notes
 
+        if slots.maximum_budget is not None:
+            draft.maximum_budget = slots.maximum_budget
+        elif current and current.maximum_budget is not None:
+            draft.maximum_budget = current.maximum_budget
+        if slots.deadline:
+            draft.deadline = slots.deadline
+        elif current and current.deadline:
+            draft.deadline = current.deadline
+        if slots.delivery_required is not None:
+            draft.delivery_required = slots.delivery_required
+
     def next_question(self, draft: RequirementDraft, language: str = "en") -> str:
         if not draft.missing_required_fields:
             return "Your requirement details look complete! Would you like to review and submit?"
@@ -288,5 +305,11 @@ class CatalogDraftValidator:
             if draft.location_pending:
                 return f"Requesting your device location for {item} delivery..."
             return f"Where should the {item} be delivered?"
+        elif field == "delivery_coordinates":
+            return "Please share your device location so I can use the exact delivery point."
+        elif field == "maximum_budget":
+            return "What is your maximum budget in LKR?"
+        elif field == "deadline":
+            return "When do you need it delivered?"
         return f"Please provide details for {field}."
 

@@ -8,6 +8,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SurplusLink.Api.Data;
 using SurplusLink.Api.Models;
+using SurplusLink.Api.Requirements;
+using SurplusLink.Api.Workflows;
 
 namespace SurplusLink.Api.Controllers;
 
@@ -65,13 +67,22 @@ public sealed record AiChatResponse(
     [property: JsonPropertyName("suggested_actions")] IReadOnlyList<string> SuggestedActions
 );
 
+/// <summary>
+/// Explicit buyer confirmation handoff.  The chat UI sends the same validated
+/// requirement contract used by the legacy form; this endpoint only composes
+/// the established create, submit, and workflow-start operations.
+/// </summary>
+public sealed record AiConfirmRequirementRequest(SaveRequirementRequest Requirement);
+public sealed record AiConfirmRequirementResponse(RequirementResponse Requirement, Guid WorkflowId);
+
 [ApiController]
 [Route("api/ai")]
 [Authorize]
 public sealed class AiAssistantController(
     IHttpClientFactory httpClientFactory,
     IConfiguration config,
-    SurplusLinkDbContext db) : ControllerBase
+    SurplusLinkDbContext db,
+    RequirementService requirementService) : ControllerBase
 {
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
@@ -159,6 +170,34 @@ public sealed class AiAssistantController(
             ClientAction: null,
             SuggestedActions: new[] { "Find materials", "How does matching work?", "My transactions" }
         ));
+    }
+
+    [HttpPost("chat/confirm-requirement")]
+    [Authorize(Roles = "BUYER")]
+    [ProducesResponseType(typeof(AiConfirmRequirementResponse), StatusCodes.Status201Created)]
+    public async Task<ActionResult<AiConfirmRequirementResponse>> ConfirmRequirement(
+        [FromBody] AiConfirmRequirementRequest request, CancellationToken ct)
+    {
+        var subject = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+        if (!Guid.TryParse(subject, out var buyerId)) return Unauthorized();
+        try
+        {
+            // No chatbot-owned requirement state or alternate matching path:
+            // use the legacy form's authoritative application service exactly.
+            var created = await requirementService.CreateAsync(buyerId, request.Requirement, ct);
+            var submitted = await requirementService.SubmitAsync(created.Id, buyerId, ct);
+            var started = await requirementService.StartMatchingAsync(submitted.Id, buyerId, ct);
+            return Created($"/api/requirements/{started.Requirement.Id}",
+                new AiConfirmRequirementResponse(started.Requirement, started.WorkflowId));
+        }
+        catch (RequirementException exception)
+        {
+            return Problem(statusCode: exception.StatusCode, detail: exception.Message);
+        }
+        catch (RequirementWorkflowUnavailableException exception)
+        {
+            return Problem(statusCode: StatusCodes.Status503ServiceUnavailable, detail: exception.Message);
+        }
     }
 }
 

@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:lottie/lottie.dart';
 import 'package:mobile/core/api_client.dart';
 import 'package:mobile/location/location_lookup.dart';
 import 'package:mobile/requirements/requirement_gateway.dart';
 import 'package:mobile/requirements/requirement_location.dart';
-import 'package:mobile/screens/requirement_form_screen.dart';
 import 'package:mobile/widgets/surplus_link_logo.dart';
 
 import '../models/ai_assistant_models.dart';
@@ -66,6 +69,25 @@ final class AiAssistantService {
       timestamp: DateTime.now(),
     );
   }
+
+  Future<Map<String, dynamic>> confirmRequirement(
+    Map<String, dynamic> requirement,
+  ) => apiClient.postJson('/api/ai/chat/confirm-requirement', {
+    'requirement': requirement,
+  }, authenticated: true);
+
+  Future<AiWorkflowProgress> workflowProgress({
+    required String requirementId,
+    required String workflowId,
+  }) async {
+    final path = Uri(
+      path: '/api/requirements/$requirementId/workflow-progress',
+      queryParameters: {'workflowId': workflowId},
+    ).toString();
+    return AiWorkflowProgress.fromJson(
+      await apiClient.getJson(path, authenticated: true),
+    );
+  }
 }
 
 class AiAssistantScreen extends StatefulWidget {
@@ -90,6 +112,13 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
 
   String? _conversationId;
   bool _isLoading = false;
+  String? _activeRequirementId;
+  String? _activeWorkflowId;
+  AiWorkflowProgress? _workflowProgress;
+  String? _workflowProgressError;
+  Timer? _workflowPoll;
+  bool _isPollingWorkflow = false;
+  bool _isConfirmingRequirement = false;
 
   final List<String> _quickPrompts = const [
     "Find materials",
@@ -120,6 +149,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
   void dispose() {
     _inputController.dispose();
     _scrollController.dispose();
+    _workflowPoll?.cancel();
     super.dispose();
   }
 
@@ -238,25 +268,322 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
     }
   }
 
-  void _handleReviewRequirement(AiRequirementDraft draft) {
-    if (widget.requirementGateway == null) {
+  Future<void> _handleConfirmRequirement(AiRequirementDraft draft) async {
+    if (_activeWorkflowId != null || _isConfirmingRequirement) return;
+    if (draft.categoryId == null ||
+        draft.maximumBudget == null ||
+        draft.deadline == null ||
+        draft.latitude == null ||
+        draft.longitude == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Requirement creation service is unavailable.'),
+          content: Text(
+            'Please provide the remaining delivery, budget, and deadline details in chat.',
+          ),
         ),
       );
       return;
     }
+    try {
+      setState(() {
+        _isLoading = true;
+        _isConfirmingRequirement = true;
+      });
+      final response = await _assistantService.confirmRequirement({
+        'categoryId': draft.categoryId,
+        if (draft.templateId != null && draft.templateId != 'CUSTOM_ITEM')
+          'constructionItemTemplateId': draft.templateId,
+        'requiredQuantity': draft.normalizedQuantity,
+        'unit': draft.normalizedBaseUnit,
+        'maximumBudget': draft.maximumBudget,
+        'deadline': DateTime.parse(draft.deadline!).toUtc().toIso8601String(),
+        'latitude': draft.latitude,
+        'longitude': draft.longitude,
+        'notes': draft.notes ?? '',
+        'buyerPreferencesJson':
+            '{"deliveryRequired":${draft.deliveryRequired}}',
+        'inputMode': draft.inputMode,
+        'enteredQuantity': draft.enteredQuantity,
+        'enteredUnit': draft.enteredUnit,
+        if (draft.packageSize != null)
+          'preferredPackageSize': draft.packageSize,
+        if (draft.packageUnit != null) 'packageBaseUnit': draft.packageUnit,
+      });
+      if (!mounted) return;
+      final requirement = response['requirement'] as Map<String, dynamic>;
+      final requirementId = requirement['id'] as String?;
+      final workflowId = response['workflowId'] as String?;
+      if (requirementId == null || workflowId == null) {
+        throw const FormatException(
+          'The workflow confirmation response was incomplete.',
+        );
+      }
+      setState(() {
+        _isLoading = false;
+        _isConfirmingRequirement = false;
+        _activeRequirementId = requirementId;
+        _activeWorkflowId = workflowId;
+        _workflowProgress = null;
+        _workflowProgressError = null;
+        _messages.add(
+          AiChatMessage(
+            id: 'workflow-$workflowId',
+            conversationId: _conversationId ?? '',
+            role: ChatRole.assistant,
+            content: 'Your requirement is confirmed. I’m checking the real workflow status here.',
+            timestamp: DateTime.now(),
+          ),
+        );
+      });
+      _scrollToBottom();
+      await _loadWorkflowProgress();
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _isConfirmingRequirement = false;
+        });
+        _messages.add(
+          AiChatMessage(
+            id: DateTime.now().millisecondsSinceEpoch.toString(),
+            conversationId: _conversationId ?? '',
+            role: ChatRole.assistant,
+            content: 'I could not verify that matching started. Check your requirements before trying again to avoid creating a duplicate.',
+            timestamp: DateTime.now(),
+            isError: true,
+          ),
+        );
+        _scrollToBottom();
+      }
+    }
+  }
 
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => RequirementFormScreen(
-          gateway: widget.requirementGateway!,
-          initialCategoryId: draft.categoryId,
-          aiPrefill: AiRequirementPrefill(draft: draft),
+  Future<void> _loadWorkflowProgress() async {
+    final requirementId = _activeRequirementId;
+    final workflowId = _activeWorkflowId;
+    if (_isPollingWorkflow || requirementId == null || workflowId == null) {
+      return;
+    }
+    _isPollingWorkflow = true;
+    _workflowPoll?.cancel();
+    try {
+      final progress = await _assistantService.workflowProgress(
+        requirementId: requirementId,
+        workflowId: workflowId,
+      );
+      if (!mounted) return;
+      setState(() {
+        _workflowProgress = progress;
+        _workflowProgressError = null;
+      });
+      if (progress.matchResultsReady) {
+        _workflowPoll?.cancel();
+        context.go('/requirements/$requirementId/matches');
+        return;
+      }
+      if (progress.hasFailed || !progress.isRunning) {
+        _workflowPoll?.cancel();
+        return;
+      }
+      _workflowPoll = Timer(const Duration(seconds: 3), _loadWorkflowProgress);
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _workflowProgressError = 'Workflow status is temporarily unavailable. Retry to check the backend status.',
+        );
+      }
+    } finally {
+      _isPollingWorkflow = false;
+    }
+  }
+
+  Widget _buildWorkflowProgress(ThemeData theme) {
+    final progress = _workflowProgress;
+    final isRunning = progress?.isRunning ?? progress == null;
+    final workflowTitle = progress == null
+        ? 'Checking workflow status...'
+        : progress.hasFailed
+        ? 'Matching could not complete safely'
+        : progress.currentStage == 'QUEUED'
+        ? 'Waiting for workflow execution...'
+        : progress.isRunning
+        ? 'Finding the best options...'
+        : 'Workflow status';
+    final stages = const [
+      ('PLANNER', 'Requirement Planner', 'Preparing the confirmed requirement'),
+      ('MATCHING', 'Material Matching', 'Checking actual seller listings'),
+      ('LOGISTICS', 'Logistics', 'Checking delivery feasibility'),
+      ('VALIDATION', 'Validation', 'Applying stock and business rules'),
+    ];
+
+    return Card(
+      key: const Key('chat-workflow-progress'),
+      margin: const EdgeInsets.only(left: 40, right: 8, bottom: 16),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                if (isRunning && !MediaQuery.disableAnimationsOf(context))
+                  SizedBox(
+                    width: 38,
+                    height: 38,
+                    child: Lottie.asset(
+                      'assets/animations/workflow-running.json',
+                      repeat: true,
+                    ),
+                  )
+                else
+                  Icon(
+                    progress?.hasFailed == true
+                        ? Icons.error_outline
+                        : Icons.track_changes,
+                    color: progress?.hasFailed == true
+                        ? theme.colorScheme.error
+                        : theme.colorScheme.primary,
+                  ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    workflowTitle,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (progress != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Workflow ${progress.workflowId}',
+                style: theme.textTheme.labelSmall,
+              ),
+              const SizedBox(height: 8),
+              ...stages.map((stage) {
+                AiWorkflowStepProgress? step;
+                for (final item in progress.steps) {
+                  if (item.stage == stage.$1) {
+                    step = item;
+                    break;
+                  }
+                }
+                final state = _workflowStageState(progress, stage.$1, step);
+                final icon = switch (state) {
+                  'COMPLETED' => Icons.check_circle,
+                  'RUNNING' => Icons.hourglass_top,
+                  'FAILED' => Icons.error,
+                  _ => Icons.radio_button_unchecked,
+                };
+                final color = switch (state) {
+                  'COMPLETED' => Colors.green,
+                  'FAILED' => theme.colorScheme.error,
+                  'RUNNING' => theme.colorScheme.primary,
+                  _ => theme.colorScheme.outline,
+                };
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(icon, size: 18, color: color),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(stage.$2),
+                            Text(
+                              _workflowStageDetail(state, step, stage.$3),
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+            ],
+            if (_workflowProgressError != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                _workflowProgressError!,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.error,
+                ),
+              ),
+              TextButton.icon(
+                onPressed: _isPollingWorkflow ? null : _loadWorkflowProgress,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Retry status'),
+              ),
+            ],
+            if (progress?.hasFailed == true) ...[
+              const SizedBox(height: 8),
+              Text(
+                progress?.errorCode == 'WORKFLOW_TIMEOUT'
+                    ? 'The workflow timed out and could not complete safely.'
+                    : 'The workflow failed. No match results are being reported as ready.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.error,
+                ),
+              ),
+              TextButton(
+                onPressed: () => context.go(
+                  '/requirements/${progress!.requirementId}/status',
+                  extra: progress.workflowId,
+                ),
+                child: const Text('View requirement status'),
+              ),
+            ],
+            if (progress == null && _workflowProgressError == null)
+              const Padding(
+                padding: EdgeInsets.only(top: 8),
+                child: LinearProgressIndicator(),
+              ),
+          ],
         ),
       ),
     );
+  }
+
+  static String _workflowStageState(
+    AiWorkflowProgress progress,
+    String stage,
+    AiWorkflowStepProgress? step,
+  ) {
+    if (step?.status == 'COMPLETED') return 'COMPLETED';
+    if (step?.status == 'FAILED' || step?.errorCode != null) return 'FAILED';
+    if (stage == progress.currentStage && progress.isRunning) return 'RUNNING';
+    return 'WAITING';
+  }
+
+  static String _workflowStageDetail(
+    String state,
+    AiWorkflowStepProgress? step,
+    String waitingDescription,
+  ) {
+    if (state == 'FAILED') return 'Could not complete safely';
+    if (state == 'WAITING') return 'Waiting';
+    if (state == 'RUNNING') return waitingDescription;
+    final details = <String>['Completed'];
+    if (step != null && step.toolCallCount > 0) {
+      details.add('${step.toolCallCount} tool calls');
+    }
+    final retries = step?.retryCount ?? 0;
+    if (retries > 0) {
+      details.add('$retries retries');
+    }
+    final duration = step?.durationMilliseconds;
+    if (duration != null) {
+      details.add('${(duration / 1000).toStringAsFixed(1)} s');
+    }
+    return details.join(' · ');
   }
 
   @override
@@ -298,12 +625,21 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
             child: ListView.builder(
               controller: _scrollController,
               padding: const EdgeInsets.all(16),
-              itemCount: _messages.length + (_isLoading ? 1 : 0),
+              itemCount:
+                  _messages.length +
+                  (_isLoading ? 1 : 0) +
+                  (_activeWorkflowId == null ? 0 : 1),
               itemBuilder: (context, index) {
-                if (index == _messages.length && _isLoading) {
+                if (index < _messages.length) {
+                  return _buildMessageBubble(_messages[index], theme);
+                }
+                if (_isLoading && index == _messages.length) {
                   return _buildTypingIndicator(theme);
                 }
-                return _buildMessageBubble(_messages[index], theme);
+                if (_activeWorkflowId != null) {
+                  return _buildWorkflowProgress(theme);
+                }
+                return const SizedBox.shrink();
               },
             ),
           ),
@@ -428,7 +764,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
             _CollapsibleRequirementDraftCard(
               draft: msg.draft!,
               theme: theme,
-              onReview: () => _handleReviewRequirement(msg.draft!),
+              onReview: () => _handleConfirmRequirement(msg.draft!),
             ),
         ],
       ),
@@ -663,6 +999,14 @@ class __CollapsibleRequirementDraftCardState
                     draft.locationText ?? 'Not specified',
                     theme,
                   ),
+                  if (draft.maximumBudget != null)
+                    _buildDraftRow(
+                      'Maximum budget',
+                      'LKR ${draft.maximumBudget!.toStringAsFixed(2)}',
+                      theme,
+                    ),
+                  if (draft.deadline != null)
+                    _buildDraftRow('Needed by', draft.deadline!, theme),
                   if (draft.missingRequiredFields.isNotEmpty) ...[
                     const SizedBox(height: 6),
                     Text(
@@ -679,7 +1023,7 @@ class __CollapsibleRequirementDraftCardState
                       child: ElevatedButton.icon(
                         onPressed: widget.onReview,
                         icon: const Icon(Icons.rate_review_outlined),
-                        label: const Text('Review Requirement'),
+                        label: const Text('Yes, find matches'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: theme.colorScheme.primary,
                           foregroundColor: theme.colorScheme.onPrimary,
