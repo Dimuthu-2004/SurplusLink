@@ -16,6 +16,7 @@ import 'package:mobile/notifications/notification_controller.dart';
 import 'package:mobile/theme/surplus_link_theme.dart';
 import 'package:mobile/widgets/role_navigation.dart';
 import 'package:mobile/widgets/surplus_link_logo.dart';
+import 'package:mobile/widgets/role_avatar.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({
@@ -274,20 +275,7 @@ class _Hero extends StatelessWidget {
                       key: const Key('home-profile-button'),
                       onTap: onProfile,
                       borderRadius: BorderRadius.circular(14),
-                      child: SizedBox(
-                        width: 46,
-                        height: 46,
-                        child: Center(
-                          child: Text(
-                            _initial(user),
-                            style: const TextStyle(
-                              color: SurplusLinkTheme.slate900,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                        ),
-                      ),
+                      child: RoleAvatar(user: user, size: 46),
                     ),
                   ),
                 ],
@@ -330,8 +318,6 @@ class _Hero extends StatelessWidget {
   static String _name(AppUser u) => u.fullName?.trim().isNotEmpty == true
       ? u.fullName!.trim()
       : u.email.split('@').first;
-  static String _initial(AppUser u) =>
-      _name(u).isEmpty ? '?' : _name(u)[0].toUpperCase();
 }
 
 class _RolePill extends StatelessWidget {

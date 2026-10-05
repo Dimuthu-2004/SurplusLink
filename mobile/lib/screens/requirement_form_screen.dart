@@ -13,7 +13,6 @@ import 'package:mobile/materials/construction_item_template_models.dart';
 
 import 'dart:convert';
 
-import 'package:mobile/l10n/app_localizations.dart';
 
 import '../models/ai_assistant_models.dart';
 
@@ -504,9 +503,7 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              AppLocalizations.of(context)?.draftSaved ?? 'Draft saved',
-            ),
+            content: const Text('Draft saved'),
           ),
         );
       }
@@ -524,13 +521,12 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final text = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(
         title: Text(
           _editing
               ? 'Edit Requirement'
-              : text?.createRequirement ?? 'Create Requirement',
+              : 'Create Requirement',
         ),
         leading: const RequirementBackButton(),
       ),
@@ -570,7 +566,7 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
                       const SizedBox(height: 16),
                       if (_templates.isNotEmpty) ...[
                         Text(
-                          text?.whatDoYouNeed ?? 'What do you need?',
+                          'What do you need?',
                           style: Theme.of(context).textTheme.titleMedium,
                         ),
                         const SizedBox(height: 6),
@@ -578,9 +574,7 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
                           key: const Key('requirement-item-picker'),
                           icon: const Icon(Icons.search),
                           label: Text(
-                            _selectedTemplate?.name ??
-                                text?.searchConstructionItems ??
-                                'Search construction items...',
+                            _selectedTemplate?.name ?? 'Search construction items...',
                           ),
                           onPressed: _saving
                               ? null
@@ -597,7 +591,7 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
                           const SizedBox(height: 8),
                           InputDecorator(
                             decoration: InputDecoration(
-                              labelText: text?.category ?? 'Category',
+                              labelText: 'Category',
                             ),
                             child: Text(_selectedTemplate!.categoryName),
                           ),
@@ -622,7 +616,7 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
                               .isNotEmpty) ...[
                         const SizedBox(height: 4),
                         Text(
-                          text?.preferencesOptional ?? 'Preferences (optional)',
+                          'Preferences (optional)',
                           style: Theme.of(context).textTheme.titleMedium,
                         ),
                         const Text('Leave blank when any option is suitable.'),
@@ -642,10 +636,7 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
                                             : null),
                                     isExpanded: true,
                                     decoration: InputDecoration(
-                                      labelText: field.labelFor(
-                                        Localizations.localeOf(context)
-                                            .languageCode,
-                                      ),
+                                      labelText: field.labelFor('en'),
                                       helperText: field.helper,
                                     ),
                                     hint: const Text('Any / No preference'),
@@ -654,8 +645,7 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
                                         DropdownMenuItem<String>(
                                           value: '__ANY__',
                                           child: Text(
-                                            text?.anyPreference ??
-                                                'Any / No preference',
+                                            'Any / No preference',
                                           ),
                                         ),
                                       ...field.options.map(
@@ -680,10 +670,7 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
                                     initialValue: _preferences[field.id]
                                         ?.toString(),
                                     decoration: InputDecoration(
-                                      labelText: field.labelFor(
-                                        Localizations.localeOf(context)
-                                            .languageCode,
-                                      ),
+                                      labelText: field.labelFor('en'),
                                       helperText:
                                           field.helper ?? field.placeholder,
                                     ),
@@ -771,7 +758,7 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
                               ? 'Saving…'
                               : _editing
                               ? 'Save changes'
-                              : text?.saveDraft ?? 'Save draft',
+                              : 'Save draft',
                         ),
                       ),
                       const SizedBox(height: 24),

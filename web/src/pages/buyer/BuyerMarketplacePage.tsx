@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { fetchItemTemplates, type ConstructionItemTemplate } from '../../api/constructionItemTemplatesApi';
 import { fetchMarketplaceListings, fetchMaterialCategories, type MaterialCategoryItem, type MaterialListingItem, type MarketplaceQueryParams } from '../../api/buyerMarketplaceApi';
-import { catalogLabel, useLanguage } from '../../i18n/LanguageContext';
 import { BuyerListingCard } from './BuyerListingCard';
 import { MobileHandoffModal } from './MobileHandoffModal';
 import './buyerMarketplace.css';
@@ -10,7 +9,6 @@ import './buyerMarketplace.css';
 type CategoryPreview = { count: number; image?: string };
 
 export function BuyerMarketplacePage() {
-  const { language, t } = useLanguage();
   const [params, setParams] = useSearchParams();
   const [categories, setCategories] = useState<MaterialCategoryItem[]>([]);
   const [templates, setTemplates] = useState<ConstructionItemTemplate[]>([]);
@@ -128,9 +126,9 @@ export function BuyerMarketplacePage() {
       <h1 className="sr-only">Buyer home</h1>
 
       <section className="marketplace-discovery-header">
-        <p className="marketplace-kicker">{t('marketplace')}</p>
-        <h1>{selectedTemplate ? catalogLabel(selectedTemplate.name, language) : selectedCategory ? catalogLabel(selectedCategory.name, language) : t('marketplace')}</h1>
-        <p>{t('findMaterials')}</p>
+        <p className="marketplace-kicker">Marketplace</p>
+        <h1>{selectedTemplate?.name ?? selectedCategory?.name ?? 'Marketplace'}</h1>
+        <p>Find surplus construction materials</p>
         <label className="marketplace-discovery-search">
           <span aria-hidden="true">⌕</span>
           <input
@@ -139,8 +137,8 @@ export function BuyerMarketplacePage() {
               setSearch(e.target.value);
               setPage(1);
             }}
-            placeholder={t('searchMaterials')}
-            aria-label={t('searchMaterials')}
+            placeholder="Search materials..."
+            aria-label="Search materials"
           />
         </label>
       </section>
@@ -162,7 +160,7 @@ export function BuyerMarketplacePage() {
               className={`category-chip-btn ${categoryId === cat.name || categoryId === cat.id ? 'active' : ''}`}
               onClick={() => chooseCategory(cat.name)}
             >
-              {catalogLabel(cat.name, language)}
+              {cat.name}
             </button>
           ))}
         </div>
@@ -179,7 +177,7 @@ export function BuyerMarketplacePage() {
               className={templateId === template.id ? 'active' : ''}
               onClick={() => { setTemplateId(template.id); setPage(1); }}
             >
-              {catalogLabel(template.name, language)}
+              {template.name}
             </button>
           ))}
         </nav>
@@ -187,16 +185,16 @@ export function BuyerMarketplacePage() {
 
       {/* Controls & Filter Bar */}
       <div className="marketplace-controls-bar">
-        <span>{t('filters')}</span>
+        <span>Filters</span>
         <select
           value={condition}
           onChange={(e) => {
             setCondition(e.target.value);
             setPage(1);
           }}
-          aria-label={t('allConditions')}
+          aria-label="All conditions"
         >
-          <option value="">{t('allConditions')}</option>
+          <option value="">All conditions</option>
           <option value="NEW">New</option>
           <option value="EXCELLENT">Excellent</option>
           <option value="GOOD">Good</option>
@@ -211,17 +209,17 @@ export function BuyerMarketplacePage() {
             setPage(1);
           }}
         >
-          <option value="createdAt_desc">{t('sortNewest')}</option>
+          <option value="createdAt_desc">Newest listings</option>
           <option value="unitPrice_asc">Price: low to high</option>
           <option value="unitPrice_desc">Price: high to low</option>
         </select>
         <button type="button" className="button button-secondary" onClick={() => setShowQr(true)}>
-          {t('findBestMatch')}
+          Find my best match with AI
         </button>
       </div>
 
       {loading ? (
-        <p>{t('loading')}</p>
+        <p>Loading...</p>
       ) : error ? (
         <p className="field-error">{error}</p>
       ) : listings.length ? (
@@ -232,7 +230,7 @@ export function BuyerMarketplacePage() {
         </div>
       ) : (
         <div className="marketplace-empty-state">
-          <h2>{t('noListings')}</h2>
+          <h2>No active listings found.</h2>
         </div>
       )}
 
@@ -253,10 +251,10 @@ export function BuyerMarketplacePage() {
       {showPrompt && (
         <div className="marketplace-ai-prompt" role="dialog" aria-modal="true">
           <div>
-            <h2>{t('handoffTitle')}</h2>
-            <p>{t('handoffDescription')}</p>
+            <h2>Want the best match for your requirement?</h2>
+            <p>SurplusLink AI compares available materials using your required quantity, budget, location and delivery needs.</p>
             <button className="button button-secondary" onClick={() => setShowPrompt(false)}>
-              {t('notNow')}
+              Not now
             </button>
             <button
               className="button button-primary"
@@ -265,7 +263,7 @@ export function BuyerMarketplacePage() {
                 setShowQr(true);
               }}
             >
-              {t('continueQr')}
+              Show QR code
             </button>
           </div>
         </div>
@@ -276,7 +274,7 @@ export function BuyerMarketplacePage() {
           isOpen={showQr}
           onClose={() => setShowQr(false)}
           categoryId={handoffCategory.id}
-          categoryName={catalogLabel(selectedTemplate?.name ?? handoffCategory.name, language)}
+          categoryName={selectedTemplate?.name ?? handoffCategory.name}
         />
       )}
     </div>

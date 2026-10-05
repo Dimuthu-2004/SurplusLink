@@ -1,8 +1,6 @@
 import 'package:mobile/widgets/dashboard_back_button.dart';
 
 import 'dart:convert';
-import 'package:mobile/l10n/app_localizations.dart';
-import 'package:mobile/l10n/app_localizations_en.dart';
 import 'dart:typed_data';
 
 import 'package:mobile/categories/category_dropdown.dart';
@@ -71,18 +69,17 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
   String? _savedDraftId;
   final Map<String, String> _fieldErrors = {};
   final Map<String, String> _rejectedValues = {};
-  AppLocalizations get _text => AppLocalizations.of(context) ?? AppLocalizationsEn();
   String? _fieldError(String field, Object? value) {
     if (_rejectedValues[field] != value.toString()) {
       _fieldErrors.remove(field);
       _rejectedValues.remove(field);
     }
     return switch (_fieldErrors[field]) {
-      'REQUIRED' => _text.requiredField,
-      'PACKAGE_SIZE_REQUIRED' => _text.packageSizeRequired,
-      'UNIT_INVALID' => _text.invalidMeasurement,
-      'WHOLE_NUMBER_REQUIRED' => _text.wholeNumberRequired,
-      'DATE_MUST_BE_FUTURE' => _text.futureDateRequired,
+      'REQUIRED' => 'This field is required.',
+      'PACKAGE_SIZE_REQUIRED' => 'Enter a package size.',
+      'UNIT_INVALID' => 'Choose a valid measurement.',
+      'WHOLE_NUMBER_REQUIRED' => 'Enter a whole number.',
+      'DATE_MUST_BE_FUTURE' => 'Choose a future date.',
       final message => message,
     };
   }
@@ -583,17 +580,13 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
         if (submit) {
           await showSubmittedAnimationOverlay(
             context,
-            title: widget.isEditing
-                ? _text.listingResubmitted
-                : _text.listingSubmitted,
-            message: widget.isEditing
-                ? _text.listingResubmittedMessage
-                : _text.listingSubmittedMessage,
+            title: widget.isEditing ? 'Listing resubmitted' : 'Listing submitted',
+            message: widget.isEditing ? 'Your listing was resubmitted for manager review.' : 'Your material was sent for manager review.',
           );
           if (!mounted) return;
           context.go('/materials');
         } else {
-          _showMessage(_text.draftSaved);
+          _showMessage('Draft saved');
           if (widget.isEditing && context.canPop()) {
             context.pop(true);
           } else {
@@ -709,13 +702,13 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
         Expanded(child: OutlinedButton(
           key: const Key('save-material'),
           onPressed: _isSaving || _mediaBusy || _locating ? null : () => _save(),
-          child: Text(_text.saveDraft),
+          child: const Text('Save draft'),
         )),
         const SizedBox(width: 12),
         Expanded(child: FilledButton(
           key: const Key('submit-material'),
           onPressed: _isSaving || _mediaBusy || _locating ? null : () => _save(submit: true),
-          child: Text(widget.isEditing ? 'Resubmit for review' : _text.submitListing),
+          child: Text(widget.isEditing ? 'Resubmit for review' : 'Submit listing'),
         )),
       ]),
     ),
@@ -870,14 +863,14 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                               }),
                       ),
                       const SizedBox(height: 12),
-                      Text(_text.howSold, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                      const Text('How is this sold?', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
                       const SizedBox(height: 6),
                       SegmentedButton<String>(
                         key: const Key('custom-sale-type-toggle'),
                         segments: [
-                          ButtonSegment(value: 'PIECE', label: Text(_text.piecesUnits)),
-                          ButtonSegment(value: 'PACKAGE', label: Text(_text.packages)),
-                          ButtonSegment(value: 'CONTINUOUS', label: Text(_text.bulkQuantity)),
+                          const ButtonSegment(value: 'PIECE', label: Text('Pieces / Units')),
+                          const ButtonSegment(value: 'PACKAGE', label: Text('Packages')),
+                          const ButtonSegment(value: 'CONTINUOUS', label: Text('Bulk quantity')),
                         ],
                         selected: {_customSaleType},
                         onSelectionChanged: (val) {
@@ -893,21 +886,21 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                         DropdownButtonFormField<String>(
                           key: const Key('custom-package-type'),
                           initialValue: _packageType.toUpperCase(),
-                          decoration: InputDecoration(labelText: '${_text.packageType} *'),
+                          decoration: const InputDecoration(labelText: 'Package type *'),
                           items: const ['BAG', 'BOX', 'CAN', 'BOTTLE', 'CARTRIDGE', 'ROLL', 'BUNDLE', 'PACK', 'SACK', 'CARTON', 'OTHER']
                               .map((v) => DropdownMenuItem(value: v, child: Text(v.toLowerCase()))).toList(),
                           onChanged: (v) => setState(() => _packageType = v ?? 'OTHER'),
                         ),
                         if (_packageType == 'OTHER') TextFormField(
                           initialValue: _specs['packageName'] as String?,
-                          decoration: InputDecoration(labelText: '${_text.customPackageName} *'),
+                          decoration: const InputDecoration(labelText: 'Custom package name *'),
                           onChanged: (v) => _specs['packageName'] = v,
                           validator: (v) => _requiredLength(v, 'Package name', 40),
                         ),
                         DropdownButtonFormField<String>(
                           key: const Key('custom-base-unit'),
                           initialValue: _unit ?? 'kg',
-                          decoration: InputDecoration(labelText: '${_text.baseMeasurement} *'),
+                          decoration: const InputDecoration(labelText: 'Base measurement *'),
                           items: const ['kg', 'g', 'L', 'ml', 'm', 'sqm', 'm3', 'piece']
                               .map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(),
                           onChanged: (v) => setState(() => _unit = v),

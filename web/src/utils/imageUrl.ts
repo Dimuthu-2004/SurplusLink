@@ -2,6 +2,19 @@ import { environment } from '../config/environment';
 
 export const FALLBACK_MATERIAL_IMAGE = '/images/placeholder-material.svg';
 
+/** Resolves a persisted user-photo path without substituting a fake image. */
+export function resolveProfilePhotoUrl(photoUrl?: string | null): string | null {
+  if (!photoUrl || typeof photoUrl !== 'string' || !photoUrl.trim()) return null;
+  const trimmed = photoUrl.trim();
+  if (trimmed.startsWith('file:')) return null;
+  if (/^https?:\/\//i.test(trimmed) || trimmed.startsWith('data:')) return trimmed;
+  try {
+    return new URL(trimmed, environment.apiBaseUrl).toString();
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Resolves an image URL safely against the backend API base URL.
  * Handles:

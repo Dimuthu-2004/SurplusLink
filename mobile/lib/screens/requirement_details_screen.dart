@@ -6,7 +6,6 @@ import 'package:mobile/core/api_exception.dart';
 import 'package:mobile/requirements/requirement_gateway.dart';
 import 'package:mobile/requirements/requirement_models.dart';
 import 'package:mobile/requirements/requirement_widgets.dart';
-import 'package:mobile/l10n/app_localizations.dart';
 import 'package:mobile/widgets/submission_animation_overlays.dart';
 
 class RequirementDetailsScreen extends StatefulWidget {
@@ -126,11 +125,10 @@ class _RequirementDetailsScreenState extends State<RequirementDetailsScreen> {
           final row = await widget.gateway.submit(widget.requirementId);
           if (!mounted) return;
           setState(() => _row = row);
-          final text = AppLocalizations.of(context);
           await showSubmittedAnimationOverlay(
             context,
-            title: text?.requirementSubmitted ?? 'Requirement submitted',
-            message: text?.requirementSubmittedMessage ?? 'Your requirement is ready for matching.',
+            title: 'Requirement submitted',
+            message: 'Your requirement is ready for matching.',
           );
           if (!mounted) return;
         case 'start':

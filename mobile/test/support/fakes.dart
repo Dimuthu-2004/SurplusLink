@@ -101,6 +101,9 @@ final class FakeAuthGateway implements AuthGateway {
   );
 
   @override
+  Future<String> uploadProfilePhoto(List<int> bytes) async => '/api/profile-photos/test/photo.png';
+
+  @override
   Future<void> logout() async {
     logoutCalled = true;
   }

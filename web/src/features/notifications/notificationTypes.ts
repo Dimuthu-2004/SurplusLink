@@ -12,8 +12,8 @@ export interface NotificationItem {
   entityId?: string | null;
   actionRoute?: string | null;
   isRead: boolean;
-  createdAtUtc: string;
-  readAtUtc?: string | null;
+  createdAt: string;
+  readAt?: string | null;
 }
 
 export interface NotificationPageResponse {

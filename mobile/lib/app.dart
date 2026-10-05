@@ -1,3 +1,4 @@
+
 import 'dart:async';
 
 import 'package:mobile/widgets/startup_transition.dart';
@@ -18,8 +19,6 @@ import 'package:mobile/requirements/requirement_location.dart';
 import 'package:mobile/location/location_lookup.dart';
 import 'package:mobile/theme/surplus_link_theme.dart';
 import 'package:mobile/core/api_client.dart';
-import 'package:mobile/l10n/app_localizations.dart';
-import 'package:mobile/l10n/locale_controller.dart';
 import 'package:mobile/notifications/notification_controller.dart';
 import 'package:mobile/notifications/notification_gateway.dart';
 
@@ -37,7 +36,6 @@ class SurplusLinkApp extends StatefulWidget {
     this.addressSearch,
     this.notificationGateway,
     this.initialLocation = AppRoutes.splash,
-    this.localeController,
     super.key,
   });
 
@@ -53,7 +51,6 @@ class SurplusLinkApp extends StatefulWidget {
   final AddressSearch? addressSearch;
   final NotificationGateway? notificationGateway;
   final String initialLocation;
-  final LocaleController? localeController;
 
   @override
   State<SurplusLinkApp> createState() => _SurplusLinkAppState();
@@ -61,7 +58,6 @@ class SurplusLinkApp extends StatefulWidget {
 
 class _SurplusLinkAppState extends State<SurplusLinkApp> {
   late final GoRouter _router;
-  late final LocaleController _localeController;
   late int _modeRevision;
   late String _routePath;
   late final NotificationController? _notificationController;
@@ -72,8 +68,6 @@ class _SurplusLinkAppState extends State<SurplusLinkApp> {
     _notificationController = widget.notificationGateway == null
         ? null
         : NotificationController(gateway: widget.notificationGateway!);
-    _localeController = widget.localeController ?? LocaleController();
-    if (widget.localeController == null) unawaited(_localeController.load());
     _router = createAppRouter(
       authController: widget.authController,
       apiClient: widget.apiClient,
@@ -115,15 +109,6 @@ class _SurplusLinkAppState extends State<SurplusLinkApp> {
     if (next != _routePath && mounted) setState(() => _routePath = next);
   }
 
-  bool get _showLanguageSelector => {
-    AppRoutes.login,
-    AppRoutes.register,
-    AppRoutes.verifyEmail,
-    AppRoutes.forgotPassword,
-    AppRoutes.home,
-    '/profile',
-  }.contains(_routePath);
-
   @override
   void dispose() {
     widget.authController.marketplace.removeListener(_modeChanged);
@@ -135,13 +120,8 @@ class _SurplusLinkAppState extends State<SurplusLinkApp> {
   }
 
   @override
-  Widget build(BuildContext context) => AnimatedBuilder(
-    animation: _localeController,
-    builder: (context, _) => MaterialApp.router(
+  Widget build(BuildContext context) => MaterialApp.router(
     title: 'SurplusLink',
-    locale: _localeController.locale,
-    supportedLocales: AppLocalizations.supportedLocales,
-    localizationsDelegates: AppLocalizations.localizationsDelegates,
     debugShowCheckedModeBanner: false,
     theme: SurplusLinkTheme.light,
     routerConfig: _router,
@@ -156,8 +136,6 @@ class _SurplusLinkAppState extends State<SurplusLinkApp> {
             child: child!,
           ),
         ),
-        if (_showLanguageSelector)
-          Positioned(top: 2, left: 2, child: SafeArea(child: LanguageSelector(controller: _localeController))),
       ]),
       );
       final controller = _notificationController;
@@ -165,5 +143,5 @@ class _SurplusLinkAppState extends State<SurplusLinkApp> {
           ? content
           : NotificationScope(controller: controller, child: content);
     },
-  ));
+  );
 }

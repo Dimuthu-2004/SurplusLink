@@ -6,7 +6,7 @@ import { profileApi } from '../features/profile/profileApi';
 import { PageHeader } from '../components/DesignSystem';
 
 export function ProfileSettingsPage() {
-  const { user, logout } = useAuth();
+  const { user, logout, updateCurrentUser } = useAuth();
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -47,9 +47,7 @@ export function ProfileSettingsPage() {
       const res = await profileApi.uploadPhoto(file);
       setCurrentPhoto(res.profilePhotoUrl);
       setPhotoSuccess('Profile photo updated successfully.');
-      if (user) {
-        user.profilePhotoUrl = res.profilePhotoUrl;
-      }
+      updateCurrentUser({ ...user, profilePhotoUrl: res.profilePhotoUrl });
     } catch (err) {
       setPhotoError(err instanceof Error ? err.message : 'Failed to upload photo.');
     } finally {
@@ -67,9 +65,7 @@ export function ProfileSettingsPage() {
       await profileApi.deletePhoto();
       setCurrentPhoto(null);
       setPhotoSuccess('Profile photo removed.');
-      if (user) {
-        user.profilePhotoUrl = null;
-      }
+      updateCurrentUser({ ...user, profilePhotoUrl: null });
     } catch (err) {
       setPhotoError(err instanceof Error ? err.message : 'Failed to remove photo.');
     } finally {

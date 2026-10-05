@@ -98,12 +98,20 @@ final class ApiClient {
       : mutations!.track(() => _uploadPhoto(bytes));
 
   Future<Map<String, dynamic>> _uploadPhoto(List<int> bytes) async {
+    return _uploadImage('/api/material-photos', bytes);
+  }
+
+  Future<Map<String, dynamic>> uploadProfilePhoto(List<int> bytes) => mutations == null
+      ? _uploadImage('/api/profile-photos', bytes)
+      : mutations!.track(() => _uploadImage('/api/profile-photos', bytes));
+
+  Future<Map<String, dynamic>> _uploadImage(String endpoint, List<int> bytes) async {
     final token = await tokenStorage.readToken();
     if (token == null || token.isEmpty) {
       throw const ApiException('Authentication is required.', statusCode: 401);
     }
     final request =
-        http.MultipartRequest('POST', baseUri.resolve('/api/material-photos'))
+        http.MultipartRequest('POST', baseUri.resolve(endpoint))
           ..headers['Authorization'] = 'Bearer $token'
           ..files.add(
             http.MultipartFile.fromBytes('file', bytes, filename: 'photo'),

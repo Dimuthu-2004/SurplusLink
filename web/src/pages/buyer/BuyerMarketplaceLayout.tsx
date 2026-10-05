@@ -3,7 +3,6 @@ import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
 import { LogoutConfirmation } from '../../components/LogoutConfirmation';
 import { SurplusLinkLogo } from '../../components/SurplusLinkLogo';
-import { LanguageSelector } from '../../i18n/LanguageContext';
 import { NotificationBell } from '../../features/notifications/NotificationBell';
 import { UserAvatar } from '../../components/UserAvatar';
 import './buyerMarketplace.css';
@@ -54,7 +53,6 @@ export function BuyerMarketplaceLayout({ children }: BuyerMarketplaceLayoutProps
 
           {/* Desktop User Section */}
           <div className="marketplace-nav-user" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            {location.pathname === '/app/buyer' && <LanguageSelector />}
             <NotificationBell />
             {user && (
               <Link to="/app/profile" className="marketplace-user-pill" title="View profile settings" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', textDecoration: 'none' }}>

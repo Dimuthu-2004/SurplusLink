@@ -17,6 +17,7 @@ abstract interface class AuthGateway {
   Future<void> resetPassword({required String email, required String code, required String newPassword});
 
   Future<AppUser> updateProfile(UserProfile profile);
+  Future<String> uploadProfilePhoto(List<int> bytes);
 
   Future<void> logout();
 }

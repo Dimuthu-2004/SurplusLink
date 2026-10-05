@@ -43,6 +43,7 @@ interface AuthContextValue extends AuthState {
   resendVerification(email: string): Promise<boolean>;
   forgotPassword(email: string): Promise<boolean>;
   resetPassword(email: string, code: string, newPassword: string): Promise<boolean>;
+  updateCurrentUser(user: AuthUser): void;
   logout(): void;
   clearError(): void;
 }
@@ -53,6 +54,7 @@ type AuthAction =
   | { type: 'REQUEST_STARTED' }
   | { type: 'REQUEST_FINISHED' }
   | { type: 'AUTHENTICATED'; user: AuthUser }
+  | { type: 'USER_UPDATED'; user: AuthUser }
   | { type: 'REQUEST_FAILED'; error: string; code?: string }
   | { type: 'CLEAR_ERROR' };
 
@@ -180,9 +182,10 @@ export function AuthProvider({
   const resetPassword = useCallback((email: string, code: string, newPassword: string) => unauthenticatedRequest('/api/auth/reset-password', { email: email.trim(), code, newPassword }), [unauthenticatedRequest]);
 
   const clearError = useCallback(() => dispatch({ type: 'CLEAR_ERROR' }), []);
+  const updateCurrentUser = useCallback((user: AuthUser) => dispatch({ type: 'USER_UPDATED', user }), []);
   const value = useMemo(
-    () => ({ ...state, login, register, verifyEmail, resendVerification, forgotPassword, resetPassword, logout, clearError }),
-    [state, login, register, verifyEmail, resendVerification, forgotPassword, resetPassword, logout, clearError],
+    () => ({ ...state, login, register, verifyEmail, resendVerification, forgotPassword, resetPassword, logout, clearError, updateCurrentUser }),
+    [state, login, register, verifyEmail, resendVerification, forgotPassword, resetPassword, logout, clearError, updateCurrentUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -207,6 +210,8 @@ function authReducer(state: AuthState, action: AuthAction): AuthState {
         error: null,
         errorCode: null,
       };
+    case 'USER_UPDATED':
+      return { ...state, user: action.user };
     case 'ANONYMOUS':
       return {
         status: 'anonymous',

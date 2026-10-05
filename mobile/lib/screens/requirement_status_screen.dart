@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import 'package:mobile/requirements/requirement_gateway.dart';
 import 'package:mobile/requirements/requirement_models.dart';
 import 'package:mobile/requirements/requirement_widgets.dart';
-import 'package:mobile/l10n/app_localizations.dart';
 import 'package:mobile/widgets/submission_animation_overlays.dart';
 
 class RequirementStatusScreen extends StatefulWidget {
@@ -104,7 +103,6 @@ class _RequirementStatusScreenState extends State<RequirementStatusScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final text = AppLocalizations.of(context);
     final workflowRunning = _workflowRunning && _error == null;
     return PopScope(
       canPop: !workflowRunning,
@@ -136,17 +134,14 @@ class _RequirementStatusScreenState extends State<RequirementStatusScreen> {
                               ),
                             if (row.workflowStatus == 'FAILED') ...[
                               Text(
-                                text?.matchingCouldNotComplete ??
-                                    'Matching could not be completed.',
+                                'Matching could not be completed.',
                               ),
                               const SizedBox(height: 12),
                               FilledButton(
                                 onPressed: () => context.go(
                                   '/requirements/${widget.requirementId}',
                                 ),
-                                child: Text(
-                                  text?.retryMatching ?? 'Retry Matching',
-                                ),
+                                child: const Text('Retry Matching'),
                               ),
                             ],
                             if (row.decisionNote?.isNotEmpty == true)
@@ -200,13 +195,10 @@ class _RequirementStatusScreenState extends State<RequirementStatusScreen> {
               Positioned.fill(
                 child: WorkflowRunningOverlay(
                   title:
-                      text?.findingSuitableMatches ??
                       'Finding suitable matches...',
                   message: _isLongRunning
-                      ? (text?.stillWorkingOnMatches ??
-                            'Still working on your matches...')
-                      : (text?.matchingWorkflowMessage ??
-                            'Our matching workflow is checking available sellers.'),
+                      ? 'Still working on your matches...'
+                      : 'Our matching workflow is checking available sellers.',
                 ),
               ),
           ],
