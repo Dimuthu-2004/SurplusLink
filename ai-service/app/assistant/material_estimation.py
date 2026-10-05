@@ -147,14 +147,17 @@ class MaterialEstimationEngine:
         total_area_needed = area_sqm * (1 + wastage_pct)
 
         tiles_needed = math.ceil(total_area_needed / tile_area_sqm)
-        tiles_per_box = int(params.get("tiles_per_box", 4))
-        boxes_needed = math.ceil(tiles_needed / tiles_per_box)
+        package_size = params.get("package_size", params.get("tiles_per_box", 4))
+        tiles_per_package = int(package_size)
+        if tiles_per_package <= 0:
+            tiles_per_package = 4
+        boxes_needed = math.ceil(tiles_needed / tiles_per_package)
 
         explanation = (
             f"Calculated tile requirement for {area_sqm:g} m² coverage using {tile_w_mm:g}×{tile_h_mm:g} mm tiles:\n"
             f"• Area per tile: {tile_area_sqm:.3f} m²\n"
             f"• Wastage & cutting allowance: 10%\n"
-            f"• **Tiles Needed: {tiles_needed} pieces** ({boxes_needed} boxes @ {tiles_per_box} pcs/box)"
+            f"• **Tiles Needed: {tiles_needed} pieces** ({boxes_needed} boxes @ {tiles_per_package} pcs/box)"
         )
 
         return EstimationResult(

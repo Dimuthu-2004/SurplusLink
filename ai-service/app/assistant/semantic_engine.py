@@ -98,19 +98,36 @@ class SurplusLinkSemanticAssistantEngine:
                 catalog_item_id=resolved.catalog_item_id if resolved else None,
                 is_custom_item=resolved.is_custom_item if resolved else True,
                 location=primary.extracted_slots.location_text,
+                structured_location=primary.extracted_slots.structured_location,
+                location_source=primary.extracted_slots.location_source,
+                location_pending=primary.extracted_slots.location_pending,
                 quantity=primary.extracted_slots.quantity,
                 preferences=primary.extracted_slots.preferences,
+                maximum_budget=primary.extracted_slots.maximum_budget,
+                deadline=primary.extracted_slots.deadline,
+                delivery_required=primary.extracted_slots.delivery_required,
                 is_follow_up=primary.is_follow_up,
                 is_question=primary.is_question,
                 is_purchase_request=primary.is_purchase_request,
                 retrieval_query=primary.retrieval_query,
             )
 
+        # A device-location callback is an explicit continuation of the active
+        # draft, even if the callback text itself is not a natural-language turn.
+        if (
+            structured_location
+            and state.active_requirement_draft
+            and canonical_req.intent in {Intent.UNKNOWN, Intent.CLARIFICATION}
+        ):
+            canonical_req.intent = Intent.UPDATE_REQUIREMENT
+            canonical_req.item_candidate = state.active_requirement_draft.item_name
+            canonical_req.resolved_item = state.active_requirement_draft.item_name
+
         if structured_location:
             canonical_req.structured_location = structured_location
-            if structured_location.get("latitude"):
+            if structured_location.get("latitude") is not None:
                 canonical_req.latitude = float(structured_location["latitude"])
-            if structured_location.get("longitude"):
+            if structured_location.get("longitude") is not None:
                 canonical_req.longitude = float(structured_location["longitude"])
             if structured_location.get("resolved_address") or structured_location.get("address"):
                 canonical_req.resolved_address = str(structured_location.get("resolved_address") or structured_location.get("address"))
@@ -144,7 +161,7 @@ class SurplusLinkSemanticAssistantEngine:
 
         # 3. Capability Selection & Execution
         # A. Requirement creation / continuation (Catalog or Custom Item)
-        if canonical_req.intent in {Intent.CREATE_REQUIREMENT, Intent.UPDATE_REQUIREMENT, Intent.CREATE_REQUIREMENT_DRAFT, Intent.CONTINUE_REQUIREMENT_DRAFT}:
+        if canonical_req.intent in {Intent.CREATE_REQUIREMENT, Intent.UPDATE_REQUIREMENT}:
             catalog = await self.tools_client.get_catalog_item(user_context)
             extracted_slots = ExtractedSlots(
                 item=canonical_req.resolved_item or canonical_req.item_candidate,
@@ -190,7 +207,7 @@ class SurplusLinkSemanticAssistantEngine:
             parts.append(stats_response)
 
         # D. Live Marketplace Queries & Price Information (Live ASP.NET Tool Provenance Required!)
-        elif canonical_req.intent in {Intent.SEARCH_MATERIAL, Intent.COMPARE_MATERIALS, Intent.ASK_MATERIAL_PRICE, Intent.ASK_MATERIAL_AVAILABILITY, Intent.LIVE_MARKETPLACE_QUERY, Intent.PRICE_INFORMATION}:
+        elif canonical_req.intent in {Intent.SEARCH_MATERIAL, Intent.COMPARE_MATERIALS, Intent.ASK_MATERIAL_PRICE, Intent.ASK_MATERIAL_AVAILABILITY}:
             live_response, tool_data = await self._handle_live_marketplace_query(user_context, canonical_req)
             if self.validation_gate.validate_marketplace_provenance(canonical_req.intent, tool_data, live_response):
                 parts.append(live_response)
@@ -367,8 +384,13 @@ class SurplusLinkSemanticAssistantEngine:
             return f"{qty} {prefs} {name} requirement draft ekata ekathu kala.".replace("  ", " ")
         if draft.ready_for_review:
             delivery = "required" if draft.delivery_required else "not required"
+            budget = (
+                f"LKR {draft.maximum_budget:,.2f}"
+                if draft.maximum_budget is not None
+                else "not specified"
+            )
             return (f"Here is what I understood: {qty} {prefs} {name}; delivery to "
-                    f"{draft.location_text or draft.resolved_address}; maximum budget LKR {draft.maximum_budget:,.2f}; "
+                    f"{draft.location_text or draft.resolved_address}; maximum budget {budget}; "
                     f"delivery {delivery}; needed by {draft.deadline}. Is this correct?").replace("  ", " ")
         return f"Draft updated: {qty} {prefs} {name}.".replace("  ", " ")
 
@@ -382,7 +404,7 @@ class SurplusLinkSemanticAssistantEngine:
     def _response(conversation_id: str, message: str, intent: Intent, state, citations=None):
         draft = state.active_requirement_draft
         client_action = None
-        if draft and (draft.location_pending or (draft.latitude is None or draft.longitude is None)):
+        if draft and draft.location_pending:
             client_action = {
                 "type": "REQUEST_DEVICE_LOCATION",
                 "draft_id": draft.id,
@@ -399,5 +421,3 @@ class SurplusLinkSemanticAssistantEngine:
             "active_draft_id": state.active_draft_id,
             "suggested_actions": ["Yes, find matches", "Edit requirement"] if draft and draft.ready_for_review else [],
         }
-
-

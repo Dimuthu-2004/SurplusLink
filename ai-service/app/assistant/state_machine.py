@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.assistant.canonical_request import CanonicalUserRequest
 from app.assistant.semantic_schemas import Intent, RequirementDraft
+from app.assistant.validation_gate import ValidationGate
 
 logger = logging.getLogger(__name__)
 
@@ -150,7 +151,7 @@ class ConversationStateMachine(BaseModel):
                 canonical_req.location_text = None
 
         raw = canonical_req.raw_message.lower()
-        if ("current location" in raw or "same location" in raw or "my location" in raw) and self.structured_location:
+        if ValidationGate.is_current_location_request(raw) and self.structured_location:
             canonical_req.structured_location = self.structured_location
             if not canonical_req.location_text and self.structured_location.get("city"):
                 canonical_req.location_text = str(self.structured_location.get("city"))
@@ -163,7 +164,7 @@ class ConversationStateMachine(BaseModel):
     def _is_topic_switch(self, canonical_req: CanonicalUserRequest) -> bool:
         """Determines if the new request represents a broad topic switch away from current context."""
         # Broad marketplace queries ("sellers lage thiyena items monada") should not inherit previous item
-        if canonical_req.intent == Intent.LIVE_MARKETPLACE_QUERY and not canonical_req.is_follow_up:
+        if canonical_req.intent in {Intent.SEARCH_MATERIAL, Intent.LIVE_MARKETPLACE_QUERY} and not canonical_req.is_follow_up:
             return True
 
         if self.current_state == AssistantState.IDLE and not self.active_requirement_draft:
@@ -265,22 +266,29 @@ class ConversationStateMachine(BaseModel):
     def _determine_next_state(self, canonical_req: CanonicalUserRequest) -> AssistantState:
         intent = canonical_req.intent
 
-        if intent in {Intent.CREATE_REQUIREMENT_DRAFT, Intent.CONTINUE_REQUIREMENT_DRAFT}:
+        if intent in {Intent.CREATE_REQUIREMENT, Intent.UPDATE_REQUIREMENT,
+                      Intent.CREATE_REQUIREMENT_DRAFT, Intent.CONTINUE_REQUIREMENT_DRAFT}:
             if self.active_requirement_draft and self.active_requirement_draft.ready_for_review:
                 return AssistantState.REQUIREMENT_READY
             return AssistantState.REQUIREMENT_COLLECTING
 
-        if intent == Intent.MATERIAL_ESTIMATION:
+        if intent in {Intent.ASK_QUANTITY_ESTIMATION, Intent.MATERIAL_ESTIMATION}:
             return AssistantState.ESTIMATION_COLLECTING
 
-        if intent == Intent.LIVE_MARKETPLACE_QUERY:
+        if intent in {Intent.SEARCH_MATERIAL, Intent.LIVE_MARKETPLACE_QUERY}:
             return AssistantState.LIVE_QUERY
 
         if intent in {Intent.LIVE_DATA_QUERY, Intent.TRANSACTION_QUERY, Intent.MATCH_EXPLANATION}:
             return AssistantState.TRANSACTION_QUERY
 
-        if intent in {Intent.CONSTRUCTION_KNOWLEDGE, Intent.PRICE_INFORMATION, Intent.PLATFORM_HELP}:
+        if intent in {
+            Intent.ASK_CONSTRUCTION_KNOWLEDGE,
+            Intent.ASK_STORAGE_KNOWLEDGE,
+            Intent.GENERAL_PLATFORM_QUESTION,
+            Intent.CONSTRUCTION_KNOWLEDGE,
+            Intent.PRICE_INFORMATION,
+            Intent.PLATFORM_HELP,
+        }:
             return AssistantState.KNOWLEDGE_QA
 
         return AssistantState.IDLE
-

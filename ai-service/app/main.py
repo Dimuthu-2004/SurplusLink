@@ -5,27 +5,8 @@ from typing import Any, Dict, Optional
 
 from dotenv import load_dotenv
 
-# ---------------------------------------------------------
-# Load environment variables from the project root .env.local
-#
-# Structure:
-#
-# SurplusLink/
-# ├── .env.local
-# ├── ai-service/
-# │   └── app/
-# │       └── main.py
-# ├── backend/
-# ├── mobile/
-# └── web/
-# ---------------------------------------------------------
-
-AI_SERVICE_DIR = Path(__file__).resolve().parent.parent
-PROJECT_ROOT = AI_SERVICE_DIR.parent
-ENV_FILE = PROJECT_ROOT / ".env.local"
-
-if ENV_FILE.exists():
-    load_dotenv(dotenv_path=ENV_FILE, override=True)
+# Load the project-root configuration before initializing the application.
+load_dotenv(Path(__file__).resolve().parents[2] / ".env.local")
 
 import logging
 logger = logging.getLogger(__name__)

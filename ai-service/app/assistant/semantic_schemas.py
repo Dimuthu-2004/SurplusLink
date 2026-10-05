@@ -45,6 +45,23 @@ class Intent(str, Enum):
     UNKNOWN = "UNKNOWN"
 
 
+CANONICAL_REQUIREMENT_INTENTS = {
+    Intent.CREATE_REQUIREMENT,
+    Intent.UPDATE_REQUIREMENT,
+}
+CANONICAL_MARKETPLACE_INTENTS = {
+    Intent.SEARCH_MATERIAL,
+    Intent.COMPARE_MATERIALS,
+    Intent.ASK_MATERIAL_PRICE,
+    Intent.ASK_MATERIAL_AVAILABILITY,
+}
+CANONICAL_KNOWLEDGE_INTENTS = {
+    Intent.ASK_CONSTRUCTION_KNOWLEDGE,
+    Intent.ASK_STORAGE_KNOWLEDGE,
+    Intent.GENERAL_PLATFORM_QUESTION,
+}
+
+
 class QuantitySlots(BaseModel):
     model_config = ConfigDict(extra="ignore")
 

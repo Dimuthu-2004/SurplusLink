@@ -10,6 +10,8 @@ import pytest
 from app.assistant.semantic_engine import SurplusLinkSemanticAssistantEngine
 from app.assistant.semantic_schemas import Intent
 
+pytestmark = pytest.mark.live_gemini
+
 
 @pytest.fixture
 def engine():

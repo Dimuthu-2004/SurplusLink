@@ -38,6 +38,11 @@ Output JSON Format:
         } or null,
         "preferences": {},
         "location_text": string or null,
+        "structured_location": object or null,
+        "location_source": string or null,
+        "location_pending": boolean,
+        "dimensions": object or null,
+        "coverage_area": number or null,
         "maximum_budget": number or null,
         "deadline": ISO-8601 date/time or null,
         "delivery_required": boolean or null,
@@ -120,10 +125,10 @@ class SemanticRouter:
             logger.warning("SemanticRouter returned no intent for: '%s'", message)
             return CanonicalUserRequest(
                 raw_message=message,
-                intent=Intent.CLARIFICATION,
+                intent=Intent.UNKNOWN,
                 confidence=0.0,
-                needs_clarification=True,
-                clarification_question="I couldn't understand that confidently just now. Could you clarify what material or assistance you need?",
+                needs_clarification=False,
+                clarification_question="The AI assistant is temporarily unavailable. Please try again shortly.",
             )
 
         primary = routing_res.intents[0]
@@ -145,8 +150,8 @@ class SemanticRouter:
 
         # Check for device location handoff ("to my current location", "where I am", "mata innathanata genna")
         msg_lower = message.lower()
-        device_loc_phrases = ["current location", "my location", "same location", "where i am", "where i stay", "innathanata", "current place", "my place"]
-        is_current_loc_phrase = any(phrase in msg_lower for phrase in device_loc_phrases)
+        is_current_loc_phrase = ValidationGate.is_current_location_request(message)
+        device_loc_phrases = ValidationGate.CURRENT_LOCATION_PHRASES
         loc_source = "CURRENT_DEVICE_LOCATION" if is_current_loc_phrase else ("USER_TEXT" if valid_loc else None)
         loc_pending = is_current_loc_phrase and not state.structured_location
 
@@ -187,6 +192,7 @@ class SemanticRouter:
             catalog_item_id=catalog_id,
             is_custom_item=is_custom,
             location_text=valid_loc,
+            structured_location=slots.structured_location,
             maximum_budget=slots.maximum_budget,
             deadline=slots.deadline,
             delivery_required=slots.delivery_required,
@@ -199,6 +205,11 @@ class SemanticRouter:
             dimensions=dimensions,
             coverage_area=cov_area,
             preferences=slots.preferences,
+            estimation_context={
+                "notes": slots.notes,
+                "dimensions": slots.dimensions,
+                "coverage_area": slots.coverage_area,
+            },
             live_data_request={"live_resource": slots.live_resource, "referenced_id": slots.referenced_id} if slots.live_resource else None,
             is_follow_up=primary.is_follow_up,
             referenced_previous_context=primary.is_follow_up,

@@ -110,17 +110,21 @@ class CatalogDraftValidator:
             if draft.coverage_area and draft.dimensions:
                 w_mm = draft.dimensions.get("width", 600)
                 l_mm = draft.dimensions.get("length", 600)
-                t_per_box = 4
-                if template and template.get("allowedPackageSizes"):
-                    sizes = template.get("allowedPackageSizes")
-                    if isinstance(sizes, list) and len(sizes) > 0 and isinstance(sizes[0], (int, float)):
-                        t_per_box = int(sizes[0])
+                # Catalog package sizes for tiles are coverage areas (m² per
+                # box), not the number of physical tiles in a box. Use an
+                # explicitly supplied tile package size when available and
+                # retain the established 4-tiles-per-box default otherwise.
+                t_per_box = (
+                    int(draft.package_size)
+                    if draft.package_size is not None and draft.package_size > 0
+                    else 4
+                )
 
                 est = MaterialEstimationEngine.estimate_tiles({
                     "area_sqm": draft.coverage_area,
                     "tile_width_mm": w_mm,
                     "tile_length_mm": l_mm,
-                    "tiles_per_box": t_per_box,
+                    "package_size": t_per_box,
                 })
                 draft.calculated_physical_quantity = est.calculated_physical_quantity
                 draft.calculated_package_count = est.calculated_package_count
@@ -141,12 +145,8 @@ class CatalogDraftValidator:
             missing.append("package_size")
         if (not draft.location_text and not draft.location_source) or draft.location_pending:
             missing.append("delivery_location")
-        if draft.latitude is None or draft.longitude is None:
+        if draft.location_source == "CURRENT_DEVICE_LOCATION" and (draft.latitude is None or draft.longitude is None):
             missing.append("delivery_coordinates")
-        if draft.maximum_budget is None:
-            missing.append("maximum_budget")
-        if not draft.deadline:
-            missing.append("deadline")
 
         draft.missing_required_fields = missing
         draft.ready_for_review = len(missing) == 0
@@ -243,9 +243,9 @@ class CatalogDraftValidator:
 
         if slots.structured_location:
             draft.structured_location = slots.structured_location
-            if slots.structured_location.get("latitude"):
+            if slots.structured_location.get("latitude") is not None:
                 draft.latitude = float(slots.structured_location["latitude"])
-            if slots.structured_location.get("longitude"):
+            if slots.structured_location.get("longitude") is not None:
                 draft.longitude = float(slots.structured_location["longitude"])
             if slots.structured_location.get("address") or slots.structured_location.get("resolved_address"):
                 draft.resolved_address = str(slots.structured_location.get("address") or slots.structured_location.get("resolved_address"))
@@ -312,4 +312,3 @@ class CatalogDraftValidator:
         elif field == "deadline":
             return "When do you need it delivered?"
         return f"Please provide details for {field}."
-

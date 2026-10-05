@@ -7,6 +7,8 @@ from app.assistant.unit_normalizer import UnitNormalizer
 from app.assistant.material_estimation import MaterialEstimationEngine
 from app.assistant.semantic_engine import SurplusLinkSemanticAssistantEngine
 
+pytestmark = pytest.mark.live_gemini
+
 
 def test_unit_normalizer_area():
     res1 = UnitNormalizer.parse_area("10m2")
@@ -67,7 +69,7 @@ async def test_smart_assistant_scenarios():
 
     # Scenario 1: Material estimation question asking clarification
     res1 = await engine.process_chat(user_context, "eval-1", "10m2 area ekakata paint kochchara ooneda")
-    assert res1["intent"] == "MATERIAL_ESTIMATION"
+    assert res1["intent"] == "ASK_QUANTITY_ESTIMATION"
     assert "paint" in res1["message"].lower() or "area" in res1["message"].lower() or "litres" in res1["message"].lower()
     assert res1["requirement_draft"] is None
 

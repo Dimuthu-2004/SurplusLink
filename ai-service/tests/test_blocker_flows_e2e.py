@@ -10,6 +10,8 @@ if ENV_FILE.exists():
 from app.assistant.semantic_engine import SurplusLinkSemanticAssistantEngine
 from app.assistant.semantic_schemas import Intent, RequirementDraft
 
+pytestmark = pytest.mark.live_gemini
+
 @pytest.mark.asyncio
 async def test_blocker_1_current_location_client_action_flow():
     engine = SurplusLinkSemanticAssistantEngine()

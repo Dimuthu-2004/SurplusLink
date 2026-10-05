@@ -40,6 +40,21 @@ class ValidationGate:
         "ooneda",
         "monada",
     }
+    CURRENT_LOCATION_PHRASES = (
+        "current location",
+        "my location",
+        "same location",
+        "where i am",
+        "where i stay",
+        "innathanata",
+        "current place",
+        "my place",
+    )
+
+    @classmethod
+    def is_current_location_request(cls, message: str) -> bool:
+        lowered = message.casefold()
+        return any(phrase in lowered for phrase in cls.CURRENT_LOCATION_PHRASES)
 
     @classmethod
     def validate_location(cls, location_text: Optional[str]) -> Optional[str]:
@@ -93,7 +108,14 @@ class ValidationGate:
         Verifies that marketplace answers are produced only from non-empty live tool results.
         Prevents RAG or LLM hallucination of marketplace prices or listings.
         """
-        if intent in {Intent.LIVE_MARKETPLACE_QUERY, Intent.PRICE_INFORMATION}:
+        if intent in {
+            Intent.SEARCH_MATERIAL,
+            Intent.COMPARE_MATERIALS,
+            Intent.ASK_MATERIAL_PRICE,
+            Intent.ASK_MATERIAL_AVAILABILITY,
+            Intent.LIVE_MARKETPLACE_QUERY,
+            Intent.PRICE_INFORMATION,
+        }:
             # If answer contains exact price claims like LKR XXX, check tool_results
             if "LKR" in response_text or "rs." in response_text.lower():
                 if not tool_results:

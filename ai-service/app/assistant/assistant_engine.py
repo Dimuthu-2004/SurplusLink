@@ -12,6 +12,12 @@ logger = logging.getLogger(__name__)
 
 
 class SurplusLinkAssistantEngine:
+    """Deprecated compatibility engine.
+
+    New callers should use ``SurplusLinkSemanticAssistantEngine``. This
+    compatibility path keeps its legacy account handlers but emits the same
+    canonical requirement and knowledge intent names as the semantic engine.
+    """
     def __init__(
         self,
         rag_retriever: Optional[KnowledgeRetriever] = None,
@@ -48,13 +54,13 @@ class SurplusLinkAssistantEngine:
         intent = self._classify_intent(msg_lower)
 
         # 3. Route to Intent Handlers
-        if intent in ("CREATE_REQUIREMENT_DRAFT", "BUYER_REQUIREMENT_HELP") or self._looks_like_requirement_request(msg_lower):
+        if intent in ("CREATE_REQUIREMENT", "CREATE_REQUIREMENT_DRAFT", "BUYER_REQUIREMENT_HELP") or self._looks_like_requirement_request(msg_lower):
             return await self._handle_requirement_draft(user_context, conversation_id, raw_msg)
 
         if intent in ("MY_OFFERS", "MY_TRANSACTIONS", "MY_LISTINGS", "MY_REQUIREMENTS", "MY_MATCHES", "MATCH_EXPLANATION"):
             return await self._handle_live_account_query(user_context, conversation_id, raw_msg, intent)
 
-        if intent in ("CONSTRUCTION_KNOWLEDGE", "GENERAL_PLATFORM_HELP", "SELLER_LISTING_HELP", "QUANTITY_HELP", "PACKAGE_HELP", "LOCATION_HELP"):
+        if intent in ("ASK_CONSTRUCTION_KNOWLEDGE", "CONSTRUCTION_KNOWLEDGE", "GENERAL_PLATFORM_HELP", "SELLER_LISTING_HELP", "QUANTITY_HELP", "PACKAGE_HELP", "LOCATION_HELP"):
             return await self._handle_rag_query(user_context, conversation_id, raw_msg, intent)
 
         # Mixed / Unknown Intent
@@ -97,7 +103,7 @@ class SurplusLinkAssistantEngine:
 
         # Requirement Creation (English, Sinhala, Tamil, Romanized Sinhala)
         if any(w in msg_lower for w in ["i need", "i want", "one", "ඕන", "வேண்டும்", "buy", "looking for"]):
-            return "CREATE_REQUIREMENT_DRAFT"
+            return "CREATE_REQUIREMENT"
 
         # Quantity / Package / Listing Help
         if any(w in msg_lower for w in ["package size", "can size", "bag size", "how to list", "quantity mode"]):
@@ -105,7 +111,7 @@ class SurplusLinkAssistantEngine:
 
         # Platform / Construction RAG Knowledge
         if any(w in msg_lower for w in ["how to store", "how does matching work", "what is surpluslink", "cement storage", "paint coverage", "sls", "standards"]):
-            return "CONSTRUCTION_KNOWLEDGE"
+            return "ASK_CONSTRUCTION_KNOWLEDGE"
 
         return "UNKNOWN"
 
@@ -128,7 +134,7 @@ class SurplusLinkAssistantEngine:
             return {
                 "conversation_id": conversation_id,
                 "message": reply_text,
-                "intent": "BUYER_REQUIREMENT_HELP",
+                "intent": "UNKNOWN",
                 "citations": [],
                 "requirement_draft": None,
                 "suggested_actions": ["I need paint", "I need 50 bags of cement", "Browse materials"],
@@ -139,7 +145,7 @@ class SurplusLinkAssistantEngine:
         return {
             "conversation_id": conversation_id,
             "message": reply_text,
-            "intent": "CREATE_REQUIREMENT_DRAFT",
+            "intent": "CREATE_REQUIREMENT",
             "citations": [],
             "requirement_draft": draft.to_dict(),
             "suggested_actions": actions,
