@@ -38,7 +38,7 @@ export function NotificationToastCard({
     }
   };
 
-  const timeLabel = formatRelativeTime(item.notification.createdAtUtc);
+  const timeLabel = formatRelativeTime(item.notification.createdAt);
 
   return (
     <div
@@ -103,15 +103,14 @@ export function NotificationToastContainer({
 }
 
 function formatRelativeTime(dateString: string): string {
-  try {
-    const date = new Date(dateString);
+  const date = new Date(dateString);
+  if (!Number.isNaN(date.getTime())) {
     const now = new Date();
     const diffSec = Math.floor((now.getTime() - date.getTime()) / 1000);
     if (diffSec < 45) return 'Just now';
     if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`;
     if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h ago`;
     return `${Math.floor(diffSec / 86400)}d ago`;
-  } catch {
-    return 'Just now';
   }
+  return 'Date unavailable';
 }

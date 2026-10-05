@@ -119,6 +119,25 @@ final class AuthController extends ChangeNotifier {
     }
   }
 
+  Future<bool> uploadProfilePhoto(List<int> bytes) async {
+    if (_isBusy || _user == null) return false;
+    _errorMessage = null;
+    _setBusy(true);
+    try {
+      final photoUrl = await _gateway.uploadProfilePhoto(bytes);
+      _user = _user!.copyWith(profilePhotoUrl: photoUrl);
+      return true;
+    } on ApiException catch (error) {
+      _errorMessage = error.message;
+      return false;
+    } on Object {
+      _errorMessage = 'Unable to upload your photo. Please retry.';
+      return false;
+    } finally {
+      _setBusy(false);
+    }
+  }
+
   Future<void> logout() async {
     if (_isBusy) {
       return;

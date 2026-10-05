@@ -1,4 +1,4 @@
-/* User Avatar & Manager Orbital Glow Ring */
+/* User Avatar role border/glow */
 
 .user-avatar-container {
   position: relative;
@@ -40,20 +40,19 @@
 }
 
 /* Manager Orbital Ring */
-.user-avatar-manager-ring {
+.user-avatar-role-ring {
   position: absolute;
   top: -4px;
   left: -4px;
   right: -4px;
   bottom: -4px;
   border-radius: 50%;
-  background: conic-gradient(from 0deg, #f59e0b, #d97706, #fbbf24, #d97706, #f59e0b);
+  background: var(--avatar-role-color);
   z-index: 1;
-  animation: manager-avatar-spin 4s linear infinite;
-  filter: drop-shadow(0 0 5px rgba(245, 158, 11, 0.45));
+  filter: drop-shadow(0 0 5px var(--avatar-role-glow));
 }
 
-.user-avatar-manager-ring::after {
+.user-avatar-role-ring::after {
   content: '';
   position: absolute;
   top: 2px;
@@ -63,6 +62,11 @@
   background: #ffffff;
   border-radius: 50%;
 }
+
+.user-avatar-manager { --avatar-role-color: #f59e0b; --avatar-role-glow: rgba(245, 158, 11, .55); }
+.user-avatar-buyer { --avatar-role-color: #2563eb; --avatar-role-glow: rgba(37, 99, 235, .5); }
+.user-avatar-seller { --avatar-role-color: #16a34a; --avatar-role-glow: rgba(22, 163, 74, .5); }
+.user-avatar-both { --avatar-role-color: #9333ea; --avatar-role-glow: rgba(147, 51, 234, .5); }
 
 @keyframes manager-avatar-spin {
   0% {
@@ -74,9 +78,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .user-avatar-manager-ring {
-    animation: none;
-    background: #f59e0b;
-    box-shadow: 0 0 0 2px #fde68a;
+  .user-avatar-role-ring {
+    filter: none;
   }
 }

@@ -9,12 +9,21 @@
 .manager-shell .app-body { flex: 1; min-height: 0; overflow: hidden; }
 .manager-shell .side-nav { min-height: 0; overflow-y: auto; }
 .manager-shell .page-content { min-height: 0; overflow-y: auto; }
+.app-shell .app-body { grid-template-columns: minmax(13.5rem, 17rem) minmax(0, 1fr); transition: grid-template-columns .2s ease; }
+.app-shell.side-nav-collapsed .app-body { grid-template-columns: 4.5rem minmax(0, 1fr); }
+.side-nav-toggle { display:flex; align-items:center; gap:.7rem; width:100%; padding:.7rem 1rem; border:0; border-bottom:1px solid #e2e8f0; background:transparent; color:inherit; cursor:pointer; font:inherit; font-weight:700; }
+.side-nav-collapsed .side-nav { overflow-x: hidden; }
+.side-nav-collapsed .side-nav nav > a, .side-nav-collapsed .side-nav-toggle { justify-content:center; padding-inline:.6rem; }
+.side-nav-collapsed .side-nav-label, .side-nav-collapsed .nav-section-label { display:none; }
 .manager-shell .dashboard-back { display: inline-flex; align-items: center; gap: .4rem; }
 .manager-shell .structured-result { white-space: pre-wrap; overflow-wrap: anywhere; }
 .manager-shell .requirement-id { overflow-wrap: anywhere; }
 @media (max-width: 700px) {
   .manager-shell .app-body { grid-template-rows: auto minmax(0, 1fr); }
   .manager-shell .side-nav { overflow-x: auto; }
+  .app-shell .app-body, .app-shell.side-nav-collapsed .app-body { grid-template-columns: 1fr; }
+  .side-nav-toggle { display:none; }
+  .side-nav-collapsed .side-nav-label { display:inline; }
 }
 .manager-shell .page-content { background: radial-gradient(ellipse at top right, #ffedd580, transparent 55%), #f3f6fc; }
 .manager-shell .page-heading { padding: 1.6rem; border: 1px solid #253c63; border-radius: 1.3rem; background: linear-gradient(115deg, #101e38, #233e67); box-shadow: 0 12px 30px #14264218; }

@@ -5,7 +5,6 @@ import type {
 } from '../api/constructionItemTemplatesApi';
 import type { MaterialCategory } from '../features/materials/managerMaterialsApi';
 import { ConstructionItemPicker } from './ConstructionItemPicker';
-import { localized, useLanguage } from '../i18n/LanguageContext';
 import { ApiError } from '../api/apiClient';
 import { SubmittedAnimationOverlay } from './SubmissionAnimationOverlays';
 
@@ -45,7 +44,7 @@ export function TemplateDrivenMaterialForm({
   onCancel,
   onSubmitted,
 }: TemplateDrivenMaterialFormProps) {
-  const { language, t } = useLanguage();
+  const t = englishText;
   const fieldRefs = useRef<Record<string, HTMLElement | null>>({});
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const reportFieldErrors = (next: Record<string, string>) => {
@@ -460,7 +459,7 @@ export function TemplateDrivenMaterialForm({
               )}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
                 {attributeFields.filter((field) => field.sellerField !== false && field.packageSizeSource !== 'CALCULATED' && !(isTileTemplate && ['dimensionsMm', 'widthMm', 'heightMm', 'piecesPerBox'].includes(field.id))).map((field) => {
-                  const label = localized(field.labelI18n, language, field.label);
+                  const label = englishFieldLabel(field.labelI18n, field.label);
                   return (
                   <div key={field.id} className="catalog-field">
                     <label htmlFor={`spec-field-${field.id}`}>
@@ -905,4 +904,24 @@ function localizedValidation(message: string | undefined, field: string, t: (key
   if (code.includes('PRICE') || field.toLowerCase().includes('price')) return t('priceRequired');
   if (code.includes('QUANTITY') || field.toLowerCase().includes('quantity')) return t('quantityRequired');
   return t('required');
+}
+
+function englishFieldLabel(value: unknown, fallback: string): string {
+  if (value && typeof value === 'object' && 'en' in value) {
+    const english = (value as { en?: unknown }).en;
+    if (typeof english === 'string' && english.trim()) return english;
+  }
+  return fallback;
+}
+
+function englishText(key: string): string {
+  const copy: Record<string, string> = {
+    required: 'This field is required.',
+    packageCountRequired: 'Enter the number of packages available.',
+    quantityRequired: 'Enter the quantity available.',
+    priceRequired: 'Enter the price for this item.',
+    listingSubmitted: 'Listing submitted',
+    listingSubmittedMessage: 'Your material was sent for manager review.',
+  };
+  return copy[key] ?? key;
 }

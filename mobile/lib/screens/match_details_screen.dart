@@ -463,13 +463,13 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
             const SizedBox(height: 8),
             Text(
               match.rejectionReason != null
-                  ? localizedRoutingText(context, match.rejectionReason!)
+                  ? routingText(context, match.rejectionReason!)
                   : match.status == 'ROUTE_FAILED'
                   ? 'Delivery route could not be calculated. Please try again later.'
                   : readableRejectionReason(null),
             ),
             const SizedBox(height: 8),
-            Text(localizedRoutingText(context, 'cannotSelect')),
+            Text(routingText(context, 'cannotSelect')),
             if (match.status == 'ROUTE_FAILED') ...[
               const SizedBox(height: 8),
               OutlinedButton.icon(
@@ -477,7 +477,7 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
                 icon: _routing
                     ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
                     : const Icon(Icons.refresh),
-                label: Text(localizedRoutingText(context, 'retryRoute')),
+                label: Text(routingText(context, 'retryRoute')),
               ),
             ],
           ],

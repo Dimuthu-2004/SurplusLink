@@ -13,7 +13,7 @@ export const notificationsApi = {
     const qs = params.toString();
     const url = `/api/notifications${qs ? `?${qs}` : ''}`;
     const response = await apiClient.get<NotificationPageResponse>(url);
-    return response.data;
+    return { ...response.data, items: response.data.items.map(normalizeNotification) };
   },
 
   async unreadCount(): Promise<number> {
@@ -31,3 +31,11 @@ export const notificationsApi = {
     return response.data.markedCount;
   },
 };
+
+function normalizeNotification(item: NotificationItem & { createdAtUtc?: string; readAtUtc?: string | null }): NotificationItem {
+  return {
+    ...item,
+    createdAt: item.createdAt ?? item.createdAtUtc ?? '',
+    readAt: item.readAt ?? item.readAtUtc ?? null,
+  };
+}

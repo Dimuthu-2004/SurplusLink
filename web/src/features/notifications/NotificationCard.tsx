@@ -65,7 +65,7 @@ export function NotificationCard({
             {item.title}
           </h3>
           <span style={{ fontSize: '0.75rem', color: '#94a3b8', whiteSpace: 'nowrap' }}>
-            {formatDate(item.createdAtUtc)}
+            {formatDate(item.createdAt)}
           </span>
         </div>
 
@@ -118,22 +118,8 @@ export function NotificationCard({
   );
 }
 
-function formatDate(dateStr: string): string {
-  try {
-    const d = new Date(dateStr);
-    const now = new Date();
-    const diffMs = now.getTime() - d.getTime();
-    const diffHours = diffMs / (1000 * 60 * 60);
-
-    if (diffHours < 1) {
-      const diffMins = Math.max(1, Math.floor(diffMs / (1000 * 60)));
-      return `${diffMins}m ago`;
-    }
-    if (diffHours < 24) {
-      return `${Math.floor(diffHours)}h ago`;
-    }
-    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-  } catch {
-    return dateStr;
-  }
+function formatDate(timestamp: string): string {
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return 'Date unavailable';
+  return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).format(date);
 }

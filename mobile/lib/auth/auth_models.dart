@@ -28,6 +28,7 @@ final class AppUser {
     this.phoneNumber,
     this.businessName,
     this.address,
+    this.profilePhotoUrl,
   });
 
   factory AppUser.fromJson(Map<String, dynamic> json) => AppUser(
@@ -38,13 +39,20 @@ final class AppUser {
     phoneNumber: json['phoneNumber'] as String?,
     businessName: json['businessName'] as String?,
     address: json['address'] as String?,
+    profilePhotoUrl: json['profilePhotoUrl'] as String?,
   );
 
   final String id;
   final String email;
   final List<AppRole> roles;
   bool hasRole(AppRole role) => roles.contains(role);
-  final String? fullName, phoneNumber, businessName, address;
+  final String? fullName, phoneNumber, businessName, address, profilePhotoUrl;
+
+  AppUser copyWith({String? profilePhotoUrl}) => AppUser(
+    id: id, email: email, roles: roles, fullName: fullName,
+    phoneNumber: phoneNumber, businessName: businessName, address: address,
+    profilePhotoUrl: profilePhotoUrl,
+  );
 }
 
 final class AuthSession {

@@ -1,5 +1,5 @@
 import '../pages/manager/managerLayout.css';
-import { type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { roleHomePath, roleLabels } from '../routing/roleRoutes';
@@ -7,13 +7,13 @@ import { roleHomePath, roleLabels } from '../routing/roleRoutes';
 import { BuyerMarketplaceLayout } from '../pages/buyer/BuyerMarketplaceLayout';
 import { LogoutConfirmation } from './LogoutConfirmation';
 import { SurplusLinkLogo } from './SurplusLinkLogo';
-import { LanguageSelector } from '../i18n/LanguageContext';
 import { NotificationBell } from '../features/notifications/NotificationBell';
 import { UserAvatar } from './UserAvatar';
 
 export function AppLayout() {
   const { user, logout } = useAuth();
   const location = useLocation();
+  const [navCollapsed, setNavCollapsed] = useState(false);
   if (!user) {
     return null;
   }
@@ -31,20 +31,19 @@ export function AppLayout() {
   const manager = user.roles.includes('MANAGER');
 
   const navItem = (to: string, label: string, icon: 'grid' | 'offers' | 'materials' | 'categories' | 'catalog' | 'requirements' | 'approvals' | 'community') => (
-    <NavLink to={to} end={to === roleHomePath(user.roles)}>
+    <NavLink to={to} end={to === roleHomePath(user.roles)} title={navCollapsed ? label : undefined}>
       <AppIcon name={icon} />
-      <span>{label}</span>
+      <span className="side-nav-label">{label}</span>
     </NavLink>
   );
 
   return (
-    <div className={manager ? 'app-shell manager-shell' : 'app-shell'}>
+    <div className={`${manager ? 'app-shell manager-shell' : 'app-shell'} ${navCollapsed ? 'side-nav-collapsed' : ''}`}>
       <header className="app-header">
         <Link className="brand" to={roleHomePath(user.roles)}>
           <SurplusLinkLogo className="app-brand-logo" />
         </Link>
         <div className="account-summary" style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-          {location.pathname === roleHomePath(user.roles) && <LanguageSelector />}
           <NotificationBell />
           <Link
             to="/app/profile"
@@ -61,6 +60,17 @@ export function AppLayout() {
       </header>
       <div className="app-body">
         <aside className="side-nav">
+          <button
+            type="button"
+            className="side-nav-toggle"
+            aria-label={navCollapsed ? 'Expand navigation' : 'Collapse navigation'}
+            aria-expanded={!navCollapsed}
+            onClick={() => setNavCollapsed(value => !value)}
+            title={navCollapsed ? 'Expand navigation' : 'Collapse navigation'}
+          >
+            <AppIcon name="menu" />
+            <span className="side-nav-label">{navCollapsed ? 'Expand' : 'Collapse'}</span>
+          </button>
           <nav aria-label={user.roles.map(role => roleLabels[role]).join(' + ') + ' navigation'}>
             {navItem(roleHomePath(user.roles), manager ? 'Manager Dashboard' : user.roles.map(role => roleLabels[role]).join(' + ') + ' home', 'grid')}
             {(user.roles.includes('BUYER') || user.roles.includes('SELLER')) && navItem('/app/offers', 'My Offers', 'offers')}
@@ -87,7 +97,7 @@ export function AppLayout() {
   );
 }
 
-function AppIcon({ name }: { name: 'grid' | 'offers' | 'materials' | 'categories' | 'catalog' | 'requirements' | 'approvals' | 'community' | 'logout' | 'back' }) {
+function AppIcon({ name }: { name: 'grid' | 'offers' | 'materials' | 'categories' | 'catalog' | 'requirements' | 'approvals' | 'community' | 'logout' | 'back' | 'menu' }) {
   const paths: Record<string, ReactNode> = {
     grid: <><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></>,
     offers: <><path d="M4 7h16v12H4z" /><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M4 12h16" /></>,
@@ -99,6 +109,7 @@ function AppIcon({ name }: { name: 'grid' | 'offers' | 'materials' | 'categories
     community: <><circle cx="9" cy="7" r="4" /><path d="M17 11a3 3 0 0 0-3-3M2 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2M19 21v-1a3 3 0 0 0-2-2.8" /></>,
     back: <path d="m12 5-7 7 7 7M5 12h15" />,
     logout: <><path d="M10 5H5v14h5M14 8l4 4-4 4M8 12h10" /></>,
+    menu: <><path d="M4 7h16M4 12h16M4 17h16" /></>,
   };
   return <svg className="app-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg>;
 }

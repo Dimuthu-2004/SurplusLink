@@ -14,7 +14,6 @@ import 'package:mobile/materials/material_inventory_repository.dart';
 import 'package:mobile/location/location_lookup.dart';
 import 'package:mobile/requirements/requirement_repository.dart';
 import 'package:mobile/offers/offer_repository.dart';
-import 'package:mobile/l10n/locale_controller.dart';
 import 'package:mobile/notifications/notification_repository.dart';
 
 void main() {
@@ -34,8 +33,6 @@ void main() {
     AuthRepository(apiClient: apiClient, tokenStorage: tokenStorage),
     marketplace: marketplace,
   );
-  final localeController = LocaleController();
-  localeController.load();
 
   runApp(
     SurplusLinkApp(
@@ -55,7 +52,6 @@ void main() {
       locationLookup: ApiLocationLookup(apiClient).lookup,
       addressSearch: ApiLocationLookup(apiClient).search,
       notificationGateway: NotificationRepository(apiClient),
-      localeController: localeController,
     ),
   );
 }

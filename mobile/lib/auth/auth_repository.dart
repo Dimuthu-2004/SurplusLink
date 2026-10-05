@@ -87,6 +87,16 @@ final class AuthRepository implements AuthGateway {
   );
 
   @override
+  Future<String> uploadProfilePhoto(List<int> bytes) async {
+    final json = await _apiClient.uploadProfilePhoto(bytes);
+    final photoUrl = json['photoUrl'];
+    if (photoUrl is! String || photoUrl.isEmpty) {
+      throw const FormatException('Missing profile photo URL.');
+    }
+    return photoUrl;
+  }
+
+  @override
   Future<void> logout() => _tokenStorage.deleteToken();
 
   Future<AuthSession> _persistSession(Map<String, dynamic> json) async {
