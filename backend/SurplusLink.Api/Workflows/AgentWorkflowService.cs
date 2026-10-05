@@ -37,7 +37,10 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db, INotificationS
     public async Task<AgentWorkflowResponse> GetAsync(Guid id, CancellationToken ct)
     {
         var workflow = await LoadAsync(id, ct) ?? throw NotFound();
-        return ToResponse(workflow) with { ApprovalGroup = await GetApprovalGroupAsync(workflow, ct) };
+        var traceSource = workflow.Steps.Count == 0 && workflow.MaterialRequestId is Guid requestId
+            ? await FindPersistedTraceAsync(requestId, workflow.Id, ct)
+            : null;
+        return ToResponse(workflow, traceSource) with { ApprovalGroup = await GetApprovalGroupAsync(workflow, ct) };
     }
 
     public async Task<AgentWorkflowSummary> SummaryAsync(Guid id, CancellationToken ct)
@@ -573,6 +576,13 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db, INotificationS
             .Include(x => x.Steps).ThenInclude(x => x.ToolCalls)
             .Include(x => x.Approvals).SingleOrDefaultAsync(x => x.Id == id, ct);
 
+    private async Task<AgentWorkflow?> FindPersistedTraceAsync(Guid requestId, Guid currentWorkflowId, CancellationToken ct) =>
+        await db.AgentWorkflows.AsNoTracking()
+            .Where(x => x.MaterialRequestId == requestId && x.Id != currentWorkflowId && x.Steps.Any())
+            .OrderByDescending(x => x.CompletedAtUtc).ThenByDescending(x => x.StartedAtUtc)
+            .Include(x => x.Steps).ThenInclude(x => x.ToolCalls)
+            .FirstOrDefaultAsync(ct);
+
     private async Task UpdateParticipationAsync(AgentWorkflow workflow, Guid actor, OfferStatus offerStatus,
         TransactionStatus status, CancellationToken ct)
     {
@@ -622,15 +632,17 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db, INotificationS
 
     private static AgentWorkflowException NotFound() => new(404, "Workflow was not found.");
 
-    private static AgentWorkflowResponse ToResponse(AgentWorkflow workflow) => new(
+    private static AgentWorkflowResponse ToResponse(AgentWorkflow workflow, AgentWorkflow? traceSource = null) => new(
         workflow.Id, workflow.MaterialRequestId, workflow.MaterialMatchId, workflow.Status, workflow.CurrentStage,
         workflow.InputJson, workflow.OutputJson, workflow.ValidationJson, workflow.ErrorJson, workflow.Decision,
         workflow.RetryCount, workflow.StartedAtUtc, workflow.CompletedAtUtc,
-        workflow.Steps.OrderBy(x => x.Sequence).Select(ToStep).ToArray(),
+        (traceSource?.Steps ?? workflow.Steps).OrderBy(x => x.Sequence).Select(ToStep).ToArray(),
         workflow.Approvals.OrderBy(x => x.DecidedAtUtc).Select(ToApproval).ToArray(),
         workflow.MaterialRequest?.RecommendationReason ?? (workflow.MaterialMatchId.HasValue || (workflow.MaterialRequest?.RecommendedMatchId.HasValue ?? false)
             ? "Highest deterministic final score among valid routed candidates; ties use condition, total estimated cost, distance, then listing ID."
-            : null));
+            : null),
+        null,
+        traceSource?.Id);
 
     private static AgentStepResponse ToStep(AgentStep step) => new(
         step.Id, step.Sequence, step.Stage, step.Status, step.InputJson, step.OutputJson, step.ValidationJson,

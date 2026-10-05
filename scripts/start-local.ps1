@@ -17,12 +17,10 @@ $env:AgentWorkflow__Enabled = 'true'
 $routingRequired = 'Routing__Endpoint', 'Routing__ApiKey', 'Routing__BaseFee', 'Routing__CostPerKm', 'Routing__CostPerMinute'
 $missingRouting = $routingRequired | Where-Object { [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($_)) -or [Environment]::GetEnvironmentVariable($_) -like 'replace-with-*' }
 if ($missingRouting) { Write-Warning ("Routing provider configuration is missing: " + ($missingRouting -join ', ')) }
-$logs = Join-Path $projectRoot '.runtime'
-New-Item -ItemType Directory -Force $logs | Out-Null
 if (Get-NetTCPConnection -LocalPort $AiPort -State Listen -ErrorAction SilentlyContinue) {
     throw "Port $AiPort is already in use. Stop that service or choose another AiPort."
 }
-$ai = Start-Process -FilePath $python -ArgumentList '-m', 'uvicorn', 'app.main:app', '--host', '127.0.0.1', '--port', $AiPort -WorkingDirectory (Join-Path $projectRoot 'ai-service') -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $logs 'ai.log') -RedirectStandardError (Join-Path $logs 'ai-error.log')
+$ai = Start-Process -FilePath $python -ArgumentList '-m', 'uvicorn', 'app.main:app', '--host', '127.0.0.1', '--port', $AiPort -WorkingDirectory (Join-Path $projectRoot 'ai-service') -WindowStyle Normal -PassThru
 try {
     $ready = $false
     for ($attempt = 0; $attempt -lt 30; $attempt++) {
@@ -30,7 +28,7 @@ try {
         try { Invoke-RestMethod "$env:AI_SERVICE_BASE_URL/internal/health" -TimeoutSec 2 | Out-Null; $ready = $true; break } catch { Start-Sleep -Seconds 1 }
     }
     if (!$ready) { throw 'AI service did not become ready.' }
-    Write-Host 'AI ready; starting API with the same internal token and workflow worker enabled.'
+    Write-Host 'AI ready in its own console window; workflow_stage logs appear there. Starting API with the same internal token and workflow worker enabled.'
     Write-Host 'Routing settings are inherited by the API. Configure .env.local or Routing__* environment variables for real routes.'
     $smtpRequired = 'SMTP_HOST', 'SMTP_USERNAME', 'SMTP_PASSWORD', 'SMTP_FROM_EMAIL'
     $missingSmtp = $smtpRequired | Where-Object {

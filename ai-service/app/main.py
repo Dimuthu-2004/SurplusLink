@@ -1,9 +1,13 @@
 import hmac
+import logging
 import os
 from pathlib import Path
 from typing import Any, Dict, Optional
 
 from dotenv import load_dotenv
+
+logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------
 # Load environment variables from the project root .env.local
@@ -27,13 +31,6 @@ ENV_FILE = PROJECT_ROOT / ".env.local"
 if ENV_FILE.exists():
     load_dotenv(dotenv_path=ENV_FILE, override=True)
 
-# Temporary debug output.
-# Never print the actual API key.
-print("ENV file:", ENV_FILE)
-print("ENV exists:", ENV_FILE.exists())
-print("Groq configured:", bool(os.getenv("GROQ_API_KEY")))
-print("Groq model:", os.getenv("GROQ_MODEL"))
-
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -52,6 +49,8 @@ app = FastAPI(
     docs_url=None,
     redoc_url=None,
 )
+
+logger.info("ai_workflow_trace_logging_enabled module=app.workflows.orchestration")
 
 assistant_engine = SurplusLinkSemanticAssistantEngine()
 

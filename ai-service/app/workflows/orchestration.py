@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 from datetime import datetime, timezone
 from decimal import Decimal, ROUND_CEILING
@@ -16,6 +17,8 @@ from app.agents.logistics_schemas import Contract, Latitude, Longitude, Measurem
 from app.agents.material_matching import MaterialMatchingAgent
 from app.agents.match_scoring import condition_rank, score_breakdown
 from app.agents.requirement_planner import RequirementPlannerAgent
+
+logger = logging.getLogger(__name__)
 from app.agents.validation import DeterministicValidationTools, ToolTrace, ValidationAgent, ValidationInput, ValidationResult
 from app.materials.read_boundary import MaterialListingRecord
 
@@ -267,9 +270,13 @@ class WorkflowOrchestrator:
                 output=output, errorCode=error or result.get("errorCode"), retryCount=attempt,
                 startedAtUtc=started, completedAtUtc=datetime.now(timezone.utc),
                 durationMilliseconds=round((perf_counter() - tick) * 1000), toolCalls=tools))
+            trace = self.steps[-1]
+            logger.info(
+                "workflow_stage workflow=%s stage=%s status=%s duration_ms=%s retry_count=%s error_code=%s %s",
+                str(state["request"].workflowId)[:8], stage, trace.status, trace.durationMilliseconds,
+                trace.retryCount, trace.errorCode or "NONE", _safe_stage_summary(stage, output, tools))
             return result
         return execute
-
     async def _planner(self, state):
         result = await asyncio.to_thread(RequirementPlannerAgent().plan, {
             "buyerRequest": state["request"].buyerRequest,
@@ -352,3 +359,18 @@ class WorkflowOrchestrator:
             result["recommendation"] = Recommendation(matchId=row.matchId, listingId=row.listingId,
                 score=breakdown["score"], distanceKm=value.distanceKm, transportCost=value.transportCost)
         return result, output, calls
+
+
+def _safe_stage_summary(stage, output, tools) -> str:
+    """Return count-only telemetry; never include request, location, or tool payloads."""
+    output = output if isinstance(output, dict) else {}
+    candidates = output.get("candidates")
+    candidate_count = len(candidates) if isinstance(candidates, list) else 0
+    if stage == "MATCHING":
+        exclusions = output.get("exclusions")
+        return f"candidate_count={candidate_count} exclusion_count={len(exclusions) if isinstance(exclusions, list) else 0}"
+    if stage == "LOGISTICS":
+        return f"route_candidate_count={candidate_count}"
+    if stage == "VALIDATION":
+        return f"validation_tool_count={len(tools)} validation_recorded={output.get('valid') is not None}"
+    return "planner_result_recorded=true"
