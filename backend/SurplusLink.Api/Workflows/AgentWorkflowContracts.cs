@@ -46,7 +46,8 @@ public sealed record AgentWorkflowResponse(
     string? Decision, int RetryCount, DateTime StartedAtUtc, DateTime? CompletedAtUtc,
     IReadOnlyList<AgentStepResponse> Steps, IReadOnlyList<ApprovalResponse> Approvals,
     string? RecommendationReason = null,
-    ApprovalGroupResponse? ApprovalGroup = null);
+    ApprovalGroupResponse? ApprovalGroup = null,
+    Guid? TraceSourceWorkflowId = null);
 
 public sealed record ApprovalAllocationResponse(
     Guid TransactionId, Guid SellerId, string SellerName, string? SellerBusinessName,

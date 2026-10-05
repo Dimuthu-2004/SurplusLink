@@ -69,6 +69,53 @@ public sealed class AgentWorkflowIntegrationTests(RequirementsDatabase fixture) 
     }
 
     [PostgresFact]
+    public async Task Manager_get_returns_the_exact_prior_matching_trace_for_a_later_selection_workflow()
+    {
+        var approval = await SeedWorkflow(AgentWorkflowStatus.PENDING_APPROVAL);
+        Guid traceId;
+        using (var db = fixture.Context())
+        {
+            var now = DateTime.UtcNow;
+            var trace = new AgentWorkflow
+            {
+                Id = Guid.NewGuid(), MaterialRequestId = approval.MaterialRequestId,
+                Status = AgentWorkflowStatus.COMPLETED, CurrentStage = "AWAITING_BUYER_SELECTION",
+                InputJson = "{}", OutputJson = "{}", ValidationJson = "{\"valid\":true}",
+                StartedAtUtc = now.AddMinutes(-2), CompletedAtUtc = now.AddMinutes(-1)
+            };
+            foreach (var (stage, sequence) in new[] { "PLANNER", "MATCHING", "LOGISTICS", "VALIDATION" }.Select((stage, index) => (stage, index + 1)))
+            {
+                var step = new AgentStep
+                {
+                    Id = Guid.NewGuid(), Sequence = sequence, Stage = stage, Status = "COMPLETED",
+                    InputJson = "{}", OutputJson = "{}", ValidationJson = "{}", RetryCount = 0,
+                    StartedAtUtc = now.AddMinutes(-2), CompletedAtUtc = now.AddMinutes(-1), DurationMilliseconds = 1
+                };
+                if (stage == "VALIDATION")
+                    step.ToolCalls.Add(new AgentToolCall
+                    {
+                        Id = Guid.NewGuid(), ToolName = "check_listing_active", InputJson = "{}", OutputJson = "{\"passed\":true}",
+                        RetryCount = 0, StartedAtUtc = now.AddMinutes(-2), CompletedAtUtc = now.AddMinutes(-1), DurationMilliseconds = 1
+                    });
+                trace.Steps.Add(step);
+            }
+            traceId = trace.Id;
+            db.AgentWorkflows.Add(trace);
+            await db.SaveChangesAsync();
+        }
+
+        using var app = fixture.App();
+        using var buyer = fixture.Client(app, fixture.Buyer, "BUYER");
+        using var manager = fixture.Client(app, fixture.Manager, "MANAGER");
+        Assert.Equal(HttpStatusCode.Forbidden, (await buyer.GetAsync($"/api/workflows/{approval.Id}")).StatusCode);
+        var response = await manager.GetFromJsonAsync<AgentWorkflowResponse>($"/api/workflows/{approval.Id}");
+        Assert.NotNull(response);
+        Assert.Equal(traceId, response.TraceSourceWorkflowId);
+        Assert.Equal(new[] { "PLANNER", "MATCHING", "LOGISTICS", "VALIDATION" }, response.Steps.Select(x => x.Stage));
+        Assert.Single(response.Steps.Single(x => x.Stage == "VALIDATION").ToolCalls);
+    }
+
+    [PostgresFact]
     public async Task Reject_and_revise_never_reserve_and_store_manager_decisions()
     {
         var rejected = await SeedWorkflow(AgentWorkflowStatus.PENDING_APPROVAL);

@@ -135,6 +135,21 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.recommendation.transportCost, Decimal("500"))
         self.assertEqual(request.model_dump_json(), before)
 
+    async def test_stage_logs_are_count_only_and_do_not_include_request_content(self):
+        request = demo_request()
+        request = request.model_copy(update={"objective": "private objective must not be logged"})
+        with self.assertLogs("app.workflows.orchestration", level="INFO") as logs:
+            await WorkflowOrchestrator().run(request)
+        output = "\n".join(logs.output)
+        self.assertEqual(output.count("workflow_stage"), 4)
+        self.assertIn("stage=PLANNER", output)
+        self.assertIn("stage=MATCHING", output)
+        self.assertIn("stage=LOGISTICS", output)
+        self.assertIn("stage=VALIDATION", output)
+        self.assertIn("candidate_count=", output)
+        self.assertIn("validation_tool_count=6", output)
+        self.assertNotIn("private objective", output)
+
     async def test_matching_uses_only_planner_normalized_criteria(self):
         planner_raw = demo_request().model_dump(mode="json")
         planner_raw["buyerRequest"].update({
