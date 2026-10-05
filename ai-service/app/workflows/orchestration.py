@@ -206,7 +206,6 @@ class State(TypedDict, total=False):
     recommendation: Recommendation
     status: str
     errorCode: str
-    planSteps: tuple[Any, ...]
 
 
 class WorkflowOrchestrator:
@@ -276,33 +275,10 @@ class WorkflowOrchestrator:
             "buyerRequest": state["request"].buyerRequest,
             "objective": state["request"].objective,
         })
-        if result.status != "ok":
-            return (dict(status="REJECTED", errorCode="INVALID_REQUIREMENT"),
-                    result.model_dump(mode="json"), ())
-        plan = tuple(result.planSteps)
-        expected = (
-            ("MaterialMatchingAgent", "match_materials"),
-            ("LogisticsAgent", "estimate_logistics"),
-            ("ValidationAgent", "validate_recommendation"),
-            ("ManagerApproval", "request_manager_approval"),
-        )
-        actual = tuple((step.agent, step.action) for step in plan)
-        if actual != expected:
-            return (dict(status="REJECTED", errorCode="INVALID_EXECUTION_PLAN"),
-                    result.model_dump(mode="json"), ())
-        return (dict(planner=result, planSteps=plan),
+        return (dict(planner=result) if result.status == "ok" else dict(status="REJECTED", errorCode="INVALID_REQUIREMENT"),
                 result.model_dump(mode="json"), ())
 
-    @staticmethod
-    def _planned_step(state, order, agent, action):
-        plan = state.get("planSteps", ())
-        step = next((x for x in plan if x.stepOrder == order), None)
-        if step is None or step.agent != agent or step.action != action:
-            raise ValueError("Planner execution contract mismatch.")
-        return step
-
     async def _matching(self, state):
-        self._planned_step(state, 1, "MaterialMatchingAgent", "match_materials")
         fields = state["planner"].normalizedCriteria.model_dump(mode="json")
         criteria = {k: fields[k] for k in ("buyerUserId", "categoryId", "category", "requiredQuantity", "unit", "maximumBudget", "deadline")}
         if fields.get("baseUnit"):
@@ -315,7 +291,6 @@ class WorkflowOrchestrator:
                 result.model_dump(mode="json"), tuple(tools.traces))
 
     async def _logistics(self, state):
-        self._planned_step(state, 2, "LogisticsAgent", "estimate_logistics")
         criteria = state["planner"].normalizedCriteria
         tools = SnapshotTools(state["request"].listings)
         result = await asyncio.to_thread(LogisticsAgent(tools, max_retries=0).assess, dict(
@@ -325,7 +300,6 @@ class WorkflowOrchestrator:
         return dict(logistics=result), result.model_dump(mode="json"), tuple(tools.traces)
 
     async def _validation(self, state):
-        self._planned_step(state, 3, "ValidationAgent", "validate_recommendation")
         evaluations = []
         valid = []
         for candidate in state["matching"].candidates:
