@@ -73,7 +73,6 @@ builder.Services.AddControllers()
     });
 builder.Services.AddMemoryCache();
 builder.Services.AddRoutingProvider();
-builder.Services.AddHttpClient("AiService");
 builder.Services.AddHttpClient<IReverseGeocodingService, NominatimReverseGeocodingService>(client =>
 {
     client.BaseAddress = new Uri("https://nominatim.openstreetmap.org/reverse");

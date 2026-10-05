@@ -37,7 +37,6 @@ void main() {
   runApp(
     SurplusLinkApp(
       authController: authController,
-      apiClient: apiClient,
       materialGateway: MaterialInventoryRepository(apiClient),
       matchGateway: MatchRepository(
         apiClient,

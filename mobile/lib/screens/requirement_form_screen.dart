@@ -14,14 +14,11 @@ import 'package:mobile/materials/construction_item_template_models.dart';
 import 'dart:convert';
 
 
-import '../models/ai_assistant_models.dart';
-
 class RequirementFormScreen extends StatefulWidget {
   const RequirementFormScreen({
     required this.gateway,
     this.requirementId,
     this.initialCategoryId,
-    this.aiPrefill,
     this.locationPicker = showLocationPicker,
     this.locationSource = const DeviceRequirementLocation(),
     this.locationLookup,
@@ -30,7 +27,6 @@ class RequirementFormScreen extends StatefulWidget {
   final RequirementGateway gateway;
   final String? requirementId;
   final String? initialCategoryId;
-  final AiRequirementPrefill? aiPrefill;
   final LocationPicker locationPicker;
   final RequirementLocationSource locationSource;
   final AddressLookup? locationLookup;
@@ -145,9 +141,6 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
           _category = widget.initialCategoryId!.trim();
         }
       });
-      if (row == null && widget.aiPrefill != null) {
-        _applyAiPrefillAfterMetadata(widget.aiPrefill!, templates);
-      }
     } on Object catch (error) {
       if (mounted) {
         setState(() {
@@ -162,97 +155,6 @@ class _RequirementFormScreenState extends State<RequirementFormScreen> {
       _useTemplate(_selectedTemplate!);
     } else if (_category != null && _editable) {
       await _loadUnits(_category!, preferredUnit: _unit);
-    }
-  }
-
-  void _applyAiPrefillAfterMetadata(
-    AiRequirementPrefill prefill,
-    List<ConstructionItemTemplate> templates,
-  ) {
-    final draft = prefill.draft;
-    final template = templates
-        .where((item) => item.id == draft.templateId)
-        .firstOrNull;
-
-    if (template != null) {
-      _useTemplate(template);
-    } else if (draft.categoryId != null) {
-      _category = draft.categoryId;
-    }
-
-    setState(() {
-      _inputMode =
-          draft.inputMode == 'PACKAGE' || draft.inputMode == 'PACKAGE_COUNT'
-          ? 'PACKAGE_COUNT'
-          : 'BASE_QUANTITY';
-
-      if (_inputMode == 'PACKAGE_COUNT') {
-        final countVal = draft.packageCount ?? (draft.enteredQuantity > 0 ? draft.enteredQuantity.toInt() : null);
-        if (countVal != null && countVal > 0) {
-          _packageCount.text = countVal.toString();
-        }
-        if (draft.packageSize != null && draft.packageSize! > 0) {
-          _packageSize.text = draft.packageSize.toString();
-        } else if (draft.normalizedQuantity > 0 && draft.enteredQuantity > 0) {
-          _packageSize.text = (draft.normalizedQuantity / draft.enteredQuantity).toStringAsFixed(1);
-        }
-        if (template != null && _packageSize.text.isNotEmpty) {
-          _packageSizeIsOther = !template.allowedPackageSizes
-              .map((value) => value.toString())
-              .contains(_packageSize.text);
-        }
-      } else {
-        final qVal = prefill.quantity;
-        if (qVal > 0) {
-          _quantity.text = qVal.toString();
-        }
-        if (prefill.unit.isNotEmpty) {
-          _unit = prefill.unit;
-        }
-      }
-
-      // Prefill notes & location info
-      final notesBuffer = StringBuffer();
-      if (draft.notes != null && draft.notes!.isNotEmpty) {
-        notesBuffer.write(draft.notes);
-      }
-      if (draft.locationText != null &&
-          draft.locationText!.isNotEmpty &&
-          !draft.locationText!.toLowerCase().contains('current location')) {
-        if (notesBuffer.isNotEmpty) notesBuffer.write(' | ');
-        notesBuffer.write('Delivery Area: ${draft.locationText}');
-      }
-      _notes.text = notesBuffer.toString();
-
-      // Coordinates handoff
-      if (draft.latitude != null && draft.longitude != null) {
-        _capturedLatitude = draft.latitude;
-        _capturedLongitude = draft.longitude;
-      }
-
-      // Attributes prefill if template exists
-      if (template != null) {
-        for (final field in template.parsedAttributes.where(
-          (field) => field.buyerPreference,
-        )) {
-          final value = draft.preferences?[field.id];
-          if (value == null) continue;
-          final canonical = field.options.firstWhere(
-            (option) => option.toLowerCase() == value.toLowerCase(),
-            orElse: () => field.allowOther || field.options.isEmpty ? value : '',
-          );
-          if (canonical.isNotEmpty) _preferences[field.id] = canonical;
-        }
-      }
-    });
-
-    // Device GPS auto-capture trigger if location is pending
-    if (draft.locationPending ||
-        (draft.locationSource == 'CURRENT_DEVICE_LOCATION' &&
-            _capturedLatitude == null)) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _captureGps();
-      });
     }
   }
 

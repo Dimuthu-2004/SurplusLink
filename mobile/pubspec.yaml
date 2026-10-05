@@ -70,7 +70,6 @@ flutter:
     - assets/animations/smartphone-call.json
     - assets/animations/login-ready.json
     - assets/animations/payment-done.json
-    - assets/animations/male_call_center.json
     - assets/images/login_background.jpg
     - assets/images/dashboard-reuse-hero.png
 
