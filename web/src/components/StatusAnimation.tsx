@@ -29,8 +29,8 @@ function isAnimationData(value: unknown): value is Record<string, unknown> {
   return Array.isArray(data.layers) && typeof data.w === 'number' && typeof data.h === 'number';
 }
 
-export function StatusAnimation({ kind, size = 200, loop = false, label, className = '', onComplete }: {
-  kind: keyof typeof animations; size?: number; loop?: boolean; label: string; className?: string; onComplete?: () => void;
+export function StatusAnimation({ kind, size = 200, loop = false, label, decorative = false, className = '', onComplete }: {
+  kind: keyof typeof animations; size?: number; loop?: boolean; label: string; decorative?: boolean; className?: string; onComplete?: () => void;
 }) {
   const [reduced, setReduced] = useState(false);
   const animationData = animations[kind] as unknown;
@@ -42,7 +42,7 @@ export function StatusAnimation({ kind, size = 200, loop = false, label, classNa
     return () => query.removeEventListener?.('change', update);
   }, []);
   if (!isAnimationData(animationData)) return null;
-  return <div className={`status-animation ${className}`} style={{ width: size, maxWidth: '100%', aspectRatio: '1' }} role="img" aria-label={label}>
+  return <div className={`status-animation ${className}`} style={{ width: size, maxWidth: '100%', aspectRatio: '1' }} {...(decorative ? { 'aria-hidden': true } : { role: 'img', 'aria-label': label })}>
     <OptionalAnimationBoundary>
       <Suspense fallback={null}>
         <Lottie animationData={animationData} loop={reduced ? false : loop} autoplay={!reduced} onComplete={onComplete} />
@@ -60,7 +60,7 @@ export function SuccessOverlay({ kind, title, message, onComplete }: {
   }, [onComplete]);
   return <div className="success-overlay" role="dialog" aria-modal="true" aria-live="polite">
     <div className="success-overlay-card">
-      <StatusAnimation kind={kind} label={title} onComplete={onComplete} />
+      <StatusAnimation kind={kind} size={170} loop label={title} decorative onComplete={onComplete} />
       <h2>{title}</h2><p>{message}</p>
     </div>
   </div>;
