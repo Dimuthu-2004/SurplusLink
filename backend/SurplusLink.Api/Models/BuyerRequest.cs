@@ -17,6 +17,10 @@ public sealed class BuyerRequest : AuditableEntity
     // from listing specifications: buyers never need to describe seller stock/packages.
     public string? BuyerPreferencesJson { get; set; }
 
+    // A workflow-owned fact, not an unstructured preference. Existing rows use
+    // true so their historical delivery/routing behaviour remains unchanged.
+    public bool DeliveryRequired { get; set; } = true;
+
     // Retained for legacy rows. New requests receive a category-based title internally.
     public string Title { get; set; } = string.Empty;
 

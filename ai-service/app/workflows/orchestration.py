@@ -17,6 +17,7 @@ from app.agents.material_matching import MaterialMatchingAgent
 from app.agents.match_scoring import condition_rank, score_breakdown
 from app.agents.requirement_planner import RequirementPlannerAgent
 from app.agents.validation import DeterministicValidationTools, ToolTrace, ValidationAgent, ValidationInput, ValidationResult
+from app.assistant.llm_provider import GeminiLLMProvider, LLMProvider
 from app.materials.read_boundary import MaterialListingRecord
 
 
@@ -211,8 +212,9 @@ class State(TypedDict, total=False):
 class WorkflowOrchestrator:
     """One invocation per instance. Topology and policy are code, never model text."""
 
-    def __init__(self, limits: Limits | None = None, *, validation_tools=None):
+    def __init__(self, limits: Limits | None = None, *, validation_tools=None, llm: LLMProvider | None = None):
         self.limits = limits or Limits()
+        self.llm = llm or GeminiLLMProvider()
         self.validation_tools = validation_tools or DeterministicValidationTools(self.limits.transactionThreshold)
         self.steps: list[StepTrace] = []
         graph = StateGraph(State)
@@ -221,9 +223,12 @@ class WorkflowOrchestrator:
         for name, node in nodes:
             graph.add_node(name, self._bounded(name, node))
         graph.add_edge(START, "PLANNER")
-        for current, following in zip(nodes, nodes[1:]):
-            graph.add_conditional_edges(current[0], lambda state: "stop" if "status" in state else "next",
-                                        {"stop": END, "next": following[0]})
+        graph.add_conditional_edges("PLANNER", self._after_planner,
+                                    {"stop": END, "MATCHING": "MATCHING"})
+        graph.add_conditional_edges("MATCHING", self._after_matching,
+                                    {"stop": END, "LOGISTICS": "LOGISTICS", "VALIDATION": "VALIDATION"})
+        graph.add_conditional_edges("LOGISTICS", lambda state: "stop" if "status" in state else "VALIDATION",
+                                    {"stop": END, "VALIDATION": "VALIDATION"})
         graph.add_edge("VALIDATION", END)
         self.graph = graph.compile()
 
@@ -241,6 +246,16 @@ class WorkflowOrchestrator:
         return WorkflowResponse(workflowId=request.workflowId, status=state.get("status", "FAILED"),
             validation=validation, recommendation=state.get("recommendation"), steps=tuple(self.steps),
             errorCode=state.get("errorCode"))
+
+    @staticmethod
+    def _after_planner(state):
+        return "stop" if "status" in state else "MATCHING"
+
+    @staticmethod
+    def _after_matching(state):
+        if "status" in state:
+            return "stop"
+        return "LOGISTICS" if any(step.agent == "LogisticsAgent" for step in state["planner"].planSteps) else "VALIDATION"
 
     def _bounded(self, stage, node):
         async def execute(state):
@@ -271,7 +286,7 @@ class WorkflowOrchestrator:
         return execute
 
     async def _planner(self, state):
-        result = await asyncio.to_thread(RequirementPlannerAgent().plan, {
+        result = await asyncio.to_thread(RequirementPlannerAgent(llm=self.llm).plan, {
             "buyerRequest": state["request"].buyerRequest,
             "objective": state["request"].objective,
         })
@@ -286,14 +301,14 @@ class WorkflowOrchestrator:
         stored = state["request"].buyerRequest
         criteria.update(constructionItemTemplateId=stored.get("constructionItemTemplateId"), itemName=stored.get("itemName"))
         tools = SnapshotTools(state["request"].listings)
-        result = await asyncio.to_thread(MaterialMatchingAgent(tools).match, criteria)
+        result = await asyncio.to_thread(MaterialMatchingAgent(tools, llm=self.llm).match, criteria)
         return (dict(matching=result) if result.status == "ok" else dict(status="REJECTED", errorCode="NO_MATCHING_CANDIDATE"),
                 result.model_dump(mode="json"), tuple(tools.traces))
 
     async def _logistics(self, state):
         criteria = state["planner"].normalizedCriteria
         tools = SnapshotTools(state["request"].listings)
-        result = await asyncio.to_thread(LogisticsAgent(tools, max_retries=0).assess, dict(
+        result = await asyncio.to_thread(LogisticsAgent(tools, llm=self.llm, max_retries=0).assess, dict(
             requirementId=state["planner"].buyerRequestId, candidateListingIds=[x.listingId for x in state["matching"].candidates],
             buyerLocation=dict(latitude=criteria.targetLatitude, longitude=criteria.targetLongitude), deadline=criteria.deadline))
         # Validation must see incomplete/failed logistics rather than accepting a model preference.
@@ -325,7 +340,7 @@ class WorkflowOrchestrator:
 
     async def _validate_candidate(self, state, candidate):
         row = next(x for x in state["request"].listings if str(x.listingId) == candidate.listingId)
-        route = next((x for x in state["logistics"].candidates if x.listingId == row.listingId), None)
+        route = next((x for x in state.get("logistics", ()).candidates if x.listingId == row.listingId), None) if state.get("logistics") else None
         criteria = state["planner"].normalizedCriteria
         priced_quantity = ((criteria.requiredQuantity / row.packageSize).to_integral_value(rounding=ROUND_CEILING)
             if row.quantityMode in {"PACKAGE", "PIECE"} and row.packageSize else criteria.requiredQuantity)
@@ -334,8 +349,11 @@ class WorkflowOrchestrator:
             unitMatches=(row.baseUnit or row.unit).casefold() == (criteria.baseUnit or criteria.unit).casefold(), listingStatus=row.status,
             availableUntil=row.availableUntil, deadline=criteria.deadline, quantity=priced_quantity,
             availableQuantity=row.availableQuantity, unitPrice=row.unitPrice, maximumBudget=criteria.maximumBudget,
-            distanceKm=route.distanceKm if route else None, durationMinutes=route.durationMinutes if route else None,
-            transportCost=route.estimatedTransportCost if route else None, deliveryFeasible=route.deliveryFeasible if route else None)
+            distanceKm=route.distanceKm if route else Decimal("0") if not criteria.deliveryRequired else None,
+            durationMinutes=route.durationMinutes if route else Decimal("0") if not criteria.deliveryRequired else None,
+            transportCost=route.estimatedTransportCost if route else Decimal("0") if not criteria.deliveryRequired else None,
+            deliveryFeasible=route.deliveryFeasible if route else True if not criteria.deliveryRequired else None,
+            deliveryRequired=criteria.deliveryRequired)
         validation, calls = await ValidationAgent(self.validation_tools, timeout_seconds=self.limits.toolTimeoutSeconds,
                                                   max_retries=self.limits.maxRetries).validate(value)
         result = dict(validation=validation, status="MATCH_FOUND" if validation.valid else "REJECTED")

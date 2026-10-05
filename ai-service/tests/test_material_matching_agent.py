@@ -5,6 +5,7 @@ from decimal import Decimal
 import unittest
 from uuid import UUID
 from dataclasses import replace
+import re
 
 from app.agents.material_matching import MaterialMatchingAgent
 from app.materials.read_boundary import ActiveMaterialCriteria, MaterialListingRecord
@@ -12,6 +13,22 @@ from app.materials.read_boundary import ActiveMaterialCriteria, MaterialListingR
 
 NOW = datetime(2026, 9, 15, tzinfo=timezone.utc)
 DEADLINE = datetime(2099, 10, 1, tzinfo=timezone.utc)
+
+
+class MatchingLlm:
+    def is_available(self): return True
+    def generate_chat_response(self, *args, **kwargs): return None
+    def generate_structured(self, messages, response_model, **_kwargs):
+        ids = re.findall(r"'listingId': '([^']+)'", messages[0]["content"])
+        return response_model.model_validate({"explanations": [
+            {"listingId": listing_id, "semanticFit": "HIGH", "reason": "Terminology is semantically suitable.",
+             "matchedAttributes": ["material description"], "concerns": []}
+            for listing_id in ids
+        ]})
+
+
+def matching_agent(boundary, *, clock=None):
+    return MaterialMatchingAgent(boundary, llm=MatchingLlm(), clock=clock)
 
 
 class FakeActiveMaterialsBoundary:
@@ -39,7 +56,7 @@ class MaterialMatchingAgentTests(unittest.TestCase):
                 listing("better-value", quantity="10", unit_price="8"),
             ]
         )
-        response = MaterialMatchingAgent(boundary, clock=lambda: NOW).match(request())
+        response = matching_agent(boundary, clock=lambda: NOW).match(request())
 
         self.assertEqual(response.status, "ok")
         self.assertIsNone(response.failure)
@@ -67,7 +84,7 @@ class MaterialMatchingAgentTests(unittest.TestCase):
                 ),
             ]
         )
-        response = MaterialMatchingAgent(boundary, clock=lambda: NOW).match(request())
+        response = matching_agent(boundary, clock=lambda: NOW).match(request())
 
         self.assertEqual(response.status, "ok")
         self.assertEqual([candidate.listingId for candidate in response.candidates], ["active"])
@@ -77,7 +94,7 @@ class MaterialMatchingAgentTests(unittest.TestCase):
         boundary = FakeActiveMaterialsBoundary(
             [listing("unavailable", quantity="0", unit_price="8")]
         )
-        response = MaterialMatchingAgent(boundary, clock=lambda: NOW).match(request())
+        response = matching_agent(boundary, clock=lambda: NOW).match(request())
 
         self.assertEqual(response.status, "no_candidate")
         self.assertEqual(response.candidates, [])
@@ -89,7 +106,7 @@ class MaterialMatchingAgentTests(unittest.TestCase):
         boundary = FakeActiveMaterialsBoundary(
             [listing("partial", quantity="2", unit_price="8")]
         )
-        response = MaterialMatchingAgent(boundary, clock=lambda: NOW).match(request())
+        response = matching_agent(boundary, clock=lambda: NOW).match(request())
         self.assertEqual(response.status, "ok")
         self.assertEqual([candidate.listingId for candidate in response.candidates], ["partial"])
         self.assertEqual(response.candidates[0].availableQuantity, Decimal("2"))
@@ -103,7 +120,7 @@ class MaterialMatchingAgentTests(unittest.TestCase):
         )
         raw = request()
         raw.update({"unit": "L", "baseUnit": "L", "requiredQuantity": "2", "maximumBudget": "300"})
-        response = MaterialMatchingAgent(FakeActiveMaterialsBoundary([canned_paint]), clock=lambda: NOW).match(raw)
+        response = matching_agent(FakeActiveMaterialsBoundary([canned_paint]), clock=lambda: NOW).match(raw)
         self.assertEqual(response.status, "ok")
         self.assertEqual(response.candidates[0].packageType, "CAN")
         self.assertEqual(response.candidates[0].baseUnit, "L")
@@ -112,12 +129,12 @@ class MaterialMatchingAgentTests(unittest.TestCase):
         own = replace(listing("own", quantity="10", unit_price="8"),
                       seller_id=UUID(str(request()["buyerUserId"])))
         other = listing("other", quantity="10", unit_price="8")
-        agent = MaterialMatchingAgent(FakeActiveMaterialsBoundary([own, other]), clock=lambda: NOW)
+        agent = matching_agent(FakeActiveMaterialsBoundary([own, other]), clock=lambda: NOW)
         result = agent.match(request())
         self.assertEqual([c.listingId for c in result.candidates], ["other"])
         self.assertEqual(result.exclusions[0].code, "SELF_MATCH_NOT_ALLOWED")
         self.assertNotIn("seller_id", result.model_dump_json())
-        only_self = MaterialMatchingAgent(FakeActiveMaterialsBoundary([own]), clock=lambda: NOW).match(request())
+        only_self = matching_agent(FakeActiveMaterialsBoundary([own]), clock=lambda: NOW).match(request())
         self.assertEqual(only_self.status, "no_candidate")
         self.assertEqual(only_self.exclusions[0].code, "SELF_MATCH_NOT_ALLOWED")
 
@@ -125,10 +142,10 @@ class MaterialMatchingAgentTests(unittest.TestCase):
         raw = request()
         del raw["buyerUserId"]
         boundary = FakeActiveMaterialsBoundary([listing("changed", quantity="10", unit_price="8")])
-        self.assertEqual(MaterialMatchingAgent(boundary).match(raw).status, "invalid_input")
+        self.assertEqual(matching_agent(boundary).match(raw).status, "invalid_input")
         detail = replace(boundary.listings["changed"], seller_id=UUID(str(request()["buyerUserId"])))
         boundary.get_material_detail = lambda _: detail
-        result = MaterialMatchingAgent(boundary, clock=lambda: NOW).match(request())
+        result = matching_agent(boundary, clock=lambda: NOW).match(request())
         self.assertEqual(result.candidates, [])
         self.assertEqual(result.exclusions[0].code, "SELF_MATCH_NOT_ALLOWED")
 

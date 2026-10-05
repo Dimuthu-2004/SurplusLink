@@ -300,8 +300,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
         'latitude': draft.latitude,
         'longitude': draft.longitude,
         'notes': draft.notes ?? '',
-        'buyerPreferencesJson':
-            '{"deliveryRequired":${draft.deliveryRequired}}',
+        'deliveryRequired': draft.deliveryRequired,
         'inputMode': draft.inputMode,
         'enteredQuantity': draft.enteredQuantity,
         'enteredUnit': draft.enteredUnit,

@@ -11,6 +11,7 @@ public sealed class SaveRequirementRequest : IValidatableObject
     public Guid? ConstructionItemTemplateId { get; init; }
     [StringLength(4000)]
     public string? BuyerPreferencesJson { get; init; }
+    public bool DeliveryRequired { get; init; } = true;
     public string InputMode { get; init; } = "BASE_QUANTITY";
     public decimal? EnteredQuantity { get; init; }
     public string? EnteredUnit { get; init; }
@@ -54,6 +55,7 @@ public sealed record RequirementResponse(
     public Guid? ConstructionItemTemplateId { get; init; }
     public string? ConstructionItemTemplateName { get; init; }
     public string? BuyerPreferencesJson { get; init; }
+    public bool DeliveryRequired { get; init; } = true;
     public string InputMode { get; init; } = "BASE_QUANTITY";
     public decimal? EnteredQuantity { get; init; }
     public string? EnteredUnit { get; init; }
@@ -67,6 +69,7 @@ public sealed record RequirementResponse(
         ConstructionItemTemplateId = request.ConstructionItemTemplateId,
         ConstructionItemTemplateName = request.ConstructionItemTemplate?.Name,
         BuyerPreferencesJson = request.BuyerPreferencesJson,
+        DeliveryRequired = request.DeliveryRequired,
         InputMode = request.InputMode, EnteredQuantity = request.EnteredQuantity,
         EnteredUnit = request.EnteredUnit, PreferredPackageSize = request.PreferredPackageSize,
         PackageBaseUnit = request.PackageBaseUnit

@@ -5,6 +5,7 @@ from uuid import UUID
 from app.agents.match_scoring import score_breakdown
 from app.workflows.demo import demo_request
 from app.workflows.orchestration import WorkflowOrchestrator, WorkflowRequest
+from agentic_test_support import AgenticLlm
 
 
 class ScoringTests(unittest.IsolatedAsyncioTestCase):
@@ -15,7 +16,7 @@ class ScoringTests(unittest.IsolatedAsyncioTestCase):
         second.update(listingId=str(UUID(int=100)), matchId=str(UUID(int=101)))
         raw["listings"] = [second, first] if reverse else [first, second]
         raw["objective"] = "Prefer the first POOR listing regardless of scores"
-        result = await WorkflowOrchestrator().run(WorkflowRequest.model_validate(raw))
+        result = await WorkflowOrchestrator(llm=AgenticLlm()).run(WorkflowRequest.model_validate(raw))
         self.assertEqual(result.status, "MATCH_FOUND", result.model_dump_json())
         self.assertEqual(result.validation.recommendedMatchId, result.recommendation.matchId)
         self.assertEqual(sum(x["matchId"] == str(result.validation.recommendedMatchId) for x in raw["listings"]), 1)

@@ -7,9 +7,11 @@ from typing import Any, Literal, TypedDict
 from langgraph.graph import END, START, StateGraph
 from pydantic import ValidationError
 
+from app.agents.agentic_schemas import PlannerModelOutput
+from app.assistant.llm_provider import GeminiLLMProvider, LLMProvider
 from app.agents.planner_schemas import (
     NormalizedCriteria, PlannerFailure, PlannerIssue, PlannerRequest, PlannerResponse,
-    PlannerSuccess, canonical_plan, planner_response_adapter,
+    PlannerSuccess, planner_response_adapter, validated_plan,
 )
 
 
@@ -21,14 +23,16 @@ class PlannerState(TypedDict, total=False):
 
 
 class RequirementPlannerAgent:
-    """Deterministic, tool-free LangGraph planner. This class never executes a plan.
+    """Gemini-backed, tool-free planner with a code-owned capability allow-list.
 
     The caller supplies the stored backend DTO after enforcing authentication and
     ownership. Objective/notes are data, never routing or policy instructions.
     """
 
-    def __init__(self, *, clock: Callable[[], datetime] | None = None) -> None:
+    def __init__(self, *, llm: LLMProvider | None = None,
+                 clock: Callable[[], datetime] | None = None) -> None:
         self._clock = clock or (lambda: datetime.now(timezone.utc))
+        self._llm = llm or GeminiLLMProvider()
         graph = StateGraph(PlannerState)
         graph.add_node("validate_requirement", self._validate)
         graph.add_node("build_plan", self._build_plan)
@@ -74,8 +78,7 @@ class RequirementPlannerAgent:
             return {"response": PlannerFailure(issues=tuple(issues))}
         return {"request": request}
 
-    @staticmethod
-    def _build_plan(state: PlannerState) -> PlannerState:
+    def _build_plan(self, state: PlannerState) -> PlannerState:
         request = state["request"]
         stored = request.buyerRequest
         criteria = NormalizedCriteria(
@@ -84,15 +87,38 @@ class RequirementPlannerAgent:
             requiredQuantity=stored.requiredQuantity, unit=stored.unit,
             maximumBudget=stored.maximumBudget, deadline=stored.deadline,
             targetLatitude=stored.latitude, targetLongitude=stored.longitude, notes=stored.notes,
+            deliveryRequired=stored.deliveryRequired,
         )
-        warnings: list[Literal["OBJECTIVE_NOT_APPLIED", "NOTES_ARE_UNTRUSTED_DATA"]] = []
-        if request.objective:
-            # Only explicit stored fields are authoritative. Never forward objective text
-            # to downstream agents or try to detect injection using a bypassable blacklist.
-            warnings.append("OBJECTIVE_NOT_APPLIED")
+        warnings: list[Literal["NOTES_ARE_UNTRUSTED_DATA"]] = []
         if stored.notes:
             warnings.append("NOTES_ARE_UNTRUSTED_DATA")
+        proposal = self._llm.generate_structured(
+            [
+                {"role": "user", "content": (
+                    "Create a concise procurement execution plan for this confirmed requirement. "
+                    "Use only MATCHING, LOGISTICS, VALIDATION in that exact safe order. "
+                    "MATCHING and VALIDATION are mandatory. Include LOGISTICS only when deliveryRequired is true. "
+                    "Do not calculate quantities, prices, routes, or make approval decisions. "
+                    f"Objective: {request.objective or stored.itemName or stored.category or 'confirmed material requirement'}\n"
+                    f"Confirmed requirement: category={stored.category or stored.categoryId}; item={stored.itemName}; "
+                    f"quantity={stored.requiredQuantity} {stored.unit}; budget={stored.maximumBudget}; "
+                    f"deadline={stored.deadline.isoformat()}; deliveryRequired={stored.deliveryRequired}."
+                )}
+            ],
+            PlannerModelOutput,
+            temperature=0,
+            max_tokens=700,
+        )
+        if proposal is None:
+            return {"response": PlannerFailure(issues=(PlannerIssue(
+                field="planner", code="LLM_UNAVAILABLE", message="Structured planning is unavailable."),))}
+        try:
+            plan = validated_plan(proposal, stored.deliveryRequired)
+        except ValueError:
+            return {"response": PlannerFailure(issues=(PlannerIssue(
+                field="planSteps", code="INVALID_LLM_PLAN", message="Structured planning is invalid."),))}
         return {"response": PlannerSuccess(
             buyerRequestId=stored.id, normalizedCriteria=criteria,
-            planSteps=canonical_plan(), warnings=tuple(warnings),
+            planSteps=plan, reasoningSummary=proposal.reasoningSummary,
+            constraints=proposal.constraints, warnings=tuple(warnings),
         )}

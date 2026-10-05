@@ -24,7 +24,12 @@ public sealed class WorkflowExecutionTests
         var empty = JsonSerializer.SerializeToElement(new { });
         var calls = Tools.Select(name => new WorkflowToolTrace(name, "COMPLETED",
             JsonSerializer.SerializeToElement(new { passed = true, code = "CHECKED", warning = (string?)null }), null, 0, now, now, 1)).ToArray();
-        var steps = new[] { "PLANNER", "MATCHING", "LOGISTICS", "VALIDATION" }.Select((name, index) =>
+        var deliveryRequired = !JsonSerializer.SerializeToElement(request.BuyerRequest)
+            .TryGetProperty("deliveryRequired", out var delivery) || delivery.ValueKind != JsonValueKind.False;
+        var stages = deliveryRequired
+            ? new[] { "PLANNER", "MATCHING", "LOGISTICS", "VALIDATION" }
+            : new[] { "PLANNER", "MATCHING", "VALIDATION" };
+        var steps = stages.Select((name, index) =>
             new WorkflowStepTrace(index + 1, name, "COMPLETED", empty, null, 0, now, now, 1,
                 name == "VALIDATION" ? calls : [])).ToArray();
         return new(request.WorkflowId, "MATCH_FOUND", new(true, true, row.MatchId, [], []),
@@ -57,6 +62,15 @@ public sealed class WorkflowExecutionTests
             Recommendation = result.Recommendation! with { TransportCost = 0 } }));
         result.Steps[3].ToolCalls[0] = result.Steps[3].ToolCalls[0] with { Output = JsonSerializer.SerializeToElement(new { passed = false }) };
         Assert.Throws<JsonException>(() => WorkflowQueueProcessor.ValidateResult(request, result));
+    }
+
+    [Fact]
+    public void Result_gate_allows_collection_only_plan_with_mandatory_validation()
+    {
+        var request = Request() with { BuyerRequest = new { deliveryRequired = false } };
+        var result = Success(request);
+        Assert.Equal(new[] { "PLANNER", "MATCHING", "VALIDATION" }, result.Steps.Select(step => step.Stage));
+        WorkflowQueueProcessor.ValidateResult(request, result);
     }
 
     [Fact]

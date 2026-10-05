@@ -42,6 +42,7 @@ class ValidationInput(Contract):
     durationMinutes: Measurement | None = None
     transportCost: Measurement | None = None
     deliveryFeasible: StrictBool | None = None
+    deliveryRequired: StrictBool = True
 
 
 class CheckResult(Contract):
@@ -122,8 +123,8 @@ class DeterministicValidationTools:
 
     async def check_match_data_complete(self, value):
         complete = (value.buyerId != value.sellerId and value.categoryMatches and value.unitMatches
-                    and value.distanceKm is not None and value.durationMinutes is not None
-                    and value.transportCost is not None and value.deliveryFeasible is True
+                    and (not value.deliveryRequired or (value.distanceKm is not None and value.durationMinutes is not None
+                    and value.transportCost is not None and value.deliveryFeasible is True))
                     and value.deadline > self.clock())
         return self._result(complete, "MATCH_DATA_INCOMPLETE_OR_INCONSISTENT")
 

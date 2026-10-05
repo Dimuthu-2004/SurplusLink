@@ -7,6 +7,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from app.agents.item_relevance import ItemRelevanceResult
+from app.agents.agentic_schemas import SemanticCandidateExplanation
 
 
 class MatchingRequest(BaseModel):
@@ -68,12 +69,13 @@ class Candidate(BaseModel):
     baseUnit: str | None = None
     minimumSellableIncrement: Decimal | None = None
     decimalPrecision: int | None = None
+    semanticExplanation: SemanticCandidateExplanation | None = None
 
 
 class MatchingFailure(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    code: Literal["INVALID_INPUT", "SEARCH_UNAVAILABLE", "NO_CANDIDATE"]
+    code: Literal["INVALID_INPUT", "SEARCH_UNAVAILABLE", "NO_CANDIDATE", "SEMANTIC_REASONING_UNAVAILABLE"]
     message: str = Field(min_length=1, max_length=500)
 
 
@@ -88,7 +90,7 @@ class MatchingResponse(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    status: Literal["ok", "invalid_input", "search_unavailable", "no_candidate"]
+    status: Literal["ok", "invalid_input", "search_unavailable", "no_candidate", "semantic_unavailable"]
     candidates: list[Candidate] = Field(default_factory=list)
     failure: MatchingFailure | None = None
     exclusions: list[CandidateExclusion] = Field(default_factory=list)

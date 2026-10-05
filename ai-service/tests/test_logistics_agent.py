@@ -3,6 +3,7 @@ from decimal import Decimal
 import json
 import unittest
 from uuid import UUID
+import re
 
 from pydantic import ValidationError
 
@@ -13,6 +14,17 @@ NOW = datetime(2030, 1, 1, tzinfo=timezone.utc)
 REQUIREMENT = "00000000-0000-0000-0000-000000000001"
 LISTING = "00000000-0000-0000-0000-000000000002"
 OTHER = "00000000-0000-0000-0000-000000000003"
+
+
+class LogisticsLlm:
+    def is_available(self): return True
+    def generate_chat_response(self, *args, **kwargs): return None
+    def generate_structured(self, messages, response_model, **_kwargs):
+        ids = re.findall(r"'listingId': '([^']+)'", messages[0]["content"])
+        return response_model.model_validate({"rationales": [
+            {"listingId": listing_id, "reason": "Controlled route facts were evaluated.", "concerns": []}
+            for listing_id in ids
+        ]})
 
 
 def request():
@@ -47,7 +59,7 @@ class Tools:
 
 class LogisticsTests(unittest.TestCase):
     def agent(self, tools, **kwargs):
-        return LogisticsAgent(tools, clock=lambda: NOW, **kwargs)
+        return LogisticsAgent(tools, llm=LogisticsLlm(), clock=lambda: NOW, **kwargs)
 
     def test_normal_metrics_and_cost_come_only_from_allowed_tools(self):
         tools = Tools()

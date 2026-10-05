@@ -6,6 +6,7 @@ from typing import Annotated, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, ValidationInfo, model_validator
+from app.agents.agentic_schemas import LogisticsCandidateRationale
 
 
 def numeric(value):
@@ -117,7 +118,8 @@ ToolName = Literal["get_listing_location", "get_route_estimate", "calculate_tran
 FailureCode = Literal["INVALID_INPUT", "MISSING_BUYER_COORDINATES", "MISSING_SELLER_COORDINATES",
     "INVALID_TOOL_RESPONSE", "TOOL_UNAVAILABLE", "TOOL_TIMEOUT", "ROUTING_TIMEOUT", "ROUTING_RATE_LIMITED",
     "ROUTING_UNAVAILABLE", "ROUTING_INVALID_RESPONSE", "ROUTING_NOT_CONFIGURED", "INVALID_COORDINATES",
-    "TRANSPORT_PRICING_NOT_CONFIGURED", "TRANSPORT_ESTIMATE_OUT_OF_RANGE", "TRANSPORT_UNAVAILABLE"]
+    "TRANSPORT_PRICING_NOT_CONFIGURED", "TRANSPORT_ESTIMATE_OUT_OF_RANGE", "TRANSPORT_UNAVAILABLE",
+    "SEMANTIC_REASONING_UNAVAILABLE"]
 
 
 class LogisticsWarning(Contract):
@@ -135,6 +137,7 @@ class CandidateLogistics(Contract):
     deliveryFeasible: bool | None = Field(default=None, strict=True)
     reason: Literal["DELIVERY_WITHIN_DEADLINE", "DEADLINE_EXCEEDED"] | FailureCode
     warnings: tuple[LogisticsWarning, ...] = ()
+    reasoning: LogisticsCandidateRationale | None = None
 
     @model_validator(mode="after")
     def consistent(self):

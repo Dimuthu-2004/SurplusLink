@@ -9,6 +9,7 @@ from pydantic import (
     AwareDatetime, BaseModel, ConfigDict, Field, TypeAdapter,
     ValidationInfo, field_validator, model_validator,
 )
+from app.agents.agentic_schemas import PlannerModelOutput
 
 
 class PlannerModel(BaseModel):
@@ -33,6 +34,7 @@ class RequirementFields(PlannerModel):
     maximumBudget: Decimal = Field(gt=0, max_digits=18, decimal_places=2, allow_inf_nan=False)
     deadline: AwareDatetime
     notes: str = Field(default="", max_length=2000)
+    deliveryRequired: bool = True
 
     @field_validator("categoryId")
     @classmethod
@@ -158,15 +160,6 @@ class ValidationPlanStep(PlannerModel):
     ] = ("normalizedCriteria", "step1.candidates", "step2.logistics")
 
 
-class ApprovalPlanStep(PlannerModel):
-    stepOrder: Literal[4] = 4
-    agent: Literal["ManagerApproval"] = "ManagerApproval"
-    action: Literal["request_manager_approval"] = "request_manager_approval"
-    requiredInputs: tuple[
-        Literal["buyerRequestId"], Literal["step3.validationResult"],
-    ] = ("buyerRequestId", "step3.validationResult")
-
-
 class PlannerIssue(PlannerModel):
     field: str
     code: str
@@ -177,8 +170,10 @@ class PlannerSuccess(PlannerModel):
     status: Literal["ok"] = "ok"
     buyerRequestId: UUID
     normalizedCriteria: NormalizedCriteria
-    planSteps: tuple[MatchingPlanStep, LogisticsPlanStep, ValidationPlanStep, ApprovalPlanStep]
-    warnings: tuple[Literal["OBJECTIVE_NOT_APPLIED", "NOTES_ARE_UNTRUSTED_DATA"], ...] = ()
+    planSteps: tuple[MatchingPlanStep, LogisticsPlanStep, ValidationPlanStep] | tuple[MatchingPlanStep, ValidationPlanStep]
+    reasoningSummary: str = Field(min_length=1, max_length=500)
+    constraints: tuple[str, ...] = Field(default=(), max_length=12)
+    warnings: tuple[Literal["NOTES_ARE_UNTRUSTED_DATA"], ...] = ()
 
 
 class PlannerFailure(PlannerModel):
@@ -192,5 +187,10 @@ PlannerResponse = Annotated[PlannerSuccess | PlannerFailure, Field(discriminator
 planner_response_adapter = TypeAdapter(PlannerResponse)
 
 
-def canonical_plan() -> tuple[MatchingPlanStep, LogisticsPlanStep, ValidationPlanStep, ApprovalPlanStep]:
-    return MatchingPlanStep(), LogisticsPlanStep(), ValidationPlanStep(), ApprovalPlanStep()
+def validated_plan(model: PlannerModelOutput, delivery_required: bool):
+    """Translate a model proposal into code-owned, allow-listed graph steps."""
+    capabilities = tuple(step.capability for step in model.planSteps)
+    expected = ("MATCHING", "LOGISTICS", "VALIDATION") if delivery_required else ("MATCHING", "VALIDATION")
+    if capabilities != expected:
+        raise ValueError("Planner capabilities are not the safe execution plan.")
+    return (MatchingPlanStep(), LogisticsPlanStep(), ValidationPlanStep()) if delivery_required else (MatchingPlanStep(), ValidationPlanStep())

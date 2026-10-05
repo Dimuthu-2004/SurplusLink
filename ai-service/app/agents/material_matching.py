@@ -7,6 +7,8 @@ from typing import Any, Literal, Mapping, TypedDict, cast
 from langgraph.graph import END, START, StateGraph
 from pydantic import ValidationError
 
+from app.agents.agentic_schemas import SemanticMatchingOutput
+from app.assistant.llm_provider import GeminiLLMProvider, LLMProvider
 from app.agents.match_scoring import condition_rank
 from app.agents.item_relevance import ItemRelevanceAgent
 from app.agents.matching_schemas import (
@@ -28,6 +30,7 @@ class MatchingState(TypedDict, total=False):
     raw_input: Mapping[str, Any]
     request: MatchingRequest
     search_results: list[MaterialListingRecord]
+    deterministic_response: MatchingResponse
     response: MatchingResponse
 
 
@@ -38,9 +41,11 @@ class MaterialMatchingAgent:
         self,
         boundary: ActiveMaterialsReadBoundary,
         *,
+        llm: LLMProvider | None = None,
         clock: callable[[], datetime] | None = None,
     ) -> None:
         self._tools = MaterialSearchTools(boundary)
+        self._llm = llm or GeminiLLMProvider()
         self._clock = clock or (lambda: datetime.now(timezone.utc))
         self._graph = self._build_graph()
 
@@ -55,6 +60,7 @@ class MaterialMatchingAgent:
         workflow.add_node("validate_input", self._validate_input)
         workflow.add_node("search_active_materials", self._search_active_materials)
         workflow.add_node("build_candidates", self._build_candidates)
+        workflow.add_node("semantic_reasoning", self._semantic_reasoning)
         workflow.add_edge(START, "validate_input")
         workflow.add_conditional_edges(
             "validate_input",
@@ -72,7 +78,9 @@ class MaterialMatchingAgent:
                 "finish": END,
             },
         )
-        workflow.add_edge("build_candidates", END)
+        workflow.add_conditional_edges("build_candidates", self._after_candidates,
+            {"semantic": "semantic_reasoning", "finish": END})
+        workflow.add_edge("semantic_reasoning", END)
         return workflow.compile()
 
     def _validate_input(self, state: MatchingState) -> MatchingState:
@@ -167,13 +175,46 @@ class MaterialMatchingAgent:
             }
 
         return {
-            "response": MatchingResponse(
+            "deterministic_response": MatchingResponse(
                 status="ok",
                 candidates=candidates,
                 exclusions=exclusions,
                 itemRelevance=relevance_results,
             )
         }
+
+    @staticmethod
+    def _after_candidates(state: MatchingState) -> Literal["semantic", "finish"]:
+        return "semantic" if "deterministic_response" in state else "finish"
+
+    def _semantic_reasoning(self, state: MatchingState) -> MatchingState:
+        """Ask Gemini to explain only candidates that already passed hard gates."""
+        deterministic = state["deterministic_response"]
+        request = state["request"]
+        rows = {row.listing_id: row for row in state["search_results"]}
+        payload = []
+        for candidate in deterministic.candidates:
+            row = rows.get(candidate.listingId)
+            payload.append({"listingId": candidate.listingId, "itemName": row.title if row else "",
+                            "description": row.description if row else "", "condition": candidate.condition})
+        output = self._llm.generate_structured(
+            [{"role": "user", "content": (
+                "For each already eligible marketplace listing, explain semantic suitability to the buyer. "
+                "Return exactly one explanation for every supplied listing ID. Do not add listings. "
+                "Do not claim stock, price, route, eligibility, or approval facts; those are verified elsewhere. "
+                f"Buyer item={request.itemName or request.constructionItemTemplateId or request.category}; "
+                f"buyer aliases={request.aliases}; buyer unit={request.unit}. Candidates={payload}"
+            )}], SemanticMatchingOutput, temperature=0, max_tokens=1200)
+        expected = {candidate.listingId for candidate in deterministic.candidates}
+        if output is None or {item.listingId for item in output.explanations} != expected or len(output.explanations) != len(expected):
+            return {"response": self._failure("semantic_unavailable", "SEMANTIC_REASONING_UNAVAILABLE",
+                "Semantic matching is temporarily unavailable. Please try again later.", deterministic.exclusions)
+                .model_copy(update={"itemRelevance": deterministic.itemRelevance})}
+        explanations = {item.listingId: item for item in output.explanations}
+        return {"response": deterministic.model_copy(update={
+            "candidates": [candidate.model_copy(update={"semanticExplanation": explanations[candidate.listingId]})
+                           for candidate in deterministic.candidates]
+        })}
 
     @staticmethod
     def _fits(listing: MaterialListingRecord, request: MatchingRequest) -> bool:
@@ -238,8 +279,8 @@ class MaterialMatchingAgent:
 
     @staticmethod
     def _failure(
-        status: Literal["invalid_input", "search_unavailable", "no_candidate"],
-        code: Literal["INVALID_INPUT", "SEARCH_UNAVAILABLE", "NO_CANDIDATE"],
+        status: Literal["invalid_input", "search_unavailable", "no_candidate", "semantic_unavailable"],
+        code: Literal["INVALID_INPUT", "SEARCH_UNAVAILABLE", "NO_CANDIDATE", "SEMANTIC_REASONING_UNAVAILABLE"],
         message: str,
         exclusions: list[CandidateExclusion] | None = None,
     ) -> MatchingResponse:

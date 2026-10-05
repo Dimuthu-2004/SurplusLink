@@ -17,6 +17,22 @@ from app.agents.planner_schemas import PlannerFailure, PlannerSuccess, planner_r
 NOW = datetime(2030, 1, 1, tzinfo=timezone.utc)
 
 
+class PlannerLlm:
+    def is_available(self): return True
+    def generate_chat_response(self, *args, **kwargs): return None
+    def generate_structured(self, _messages, response_model, **_kwargs):
+        return response_model.model_validate({
+            "objective": "Find appropriate confirmed marketplace listings.",
+            "planSteps": [
+                {"capability": "MATCHING", "purpose": "Find eligible material listings."},
+                {"capability": "LOGISTICS", "purpose": "Evaluate controlled route facts."},
+                {"capability": "VALIDATION", "purpose": "Apply deterministic business checks."},
+            ],
+            "reasoningSummary": "Match eligible listings, assess delivery, then validate.",
+            "constraints": ["Manager approval remains required."],
+        })
+
+
 def request() -> dict:
     return {"buyerRequest": {
         "id": "11111111-1111-1111-1111-111111111111",
@@ -31,7 +47,7 @@ def request() -> dict:
 
 class RequirementPlannerAgentTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.agent = RequirementPlannerAgent(clock=lambda: NOW)
+        self.agent = RequirementPlannerAgent(llm=PlannerLlm(), clock=lambda: NOW)
 
     def test_normal_stored_request_returns_normalized_criteria_and_fixed_delegations(self) -> None:
         raw = request()
@@ -47,11 +63,10 @@ class RequirementPlannerAgentTests(unittest.TestCase):
         self.assertEqual(result.normalizedCriteria.notes, "Deliver after lunch.")
         self.assertEqual(result.normalizedCriteria.targetLatitude, Decimal("6.927100"))
         self.assertEqual(result.normalizedCriteria.deadline.isoformat(), "2030-01-03T18:29:59+00:00")
-        self.assertEqual([x.stepOrder for x in result.planSteps], [1, 2, 3, 4])
+        self.assertEqual([x.stepOrder for x in result.planSteps], [1, 2, 3])
         self.assertEqual([x.agent for x in result.planSteps],
-                         ["MaterialMatchingAgent", "LogisticsAgent", "ValidationAgent", "ManagerApproval"])
-        self.assertIn("step3.validationResult", result.planSteps[-1].requiredInputs)
-        self.assertIn("OBJECTIVE_NOT_APPLIED", result.warnings)
+                         ["MaterialMatchingAgent", "LogisticsAgent", "ValidationAgent"])
+        self.assertIn("Match eligible", result.reasoningSummary)
 
     def test_missing_quantity_is_structured_rejection_without_a_partial_plan(self) -> None:
         raw = request()
@@ -162,7 +177,7 @@ class RequirementPlannerAgentTests(unittest.TestCase):
         self.assertEqual(output.getvalue(), "")
         decoded = json.loads(payload)
         self.assertEqual(decoded["normalizedCriteria"]["maximumBudget"], "25000.50")
-        self.assertEqual(len(decoded["planSteps"]), 4)
+        self.assertEqual(len(decoded["planSteps"]), 3)
         self.assertIsInstance(planner_response_adapter.validate_json(payload), PlannerSuccess)
         graph_nodes = set(self.agent._graph.get_graph().nodes)
         self.assertEqual(graph_nodes, {"__start__", "__end__", "validate_requirement", "build_plan"})

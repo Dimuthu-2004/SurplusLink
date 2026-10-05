@@ -197,11 +197,11 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
             var routingFailure = RoutingFailureClassifier.ValidateCoordinates(
                 listing.Latitude, listing.Longitude, request.Latitude, request.Longitude);
             TransportEstimate? estimate = null;
-            if (MatchService.EligibilityReason(request, listing) is null && routingFailure is null &&
+            if (request.DeliveryRequired && MatchService.EligibilityReason(request, listing) is null && routingFailure is null &&
                 listing.Latitude is decimal sellerLat && listing.Longitude is decimal sellerLon &&
                 request.Latitude is decimal buyerLat && request.Longitude is decimal buyerLon)
                 estimate = await transport.EstimateAsync(new RouteRequest(sellerLat, sellerLon, buyerLat, buyerLon), ct);
-            var routed = estimate is { Route.Success: true, Route.DistanceKm: >= 0, Route.DurationMinutes: >= 0,
+            var routed = !request.DeliveryRequired || estimate is { Route.Success: true, Route.DistanceKm: >= 0, Route.DurationMinutes: >= 0,
                 EstimatedTransportCost: >= 0, ErrorCode: null };
             logger?.LogInformation(
                 "Workflow route listing {ListingId}, requirement {RequirementId}: originPresent={OriginPresent}, destinationPresent={DestinationPresent}, provider={Provider}, outcome={Outcome}",
@@ -213,8 +213,10 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
             rows.Add(new(existing.GetValueOrDefault(listing.Id, Guid.NewGuid()), listing.Id, listing.SellerId,
                 listing.CategoryId, quantity.AvailableBaseQuantity, quantity.BaseUnit, listing.UnitPrice,
                 listing.Condition.ToString(), listing.Status.ToString(), listing.AvailableUntil, listing.Latitude,
-                listing.Longitude, routed ? estimate!.Route.DistanceKm : null, routed ? estimate!.Route.DurationMinutes : null,
-                routed ? estimate!.EstimatedTransportCost : null, routed ? null : routingFailure ?? RoutingFailureClassifier.FromEstimate(estimate),
+                listing.Longitude, request.DeliveryRequired ? (routed ? estimate!.Route.DistanceKm : null) : 0,
+                request.DeliveryRequired ? (routed ? estimate!.Route.DurationMinutes : null) : 0,
+                request.DeliveryRequired ? (routed ? estimate!.EstimatedTransportCost : null) : 0,
+                routed ? null : routingFailure ?? RoutingFailureClassifier.FromEstimate(estimate),
                 quantity.QuantityMode.ToString(), quantity.PackageType, quantity.PackageSize,
                 quantity.AvailablePackageCount, quantity.AvailableBaseQuantity,
                 QuantitySemantics.TryRequiredBaseQuantity(request, listing, out var requestedBase)
@@ -231,6 +233,7 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
             enteredUnit = request.EnteredUnit, preferredPackageSize = request.PreferredPackageSize,
             packageBaseUnit = request.PackageBaseUnit, maximumBudget = request.MaximumBudget,
             deadline = request.Deadline, latitude = request.Latitude, longitude = request.Longitude,
+            deliveryRequired = request.DeliveryRequired,
             notes = request.Notes, status = request.Status.ToString() }, rows,
             request.Title.Length <= 2000 ? request.Title : request.Title[..2000]);
     }
@@ -243,8 +246,8 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
                 x.Status == "ACTIVE" && x.AvailableUntil > now && x.AvailableUntil.Date >= request.Deadline.Date &&
                 SnapshotCompatible(request, x) &&
                 x.AvailableQuantity > 0 && request.Deadline > now &&
-                x.RoutingError is null && x.DistanceKm is >= 0 && x.DurationMinutes is >= 0 && x.TransportCost is >= 0 &&
-                x.DurationMinutes <= (decimal)(request.Deadline - now).TotalMinutes &&
+                (!request.DeliveryRequired || (x.RoutingError is null && x.DistanceKm is >= 0 && x.DurationMinutes is >= 0 && x.TransportCost is >= 0 &&
+                x.DurationMinutes <= (decimal)(request.Deadline - now).TotalMinutes)) &&
                 MaterialCost(request, x) + x.TransportCost <= request.MaximumBudget)
             .Select(x => new { Row = x, Score = MatchScoring.Score(x.Condition, MaterialCost(request, x),
                 request.MaximumBudget, x.DistanceKm, x.TransportCost) })
@@ -289,7 +292,10 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
         // recommendation in approval or request a revision; both are explicit
         // human actions.
         var allowedStatuses = new[] { "MATCH_FOUND", "REJECTED", "FAILED" };
-        var stages = new[] { "PLANNER", "MATCHING", "LOGISTICS", "VALIDATION" };
+        var deliveryRequired = DeliveryRequired(input);
+        var stages = deliveryRequired
+            ? new[] { "PLANNER", "MATCHING", "LOGISTICS", "VALIDATION" }
+            : new[] { "PLANNER", "MATCHING", "VALIDATION" };
         var validationTools = new[] { "check_listing_active", "check_listing_not_expired", "check_available_quantity",
             "check_budget", "check_match_data_complete", "check_transaction_threshold" };
         var toolsByStage = new Dictionary<string, string[]>
@@ -321,10 +327,10 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
                 throw new JsonException("Failed validation cannot recommend a match.");
             return;
         }
-        if (result.ErrorCode is not null || result.Validation.Violations.Length != 0 || result.Steps.Length != 4 ||
+        if (result.ErrorCode is not null || result.Validation.Violations.Length != 0 || result.Steps.Length != stages.Length ||
             result.Steps.Any(x => x.Status != "COMPLETED" || x.ErrorCode is not null))
             throw new JsonException("Incomplete match validation.");
-        var calls = result.Steps[3].ToolCalls;
+        var calls = result.Steps[^1].ToolCalls;
         if (!calls.Select(x => x.ToolName).SequenceEqual(validationTools) || calls.Any(x => x.ErrorCode is not null ||
             x.Status != "COMPLETED" || x.Output is not { ValueKind: JsonValueKind.Object } output ||
             !output.TryGetProperty("passed", out var passed) || passed.ValueKind != JsonValueKind.True))
@@ -336,6 +342,12 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
             listing.Status != "ACTIVE" || listing.AvailableUntil <= DateTime.UtcNow ||
             rec.DistanceKm < 0 || rec.TransportCost < 0 || rec.DistanceKm != listing.DistanceKm || rec.TransportCost != listing.TransportCost)
             throw new JsonException("Recommendation must reference the trusted snapshot.");
+    }
+
+    private static bool DeliveryRequired(WorkflowRunRequest input)
+    {
+        var request = JsonSerializer.SerializeToElement(input.BuyerRequest, AgentWorkflowClient.Json);
+        return !request.TryGetProperty("deliveryRequired", out var value) || value.ValueKind is not JsonValueKind.False;
     }
 
     private async Task PersistAsync(AgentWorkflow workflow, BuyerRequest request, WorkflowRunResult result, int retries,
@@ -375,7 +387,7 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
                 db.AuditLogs.Add(new AuditLog { Id = Guid.NewGuid(), EntityType = nameof(MaterialMatch),
                     EntityId = candidate.Id, Action = "REEVALUATE" });
             }
-            if (row.DurationMinutes > (decimal)(request.Deadline - DateTime.UtcNow).TotalMinutes)
+            if (request.DeliveryRequired && row.DurationMinutes > (decimal)(request.Deadline - DateTime.UtcNow).TotalMinutes)
                 reason ??= "DELIVERY_DEADLINE_EXCEEDED";
             var routeSucceeded = row.RoutingError is null && row.DistanceKm is >= 0 && row.DurationMinutes is >= 0 && row.TransportCost is >= 0;
             candidate.Status = reason is not null ? MatchStatus.REJECTED : routeSucceeded ? MatchStatus.ROUTED : MatchStatus.ROUTE_FAILED;

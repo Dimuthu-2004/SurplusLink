@@ -332,7 +332,8 @@ public sealed class RequirementService(
             // quantity so physical stock is never fractional.
             normalizedAllocations.Add((allocation, match, selectedRequirementBase, packageCount));
 
-            if (match.Status != MatchStatus.ROUTED || match.Distance is null || match.DurationMinutes is null || match.EstimatedTransportCost is null)
+            if (match.Status != MatchStatus.ROUTED || (request.DeliveryRequired &&
+                (match.Distance is null || match.DurationMinutes is null || match.EstimatedTransportCost is null)))
                 throw new RequirementException(409, $"Match for listing '{match.Listing.Title}' does not have complete route and transport data.");
 
             if (match.Listing.Status != ListingStatus.ACTIVE)
@@ -350,11 +351,11 @@ public sealed class RequirementService(
             if (MarketplaceMatchPolicy.RejectionReason(request.BuyerId, match.Listing.SellerId) is not null)
                 throw new RequirementException(409, $"Self-dealing matches are not allowed for listing '{match.Listing.Title}'.");
 
-            if (match.DurationMinutes > (decimal)(request.Deadline - DateTime.UtcNow).TotalMinutes)
+            if (request.DeliveryRequired && match.DurationMinutes!.Value > (decimal)(request.Deadline - DateTime.UtcNow).TotalMinutes)
                 throw new RequirementException(409, $"Delivery deadline exceeded for listing '{match.Listing.Title}'.");
 
             var matCost = packageMode ? packageCount!.Value * match.Listing.UnitPrice : selectedBase * match.Listing.UnitPrice;
-            var transCost = match.EstimatedTransportCost.Value;
+            var transCost = match.EstimatedTransportCost ?? 0;
             totalMaterialCost += matCost;
             totalTransportCost += transCost;
 
@@ -601,6 +602,7 @@ public sealed class RequirementService(
         request.BuyerPreferencesJson = string.IsNullOrWhiteSpace(input.BuyerPreferencesJson)
             ? null
             : input.BuyerPreferencesJson.Trim();
+        request.DeliveryRequired = input.DeliveryRequired;
         var enteredQuantity = input.EnteredQuantity ?? input.RequiredQuantity;
         var enteredUnit = input.EnteredUnit ?? input.Unit;
         var inputMode = input.InputMode ?? "BASE_QUANTITY";
