@@ -1,6 +1,7 @@
 import asyncio
 import os
 import unittest
+from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from unittest.mock import patch
@@ -8,6 +9,8 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
+from app.agents.matching_schemas import MatchingFailure, MatchingResponse
+from app.agents.requirement_planner import RequirementPlannerAgent
 from app.agents.validation import ALLOWED_TOOLS, DeterministicValidationTools, ValidationAgent, ValidationInput, ValidationResult
 from app.main import app
 from app.workflows.demo import demo_request
@@ -131,6 +134,60 @@ class WorkflowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.validation.recommendedMatchId, request.listings[0].matchId)
         self.assertEqual(result.recommendation.transportCost, Decimal("500"))
         self.assertEqual(request.model_dump_json(), before)
+
+    async def test_matching_uses_only_planner_normalized_criteria(self):
+        planner_raw = demo_request().model_dump(mode="json")
+        planner_raw["buyerRequest"].update({
+            "constructionItemTemplateId": "planner-template",
+            "itemName": "Planner item",
+            "baseUnit": "kg",
+            "normalizedBaseUnit": "kg",
+            "normalizedRequiredQuantity": "10",
+            "inputMode": "PACKAGE_COUNT",
+            "enteredQuantity": "2",
+            "enteredUnit": "BAG",
+            "preferredPackageSize": "5",
+            "packageBaseUnit": "kg",
+        })
+        planner = RequirementPlannerAgent().plan({
+            "buyerRequest": planner_raw["buyerRequest"],
+            "objective": planner_raw.get("objective"),
+        })
+        workflow_raw = deepcopy(demo_request().model_dump(mode="json"))
+        workflow_raw["buyerRequest"].update({
+            "constructionItemTemplateId": "raw-template",
+            "itemName": "Raw item",
+            "baseUnit": "L",
+            "normalizedBaseUnit": "L",
+            "normalizedRequiredQuantity": "999",
+            "inputMode": "BASE_QUANTITY",
+            "enteredQuantity": "999",
+            "enteredUnit": "L",
+            "preferredPackageSize": "999",
+            "packageBaseUnit": "L",
+        })
+        request = WorkflowRequest.model_validate(workflow_raw)
+        no_candidate = MatchingResponse(status="no_candidate", candidates=[],
+            failure=MatchingFailure(code="NO_CANDIDATE", message="No candidate."))
+
+        with patch("app.workflows.orchestration.MaterialMatchingAgent.match", return_value=no_candidate) as match:
+            await WorkflowOrchestrator()._matching({"planner": planner, "request": request})
+
+        criteria = match.call_args.args[0]
+        expected = planner.normalizedCriteria.model_dump(mode="json")
+        for field in (
+            "buyerUserId", "categoryId", "category", "requiredQuantity", "unit", "maximumBudget", "deadline",
+            "constructionItemTemplateId", "itemName", "baseUnit", "normalizedBaseUnit",
+            "normalizedRequiredQuantity", "inputMode", "enteredQuantity", "enteredUnit",
+            "preferredPackageSize", "packageBaseUnit",
+        ):
+            with self.subTest(field=field):
+                self.assertEqual(criteria.get(field), expected[field])
+        self.assertEqual(criteria["constructionItemTemplateId"], "planner-template")
+        self.assertEqual(criteria["itemName"], "Planner item")
+        self.assertNotIn("notes", criteria)
+        self.assertNotIn("targetLatitude", criteria)
+        self.assertNotIn("targetLongitude", criteria)
 
     async def test_transport_pushes_total_over_budget_despite_matching_fit(self):
         raw = demo_request().model_dump(mode="json")

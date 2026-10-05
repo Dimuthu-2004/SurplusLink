@@ -35,6 +35,18 @@ class RequirementPlannerAgentTests(unittest.TestCase):
 
     def test_normal_stored_request_returns_normalized_criteria_and_fixed_delegations(self) -> None:
         raw = request()
+        raw["buyerRequest"].update({
+            "constructionItemTemplateId": "template-cement",
+            "itemName": "Portland Cement",
+            "baseUnit": "kg",
+            "normalizedBaseUnit": "kg",
+            "normalizedRequiredQuantity": "10.125",
+            "inputMode": "PACKAGE_COUNT",
+            "enteredQuantity": "3",
+            "enteredUnit": "BAG",
+            "preferredPackageSize": "3.375",
+            "packageBaseUnit": "kg",
+        })
         unchanged = deepcopy(raw)
         result = self.agent.plan(raw)
         self.assertIsInstance(result, PlannerSuccess)
@@ -47,11 +59,32 @@ class RequirementPlannerAgentTests(unittest.TestCase):
         self.assertEqual(result.normalizedCriteria.notes, "Deliver after lunch.")
         self.assertEqual(result.normalizedCriteria.targetLatitude, Decimal("6.927100"))
         self.assertEqual(result.normalizedCriteria.deadline.isoformat(), "2030-01-03T18:29:59+00:00")
+        self.assertEqual(result.normalizedCriteria.constructionItemTemplateId, "template-cement")
+        self.assertEqual(result.normalizedCriteria.itemName, "Portland Cement")
+        self.assertEqual(result.normalizedCriteria.baseUnit, "kg")
+        self.assertEqual(result.normalizedCriteria.normalizedBaseUnit, "kg")
+        self.assertEqual(result.normalizedCriteria.normalizedRequiredQuantity, Decimal("10.125"))
+        self.assertEqual(result.normalizedCriteria.inputMode, "PACKAGE_COUNT")
+        self.assertEqual(result.normalizedCriteria.enteredQuantity, Decimal("3"))
+        self.assertEqual(result.normalizedCriteria.enteredUnit, "BAG")
+        self.assertEqual(result.normalizedCriteria.preferredPackageSize, Decimal("3.375"))
+        self.assertEqual(result.normalizedCriteria.packageBaseUnit, "kg")
         self.assertEqual([x.stepOrder for x in result.planSteps], [1, 2, 3, 4])
         self.assertEqual([x.agent for x in result.planSteps],
                          ["MaterialMatchingAgent", "LogisticsAgent", "ValidationAgent", "ManagerApproval"])
         self.assertIn("step3.validationResult", result.planSteps[-1].requiredInputs)
         self.assertIn("OBJECTIVE_NOT_APPLIED", result.warnings)
+
+    def test_omitted_matching_metadata_keeps_existing_none_defaults(self) -> None:
+        result = self.agent.plan(request())
+        self.assertIsInstance(result, PlannerSuccess)
+        for field in (
+            "constructionItemTemplateId", "itemName", "baseUnit", "normalizedBaseUnit",
+            "normalizedRequiredQuantity", "inputMode", "enteredQuantity", "enteredUnit",
+            "preferredPackageSize", "packageBaseUnit",
+        ):
+            with self.subTest(field=field):
+                self.assertIsNone(getattr(result.normalizedCriteria, field))
 
     def test_missing_quantity_is_structured_rejection_without_a_partial_plan(self) -> None:
         raw = request()

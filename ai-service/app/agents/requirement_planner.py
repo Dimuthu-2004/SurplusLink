@@ -80,8 +80,15 @@ class RequirementPlannerAgent:
         stored = request.buyerRequest
         criteria = NormalizedCriteria(
             buyerUserId=stored.buyerId,
+            constructionItemTemplateId=stored.constructionItemTemplateId,
+            itemName=stored.itemName,
             categoryId=stored.categoryId, category=stored.category,
-            requiredQuantity=stored.requiredQuantity, unit=stored.unit,
+            requiredQuantity=stored.requiredQuantity, unit=stored.unit, baseUnit=stored.baseUnit,
+            normalizedBaseUnit=stored.normalizedBaseUnit,
+            normalizedRequiredQuantity=stored.normalizedRequiredQuantity,
+            inputMode=stored.inputMode, enteredQuantity=stored.enteredQuantity,
+            enteredUnit=stored.enteredUnit, preferredPackageSize=stored.preferredPackageSize,
+            packageBaseUnit=stored.packageBaseUnit,
             maximumBudget=stored.maximumBudget, deadline=stored.deadline,
             targetLatitude=stored.latitude, targetLongitude=stored.longitude, notes=stored.notes,
         )

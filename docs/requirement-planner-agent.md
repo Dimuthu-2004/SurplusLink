@@ -98,7 +98,7 @@ The planner performs no listing search, reservation, approval, network request, 
 ## Integration dependencies
 
 - The shared orchestrator must fetch the stored BuyerRequest, invoke the planner, and resolve step references when executing downstream agents. Planning alone does not change request status or start execution.
-- When invoking the existing `MaterialMatchingAgent`, project only `buyerUserId`, `categoryId`, `category`, `requiredQuantity`, `unit`, `maximumBudget`, and `deadline` from normalized criteria. Its input rejects extra fields, so do not pass the entire criteria object.
+- When invoking the existing `MaterialMatchingAgent`, project only its supported fields from normalized criteria: `buyerUserId`, `constructionItemTemplateId`, `itemName`, `categoryId`, `category`, `requiredQuantity`, `unit`, `baseUnit`, `normalizedBaseUnit`, `normalizedRequiredQuantity`, `inputMode`, `enteredQuantity`, `enteredUnit`, `preferredPackageSize`, `packageBaseUnit`, `maximumBudget`, and `deadline`. Do not reconstruct matching criteria from the raw request or pass location, notes, or unsupported fields.
 - `step2.logistics` and `step3.validationResult` are symbolic references for orchestration adapters to resolve against the respective agents' actual output contracts.
 - Workflow persistence, execution, idempotency, and the manager approval mechanism remain owned by M4. This change adds no AgentWorkflow, AgentStep, AgentToolCall, Approval, DbSet, or migration.
 - Consumers can validate JSON with `planner_response_adapter.validate_json(...)`. The checked-in JSON schema is generated from `planner_response_adapter.json_schema(mode="serialization")`.
