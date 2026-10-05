@@ -48,6 +48,42 @@ describe('manager Material UI', () => {
     expect(screen.getByText('75 pieces')).toBeInTheDocument();
     expect(screen.queryByText('Quantity')).not.toBeInTheDocument();
   });
+  it('shows the seller approval success overlay only after a successful verification', async () => {
+    const api = fakeApi();
+    api.getListing.mockResolvedValue(listing);
+    vi.mocked(api.verifyListing).mockResolvedValue({ ...listing, status: 'ACTIVE' });
+    render(<MemoryRouter initialEntries={['/app/manager/materials/' + listing.id]}><Routes><Route path="/app/manager/materials/:listingId" element={<ManagerMaterialDetailsPage api={api} />} /></Routes></MemoryRouter>);
+
+    const visitor = userEvent.setup();
+    await visitor.click(await screen.findByRole('button', { name: 'Verify listing' }));
+
+    await waitFor(() => expect(api.verifyListing).toHaveBeenCalledWith(listing.id, true));
+    expect(screen.getByRole('dialog')).toHaveTextContent('Approved successfully');
+    expect(screen.getByRole('dialog')).toHaveTextContent('Seller listing approved.');
+  });
+  it('does not show the seller approval success overlay after a rejection', async () => {
+    const api = fakeApi();
+    api.getListing.mockResolvedValue(listing);
+    vi.mocked(api.verifyListing).mockResolvedValue({ ...listing, status: 'REJECTED' });
+    render(<MemoryRouter initialEntries={['/app/manager/materials/' + listing.id]}><Routes><Route path="/app/manager/materials/:listingId" element={<ManagerMaterialDetailsPage api={api} />} /></Routes></MemoryRouter>);
+
+    const visitor = userEvent.setup();
+    await visitor.click(await screen.findByRole('button', { name: 'Reject listing' }));
+    await waitFor(() => expect(api.verifyListing).toHaveBeenCalledWith(listing.id, false));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+  it('does not show the seller approval success overlay after a verification error', async () => {
+    const api = fakeApi();
+    api.getListing.mockResolvedValue(listing);
+    vi.mocked(api.verifyListing).mockRejectedValue(new Error('Verification failed'));
+    render(<MemoryRouter initialEntries={['/app/manager/materials/' + listing.id]}><Routes><Route path="/app/manager/materials/:listingId" element={<ManagerMaterialDetailsPage api={api} />} /></Routes></MemoryRouter>);
+
+    const visitor = userEvent.setup();
+    await visitor.click(await screen.findByRole('button', { name: 'Verify listing' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Verification failed');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
   it('shows server duplicate and in-use category messages without removing the category', async () => {
     const api = fakeApi();
     vi.mocked(api.getCategories).mockResolvedValue([{ id: 'c1', name: 'Tiles', allowedUnits: ['pcs'], createdAtUtc: '', updatedAtUtc: '' }]);
