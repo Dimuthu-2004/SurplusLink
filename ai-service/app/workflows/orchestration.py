@@ -281,10 +281,13 @@ class WorkflowOrchestrator:
     async def _matching(self, state):
         fields = state["planner"].normalizedCriteria.model_dump(mode="json")
         criteria = {k: fields[k] for k in ("buyerUserId", "categoryId", "category", "requiredQuantity", "unit", "maximumBudget", "deadline")}
-        if fields.get("baseUnit"):
-            criteria["baseUnit"] = fields["baseUnit"]
-        stored = state["request"].buyerRequest
-        criteria.update(constructionItemTemplateId=stored.get("constructionItemTemplateId"), itemName=stored.get("itemName"))
+        for field in (
+            "constructionItemTemplateId", "itemName", "baseUnit", "normalizedBaseUnit",
+            "normalizedRequiredQuantity", "inputMode", "enteredQuantity", "enteredUnit",
+            "preferredPackageSize", "packageBaseUnit",
+        ):
+            if fields.get(field) is not None:
+                criteria[field] = fields[field]
         tools = SnapshotTools(state["request"].listings)
         result = await asyncio.to_thread(MaterialMatchingAgent(tools).match, criteria)
         return (dict(matching=result) if result.status == "ok" else dict(status="REJECTED", errorCode="NO_MATCHING_CANDIDATE"),
