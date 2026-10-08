@@ -4,7 +4,7 @@ import asyncio
 import logging
 import os
 from datetime import datetime, timezone
-from decimal import Decimal, ROUND_CEILING
+from decimal import Decimal
 from time import perf_counter
 from typing import Any, Literal, TypedDict
 from uuid import UUID
@@ -14,7 +14,7 @@ from pydantic import AwareDatetime, Field, model_validator
 
 from app.agents.logistics import LogisticsAgent
 from app.agents.logistics_schemas import Contract, Latitude, Longitude, Measurement
-from app.agents.material_matching import MaterialMatchingAgent
+from app.agents.material_matching import MaterialMatchingAgent, _effective_contribution
 from app.agents.match_scoring import condition_rank, score_breakdown
 from app.agents.requirement_planner import RequirementPlannerAgent
 
@@ -337,8 +337,13 @@ class WorkflowOrchestrator:
         row = next(x for x in state["request"].listings if str(x.listingId) == candidate.listingId)
         route = next((x for x in state["logistics"].candidates if x.listingId == row.listingId), None)
         criteria = state["planner"].normalizedCriteria
-        priced_quantity = ((criteria.requiredQuantity / row.packageSize).to_integral_value(rounding=ROUND_CEILING)
-            if row.quantityMode in {"PACKAGE", "PIECE"} and row.packageSize else criteria.requiredQuantity)
+        # maximumContribution is calculated by the backend after routing. The
+        # agent consumes it instead of replacing it with full-request pricing.
+        contribution, package_count, material_cost = _effective_contribution(
+            SnapshotTools._record(row), criteria.requiredQuantity, criteria.maximumBudget)
+        # The matching agent and validation agent share this one contribution
+        # contract.  Packages are priced by whole package count.
+        priced_quantity = package_count if package_count is not None else contribution
         value = ValidationInput(matchId=row.matchId, listingId=row.listingId, buyerId=criteria.buyerUserId,
             sellerId=row.sellerId, categoryMatches=row.categoryId == criteria.categoryId,
             unitMatches=(row.baseUnit or row.unit).casefold() == (criteria.baseUnit or criteria.unit).casefold(), listingStatus=row.status,
@@ -353,7 +358,7 @@ class WorkflowOrchestrator:
             result.update(status="FAILED", errorCode="VALIDATION_TOOLS_FAILED")
         output = validation.model_dump(mode="json")
         if validation.valid:
-            breakdown = score_breakdown(row.condition, row.unitPrice * priced_quantity,
+            breakdown = score_breakdown(row.condition, material_cost,
                                         criteria.maximumBudget, value.distanceKm, value.transportCost)
             output["scoreBreakdown"] = breakdown
             result["recommendation"] = Recommendation(matchId=row.matchId, listingId=row.listingId,

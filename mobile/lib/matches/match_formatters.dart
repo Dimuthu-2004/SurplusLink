@@ -2,7 +2,7 @@ import 'match_models.dart';
 
 String routingText(Object? _, String key) => switch (key) {
   'retryRoute' => 'Retry route',
-  'cannotSelect' => 'This match cannot currently be selected.',
+  'cannotSelect' => 'This match cannot be selected.',
   'MISSING_SELLER_LOCATION' => 'Seller listing location is missing.',
   'MISSING_BUYER_LOCATION' => 'Buyer delivery location is missing.',
   'INVALID_SELLER_COORDINATES' => 'Seller listing coordinates are invalid.',
@@ -18,7 +18,13 @@ String readableRejectionReason(String? code) => switch (code) {
   'LISTING_EXPIRES_BEFORE_DELIVERY' => 'This material listing expires before your required delivery date.',
   'INSUFFICIENT_QUANTITY' => 'The seller does not have enough available quantity.',
   'BUDGET_EXCEEDED' => 'The material cost exceeds your maximum budget.',
-  'TOTAL_COST_EXCEEDS_BUDGET' => 'The total cost exceeds your maximum budget.',
+  'TOTAL_COST_EXCEEDS_BUDGET' => 'The total material and delivery cost exceeds your maximum budget.',
+  'ITEM_MISMATCH' => 'This material does not match your requested item.',
+  'REQUIRED_SPECIFICATION_MISMATCH' => 'This material does not meet your required specifications.',
+  'NO_MATCHING_CANDIDATE' => 'No matching material candidate is currently available.',
+  'NO_VALID_SELECTABLE_CANDIDATE' => 'No valid selectable material candidate is currently available.',
+  'WORKFLOW_REJECTED' => 'This matching attempt could not produce a selectable candidate.',
+  'TOTAL_COST_UNKNOWN' => 'The total material and delivery cost could not be confirmed.',
   'CATEGORY_MISMATCH' => 'This material does not match your required category.',
   'UNIT_MISMATCH' => 'The material unit is not compatible with your requirement.',
   'SELF_MATCH_NOT_ALLOWED' => 'You cannot match your own material listing.',

@@ -137,7 +137,7 @@ class MatchListCard extends StatelessWidget {
         : selectedQuantity ?? 0;
     final maximumControlQuantity = match.isPackaged
         ? (match.packageCountAvailable ?? 0).toDouble()
-        : maximumQuantity ?? match.availableQuantity ?? double.infinity;
+        : maximumQuantity ?? match.selectableQuantity ?? double.infinity;
     double baseForControl(double value) => match.isPackaged
         ? value * (match.packageSize ?? 1)
         : value;
@@ -263,6 +263,18 @@ class MatchListCard extends StatelessWidget {
                 color: statusColor,
                 icon: statusIcon,
               ),
+              if (isRejected && match.rejectionReason != null) ...[
+                const SizedBox(height: 4),
+                Text(
+                  routingText(context, match.rejectionReason!),
+                  key: Key('rejection-reason-${match.id}'),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: SurplusLinkTheme.slate600,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
               if (match.isPartial && !match.isRejected) ...[
                 const SizedBox(height: 6),
                 Container(

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:mobile/config/app_config.dart';
 import 'package:mobile/materials/quantity_format.dart' as quantities;
 import 'package:mobile/matches/match_formatters.dart';
@@ -31,7 +32,11 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
   RecommendedMatch? _match;
   MatchPage<MatchHistoryEntry>? _history;
   String? _error, _historyError;
-  bool _loading = true, _historyLoading = false, _routing = false;
+  bool _loading = true,
+      _historyLoading = false,
+      _selecting = false,
+      _routing = false;
+  String? _selectionError;
   int _historyPage = 1;
   MatchAllocation? _selection;
   double? get _selectedQuantity => _selection?.quantity;
@@ -161,11 +166,141 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
       actions: [
         IconButton(
           tooltip: 'Refresh match',
-          onPressed: _loading || _historyLoading ? null : _load,
+          onPressed: _loading || _historyLoading || _selecting ? null : _load,
           icon: const Icon(Icons.refresh),
         ),
       ],
     ),
+    bottomNavigationBar: !_loading &&
+            _error == null &&
+            _match?.requirementStatus == 'MATCH_FOUND' &&
+            _match!.isSelectable
+        ? SafeArea(
+            minimum: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_selectionError != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      _selectionError!,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                  ),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  margin: const EdgeInsets.only(bottom: 8),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      Text(
+                        _match!.isPackaged
+                            ? 'Quantity to take (${_match!.packageType?.toLowerCase() ?? 'package'}s):'
+                            : 'Quantity (${_match!.unit ?? ''}):',
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(
+                              Icons.remove_circle_outline,
+                              size: 20,
+                            ),
+                            onPressed: (_selectionControlValue(_match!) >
+                                    _stepFor(_match!.unit))
+                                ? () => setState(
+                                      () => _setSelectedQuantity(
+                                        _selectionControlValue(_match!) -
+                                            _stepFor(_match!.unit),
+                                      ),
+                                    )
+                                : null,
+                          ),
+                          SizedBox(
+                            width: 80,
+                            child: TextFormField(
+                              key: const Key('details-quantity-input'),
+                              controller: _quantityController,
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                decimal: true,
+                              ),
+                              textAlign: TextAlign.center,
+                              decoration: InputDecoration(
+                                isDense: true,
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 6,
+                                ),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                              ),
+                              onChanged: (text) {
+                                final parsed = double.tryParse(text.trim());
+                                if (parsed != null) {
+                                  setState(() => _setSelectedQuantity(parsed));
+                                }
+                              },
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(
+                              Icons.add_circle_outline,
+                              size: 20,
+                            ),
+                            onPressed: (_selectionControlValue(_match!) <
+                                    _maximumSelectable(_match!))
+                                ? () => setState(
+                                      () => _setSelectedQuantity(
+                                        (_selectionControlValue(_match!) +
+                                                _stepFor(_match!.unit))
+                                            .clamp(
+                                              0.0,
+                                              _maximumSelectable(_match!),
+                                            )
+                                            .toDouble(),
+                                      ),
+                                    )
+                                : null,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    key: const Key('select-match'),
+                    onPressed: _selecting ||
+                            ((_selectedQuantity ?? 0) <= 0 ||
+                                (_selectedQuantity ?? 0) >
+                                    _maximumSelectable(_match!))
+                        ? null
+                        : _selectMatch,
+                    icon: const Icon(Icons.check_circle_outline),
+                    label: Text(
+                      _selecting ? 'Selecting...' : 'Select this match',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          )
+        : null,
     body: _loading
         ? const Center(child: CircularProgressIndicator())
         : ListView(
@@ -350,7 +485,7 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
                       SelectableText('Seller ID: ${match.sellerId}'),
                     SelectableText('Status: ${match.status}'),
                     if (match.rejectionReason != null)
-                      SelectableText('Reason code: ${match.rejectionReason}'),
+                      Text('Reason: ${routingText(context, match.rejectionReason!)}'),
                     Text('Created: ${formatMatchDateTime(match.createdAt)}'),
                   ],
                 ),
@@ -368,6 +503,72 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
             ],
           ),
   );
+
+  Future<void> _selectMatch() async {
+    final match = _match;
+    if (_selecting ||
+        match == null ||
+        !match.isSelectable ||
+        match.requirementStatus != 'MATCH_FOUND') {
+      return;
+    }
+    setState(() {
+      _selecting = true;
+      _selectionError = null;
+    });
+    try {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Select this match?'),
+          content: Text(
+            match.isPartial
+                ? 'You selected ${quantities.formatQuantity(_selectedQuantity ?? 0, match.unit ?? '')} ${match.unit ?? ''}. Your selection will be checked again and sent for manager approval. No material is reserved by this choice.'
+                : 'Your selected match will be checked again and sent for manager approval. No material is reserved by this choice.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Confirm selection'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+      final selection = _selection;
+      if (selection == null || selection.matchId != match.id) return;
+      await widget.gateway.select(
+        widget.requirementId,
+        match.id,
+        quantity: selection.quantity,
+        packageCount: selection.packageCount,
+      );
+      await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Allocation saved and sent for manager approval.',
+            ),
+          ),
+        );
+        context.go('/requirements/${widget.requirementId}');
+      }
+    } on Object catch (error) {
+      if (mounted) setState(() => _selectionError = matchError(error));
+    } finally {
+      if (mounted) setState(() => _selecting = false);
+    }
+  }
+
+  double _stepFor(String? unit) => _match?.isPackaged == true
+      ? 1
+      : _match?.selectionStep ??
+          (quantities.isDiscreteUnit(unit ?? '') ? 1 : 0.1);
 
   double _maximumSelectable(RecommendedMatch match) => match.isPackaged
       ? (match.packageCountAvailable ?? 0).toDouble()

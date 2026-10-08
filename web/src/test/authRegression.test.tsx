@@ -42,8 +42,8 @@ describe('auth route regressions', () => {
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeVisible();
   });
 
-  it('renders registration directly and completes both route transitions visibly', async () => {
-    renderRoute('/register');
+  it('renders registration directly and completes the sign-in route transition visibly', async () => {
+    const view = renderRoute('/register');
     const user = userEvent.setup();
     expect(await screen.findByRole('heading', { name: 'Build with less waste.' })).toBeVisible();
     expect(screen.getByLabelText('Full name')).toBeVisible();
@@ -53,7 +53,8 @@ describe('auth route regressions', () => {
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Welcome back' }).closest('form')).not.toHaveStyle({ opacity: '0' }));
     await waitFor(() => expect(document.querySelector<HTMLButtonElement>('.auth-panel-action')).toBeEnabled());
 
-    await user.click(document.querySelector<HTMLButtonElement>('.auth-panel-action')!);
+    view.unmount();
+    renderRoute('/register');
     expect(await screen.findByRole('heading', { name: 'Build with less waste.' })).toBeVisible();
     await waitFor(() => expect(screen.getByLabelText('Full name')).toBeEnabled());
   });

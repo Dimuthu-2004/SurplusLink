@@ -322,6 +322,61 @@ public sealed class TransactionQueryIntegrationTests : IAsyncLifetime
         }
     }
 
+    [PostgresFact]
+    public async Task Multi_seller_allocations_complete_parent_only_after_every_child_transaction_completes()
+    {
+        var seeded = await SeedMultiSellerLifecycleAsync();
+        using (var db = fixture.Context())
+        {
+            var offers = await db.Offers.Where(x => x.MaterialMatch.MaterialRequestId == seeded.RequestId).ToListAsync();
+            var transactions = await db.Transactions.Where(x => x.Offer.MaterialMatch.MaterialRequestId == seeded.RequestId).ToListAsync();
+
+            Assert.Equal(2, offers.Count);
+            Assert.Equal(2, transactions.Count);
+            Assert.Equal(2, offers.Select(x => x.Id).Distinct().Count());
+            Assert.Equal(2, transactions.Select(x => x.Id).Distinct().Count());
+            Assert.Equal(2, offers.Select(x => x.SellerId).Distinct().Count());
+        }
+
+        using (var db = fixture.Context())
+            await new TransactionService(db).CompleteAsync(seeded.TransactionAId, fixture.Buyer, CancellationToken.None);
+
+        using (var db = fixture.Context())
+        {
+            Assert.Equal(BuyerRequestStatus.APPROVED, (await db.BuyerRequests.FindAsync(seeded.RequestId))!.Status);
+            Assert.Equal(TransactionStatus.COMPLETED, (await db.Transactions.FindAsync(seeded.TransactionAId))!.Status);
+            Assert.Equal(TransactionStatus.HANDED_OVER, (await db.Transactions.FindAsync(seeded.TransactionBId))!.Status);
+        }
+
+        using (var db = fixture.Context())
+            await new TransactionService(db).CompleteAsync(seeded.TransactionBId, fixture.Buyer, CancellationToken.None);
+
+        using (var db = fixture.Context())
+        {
+            Assert.Equal(BuyerRequestStatus.COMPLETED, (await db.BuyerRequests.FindAsync(seeded.RequestId))!.Status);
+            Assert.All(await db.Transactions.Where(x => x.Offer.MaterialMatch.MaterialRequestId == seeded.RequestId).ToListAsync(),
+                transaction => Assert.Equal(TransactionStatus.COMPLETED, transaction.Status));
+        }
+    }
+
+    [PostgresFact]
+    public async Task Multi_seller_parent_is_not_completed_when_one_child_is_completed_and_another_is_not_completed()
+    {
+        var seeded = await SeedMultiSellerLifecycleAsync();
+
+        using (var db = fixture.Context())
+            await new TransactionService(db).CompleteAsync(seeded.TransactionAId, fixture.Buyer, CancellationToken.None);
+
+        using (var db = fixture.Context())
+            await new TransactionService(db).ResolveNotCompletedAsync(seeded.TransactionBId, fixture.Manager,
+                "The second seller allocation was not handed over.", CancellationToken.None);
+
+        using var verify = fixture.Context();
+        Assert.Equal(BuyerRequestStatus.APPROVED, (await verify.BuyerRequests.FindAsync(seeded.RequestId))!.Status);
+        Assert.Equal(TransactionStatus.COMPLETED, (await verify.Transactions.FindAsync(seeded.TransactionAId))!.Status);
+        Assert.Equal(TransactionStatus.NOT_COMPLETED, (await verify.Transactions.FindAsync(seeded.TransactionBId))!.Status);
+    }
+
     private async Task<(Offer Offer, Transaction Pending)> Seed()
     {
         using var db = fixture.Context();
@@ -355,5 +410,61 @@ public sealed class TransactionQueryIntegrationTests : IAsyncLifetime
         db.AddRange(request, listing, match, offer, pending, workflow);
         await db.SaveChangesAsync();
         return (offer, pending);
+    }
+
+    private async Task<(Guid RequestId, Guid TransactionAId, Guid TransactionBId)> SeedMultiSellerLifecycleAsync()
+    {
+        using var db = fixture.Context();
+        var category = await db.Categories.FirstAsync();
+        var sellerB = Guid.NewGuid();
+        db.Users.Add(new User { Id = sellerB, Email = sellerB + "@requirements.test", PasswordHash = "unused-test-hash" });
+        db.Set<UserRoleAssignment>().Add(new UserRoleAssignment { UserId = sellerB, Role = UserRole.SELLER });
+        var request = new BuyerRequest
+        {
+            Id = Guid.NewGuid(), BuyerId = fixture.Buyer, CategoryId = category.Id, Title = "Multi-seller transaction lifecycle",
+            RequiredQuantity = 5, MaximumBudget = 1000, Unit = "kg", Deadline = DateTime.UtcNow.AddDays(5),
+            Status = BuyerRequestStatus.APPROVED
+        };
+        var allocations = new[]
+        {
+            (SellerId: fixture.Seller, Quantity: 2m, Title: "Seller A allocation"),
+            (SellerId: sellerB, Quantity: 3m, Title: "Seller B allocation")
+        };
+        var transactions = new List<Transaction>();
+        foreach (var allocation in allocations)
+        {
+            var listing = new Listing
+            {
+                Id = Guid.NewGuid(), SellerId = allocation.SellerId, CategoryId = category.Id, Title = allocation.Title,
+                Quantity = 10, ReservedQuantity = allocation.Quantity, Unit = "kg", UnitPrice = 10,
+                AvailableUntil = DateTime.UtcNow.AddDays(5), Status = ListingStatus.ACTIVE, Condition = MaterialCondition.GOOD
+            };
+            var match = new MaterialMatch
+            {
+                Id = Guid.NewGuid(), MaterialRequestId = request.Id, ListingId = listing.Id, Status = MatchStatus.ROUTED,
+                Distance = 10, DurationMinutes = 30, EstimatedTransportCost = 100
+            };
+            var offer = new Offer
+            {
+                Id = Guid.NewGuid(), MaterialMatchId = match.Id, BuyerId = fixture.Buyer, SellerId = allocation.SellerId,
+                Quantity = allocation.Quantity, UnitValue = 10, TotalValue = allocation.Quantity * 10, Status = OfferStatus.ACCEPTED
+            };
+            var transaction = new Transaction
+            {
+                Id = Guid.NewGuid(), OfferId = offer.Id, BuyerId = fixture.Buyer, SellerId = allocation.SellerId,
+                Quantity = allocation.Quantity, TotalValue = offer.TotalValue, ReservedQuantity = allocation.Quantity,
+                Status = TransactionStatus.HANDED_OVER, SellerHandoverConfirmedAtUtc = DateTime.UtcNow
+            };
+            var reservation = new Reservation
+            {
+                Id = Guid.NewGuid(), MaterialRequestId = request.Id, ListingId = listing.Id, TransactionId = transaction.Id,
+                Quantity = allocation.Quantity, Status = ReservationStatus.ACTIVE
+            };
+            db.AddRange(listing, match, offer, transaction, reservation);
+            transactions.Add(transaction);
+        }
+        db.BuyerRequests.Add(request);
+        await db.SaveChangesAsync();
+        return (request.Id, transactions[0].Id, transactions[1].Id);
     }
 }

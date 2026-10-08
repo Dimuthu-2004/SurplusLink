@@ -19,3 +19,11 @@ it('renders the approval animation as a decorative looping acknowledgement', asy
   expect(screen.getByRole('dialog')).toHaveTextContent('Approved successfully');
   expect(screen.getByRole('dialog')).toHaveTextContent('Seller listing approved.');
 });
+
+it('keeps a visible approval acknowledgement when reduced motion disables Lottie autoplay', async () => {
+  const original = window.matchMedia;
+  Object.defineProperty(window, 'matchMedia', { configurable: true, value: () => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }) });
+  render(<SuccessOverlay kind="approval" title="Approved successfully" message="Seller listing approved." onComplete={vi.fn()} />);
+  expect(await screen.findByTestId('status-animation-fallback')).toHaveTextContent('🐦');
+  Object.defineProperty(window, 'matchMedia', { configurable: true, value: original });
+});

@@ -442,7 +442,7 @@ public sealed class TransactionService(SurplusLinkDbContext db, INotificationSer
     private Task NotifyAsync(Transaction transaction, string type, string title, string message, NotificationContext context,
         NotificationPriority priority, string suffix, CancellationToken ct, Guid userId) => notifications is null ? Task.CompletedTask :
         notifications.CreateAsync(new(userId, type, title, message, context, priority, nameof(Transaction), transaction.Id,
-            $"/app/manager/transactions/{transaction.Id}", $"transaction:{transaction.Id}:{suffix}"), ct);
+            context == NotificationContext.MANAGER ? $"/app/manager/transactions/{transaction.Id}" : $"/app/offers/{transaction.OfferId}", $"transaction:{transaction.Id}:{suffix}"), ct);
 
     private Task CloseWarningAsync(Guid id, CancellationToken ct) => db.Notifications
         .Where(x => x.EntityType == nameof(Transaction) && x.EntityId == id && x.Type == NotificationTypes.TransactionFollowUpRequired && !x.IsRead)

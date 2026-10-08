@@ -27,6 +27,18 @@ final match = RecommendedMatch(
 );
 
 void main() {
+  test('partial piece candidate keeps five-door contribution selectable without rejection', () {
+    final doors = RecommendedMatch.fromJson({
+      'id': 'doors', 'requirementId': 'r1', 'listingId': 'l1', 'score': .7,
+      'status': 'ROUTED', 'valid': true, 'rejected': false,
+      'createdAt': '2026-09-25T00:00:00Z', 'quantity': 10, 'availableQuantity': 5,
+      'maximumContribution': 5, 'unit': 'piece', 'unitPrice': 5000,
+      'quantityMode': 'PIECE', 'packageSize': 1, 'packageCountAvailable': 5,
+    });
+    expect(doors.isRejected, isFalse);
+    expect(doors.selectableQuantity, 5);
+  });
+
   testWidgets('equal scores highlight exactly one card by current recommendation ID', (tester) async {
     tester.view.physicalSize = const Size(1200, 2400);
     tester.view.devicePixelRatio = 1;
@@ -92,8 +104,9 @@ void main() {
                   '/requirements/r1/matches${details ? '/m1' : ''}',
             ),
           );
-          await tester.pumpAndSettle();
           final allowed = roles?.contains(AppRole.buyer) == true;
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 50));
           expect(
             find.text(details ? 'Match Details' : 'Recommended Matches'),
             allowed ? findsOneWidget : findsNothing,
@@ -101,7 +114,8 @@ void main() {
           expect(gateway.reads > 0, allowed);
           if (allowed) {
             await auth.logout();
-            await tester.pumpAndSettle();
+            await tester.pump();
+            await tester.pump(const Duration(milliseconds: 50));
             expect(find.byKey(const Key('login-submit')), findsOneWidget);
           }
         },
@@ -214,8 +228,10 @@ void main() {
     await tester.tap(find.text('Retry'));
     await tester.pumpAndSettle();
     expect(gateway.queries.last.rejected, isTrue);
-    await tester.scrollUntilVisible(find.text('Next'), 300);
-    await tester.tap(find.text('Next'));
+    final next = find.text('Next');
+    await tester.ensureVisible(next);
+    await tester.pump();
+    await tester.tap(next);
     await tester.pumpAndSettle();
     expect(gateway.queries.last.page, 2);
     expect(gateway.queries.last.rejected, isTrue);

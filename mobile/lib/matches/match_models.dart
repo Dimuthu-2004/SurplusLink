@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:mobile/materials/quantity_format.dart' as quantities;
 
 class MatchAllocation {
@@ -87,6 +89,7 @@ class RecommendedMatch {
     this.availableUntil,
     this.requiredBy,
     this.availableQuantity,
+    this.maximumContribution,
     this.maximumBudget,
     this.requirementStatus,
     this.sellerName,
@@ -122,7 +125,7 @@ class RecommendedMatch {
   final String? rejectionReason;
   final DateTime createdAt;
   final DateTime? availableUntil, requiredBy;
-  final double? availableQuantity, maximumBudget;
+  final double? availableQuantity, maximumContribution, maximumBudget;
   final String? requirementStatus;
   final String? sellerName, sellerBusinessName, sellerDisplayName, condition, sellerAddress, displayLocation, fullAddress;
   final double? latitude, longitude;
@@ -142,6 +145,11 @@ class RecommendedMatch {
     return (packages ?? selectedBaseQuantity) * unitPrice!;
   }
   bool get isSelectable => valid == true && status == 'ROUTED' && !isRejected;
+  // This is an eligibility ceiling calculated by the backend, not an
+  // allocation. The buyer still explicitly chooses a quantity at or below it.
+  double? get selectableQuantity => maximumContribution == null
+      ? availableQuantity
+      : availableQuantity == null ? maximumContribution : math.min(maximumContribution!, availableQuantity!);
   bool get isPackaged => quantityMode == 'PACKAGE' || quantityMode == 'PIECE';
   double get selectionStep => isPackaged ? (packageSize ?? 1) : (quantities.isDiscreteUnit(unit ?? '') ? 1 : .1);
   int? packageCountFor(double baseQuantity) => isPackaged && packageSize != null
@@ -199,6 +207,7 @@ class RecommendedMatch {
         availableUntil: _date(json, 'availableUntil'),
         requiredBy: _date(json, 'requiredBy'),
         availableQuantity: _number(json, 'availableQuantity', optional: true),
+        maximumContribution: _number(json, 'maximumContribution', optional: true),
         maximumBudget: _number(json, 'maximumBudget', optional: true),
         requirementStatus: _optionalString(json, 'requirementStatus'),
         sellerName: _optionalString(json, 'sellerName'),

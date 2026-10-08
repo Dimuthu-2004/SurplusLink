@@ -86,6 +86,8 @@ it('loads the manager dashboard from authenticated summaries, isolates errors, r
             { period: '2026-10-02', label: 'Oct 02', transactionCount: 6, totalValue: 300000, totalQuantity: 15 },
           ],
         });
+      case '/api/transactions/follow-ups':
+        return respond([]);
       default: throw new Error('Unexpected dashboard request: ' + config.url);
     }
   };
@@ -96,15 +98,16 @@ it('loads the manager dashboard from authenticated summaries, isolates errors, r
   expect(screen.queryByText('Active listings')).not.toBeInTheDocument();
   expect(screen.getByRole('link', { name: 'Manager Dashboard' })).toHaveAttribute('aria-current', 'page');
   expect(screen.getByRole('link', { name: 'Material listings' })).toHaveAttribute('href', '/app/manager/materials');
-  await waitFor(() => expect(calls).toHaveLength(7));
+  await waitFor(() => expect(calls).toHaveLength(8));
   await act(async () => { release(); await gate; });
 
   expect(await screen.findByRole('alert')).toHaveTextContent('Match analytics is temporarily unavailable.');
   expect(calls.slice().sort()).toEqual([
     '/api/workflows', '/api/materials/analytics/summary', '/api/requirements/analytics/summary',
     '/api/matches/analytics/summary', '/api/transactions/analytics/summary', '/api/users/summary',
-    '/api/transactions/analytics/timeseries'
+    '/api/transactions/analytics/timeseries', '/api/transactions/follow-ups'
   ].sort());
+  expect(screen.getByText('No transaction follow-ups need attention.')).toBeInTheDocument();
   expect(screen.queryByText('Average match score')).not.toBeInTheDocument();
   expect(screen.queryByText('Rejected transactions')).not.toBeInTheDocument();
   metric('Active listings', '11');
@@ -136,8 +139,8 @@ it('loads the manager dashboard from authenticated summaries, isolates errors, r
   metric('Valid matches', '15');
   metric('Rejected matches', '8');
   expect(screen.getByRole('row', { name: 'Budget Exceeded 6' })).toBeInTheDocument();
-  expect(calls).toHaveLength(8);
-  expect(calls[7]).toBe('/api/matches/analytics/summary');
+  expect(calls).toHaveLength(9);
+  expect(calls[8]).toBe('/api/matches/analytics/summary');
   expect(screen.queryByRole('alert')).not.toBeInTheDocument();
 
   empty = true;

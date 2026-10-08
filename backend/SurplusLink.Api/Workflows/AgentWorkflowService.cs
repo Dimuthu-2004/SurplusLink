@@ -181,7 +181,7 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db, INotificationS
                     match.Listing.AvailableUntil <= DateTime.UtcNow || match.MaterialRequest.Deadline <= DateTime.UtcNow ||
                     match.DurationMinutes > (decimal)(match.MaterialRequest.Deadline - DateTime.UtcNow).TotalMinutes ||
                     !QuantitySemantics.IsCompatible(match.MaterialRequest, match.Listing) ||
-                    QuantitySemantics.MaterialCost(match.MaterialRequest, match.Listing) + match.EstimatedTransportCost > match.MaterialRequest.MaximumBudget)
+                    QuantitySemantics.MaterialCost(match.MaterialRequest, match.Listing, match.EstimatedTransportCost) + match.EstimatedTransportCost > match.MaterialRequest.MaximumBudget)
                     throw new AgentWorkflowException(409, "The recommendation is no longer eligible. Request a revision.");
 
                 if (MarketplaceMatchPolicy.RejectionReason(match.MaterialRequest.BuyerId, match.Listing.SellerId) is not null)

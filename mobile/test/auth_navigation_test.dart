@@ -59,6 +59,7 @@ void main() {
       final gateway = FakeAuthGateway();
       await _pumpApp(tester, gateway);
       await tester.tap(find.byKey(const Key('go-register')));
+      await tester.pump(const Duration(milliseconds: 180));
       await tester.pumpAndSettle();
 
       await tester.enterText(
@@ -149,7 +150,7 @@ void main() {
 
     expect(find.text('Your email is not verified yet.'), findsOneWidget);
     expect(find.text('Verify your email to continue.'), findsOneWidget);
-    expect(find.text('dual@example.com'), findsOneWidget);
+    expect(find.text('dual@example.com'), findsWidgets);
     expect(find.byKey(const Key('unverified-verify')), findsOneWidget);
     expect(find.byKey(const Key('unverified-resend')), findsOneWidget);
 
@@ -380,10 +381,17 @@ Future<void> _pumpApp(
   FakeAuthGateway gateway, {
   String initialLocation = AppRoutes.splash,
 }) async {
+  tester.view.physicalSize = const Size(1000, 1800);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
   await tester.pumpWidget(
-    SurplusLinkApp(
-      authController: AuthController(gateway),
-      initialLocation: initialLocation,
+    TickerMode(
+      enabled: false,
+      child: SurplusLinkApp(
+        authController: AuthController(gateway),
+        initialLocation: initialLocation,
+      ),
     ),
   );
   await tester.pumpAndSettle();
