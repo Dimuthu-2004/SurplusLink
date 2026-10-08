@@ -94,7 +94,7 @@ it('loads the manager dashboard from authenticated summaries, isolates errors, r
 
   render(<MemoryRouter initialEntries={['/app/manager']}><AuthProvider><App /></AuthProvider></MemoryRouter>);
   await screen.findByRole('heading', { name: 'Manager Dashboard' });
-  expect(screen.getAllByRole('status')).toHaveLength(6);
+  expect(screen.getAllByRole('status')).toHaveLength(7);
   expect(screen.queryByText('Active listings')).not.toBeInTheDocument();
   expect(screen.getByRole('link', { name: 'Manager Dashboard' })).toHaveAttribute('aria-current', 'page');
   expect(screen.getByRole('link', { name: 'Material listings' })).toHaveAttribute('href', '/app/manager/materials');

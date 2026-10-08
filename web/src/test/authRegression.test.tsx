@@ -34,12 +34,15 @@ function renderRoute(path: string) {
 describe('auth route regressions', () => {
   beforeEach(() => clearError.mockClear());
 
-  it('renders the required login form even when the decorative Lottie throws', async () => {
+  it('renders login without any status or Lottie animation', async () => {
     renderRoute('/login');
     expect(await screen.findByRole('heading', { name: 'Welcome back' })).toBeVisible();
     expect(screen.getByLabelText('Email')).toBeVisible();
     expect(screen.getByLabelText('Password')).toBeVisible();
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeVisible();
+    expect(document.querySelector('[data-approval-animation="true"]')).not.toBeInTheDocument();
+    expect(document.querySelector('.status-animation')).not.toBeInTheDocument();
+    expect(document.querySelector('[data-testid="approval-lottie"]')).not.toBeInTheDocument();
   });
 
   it('renders registration directly and completes the sign-in route transition visibly', async () => {
@@ -47,6 +50,8 @@ describe('auth route regressions', () => {
     const user = userEvent.setup();
     expect(await screen.findByRole('heading', { name: 'Build with less waste.' })).toBeVisible();
     expect(screen.getByLabelText('Full name')).toBeVisible();
+    expect(document.querySelector('.status-animation')).not.toBeInTheDocument();
+    expect(document.querySelector('[data-approval-animation="true"]')).not.toBeInTheDocument();
 
     await user.click(document.querySelector<HTMLButtonElement>('.auth-panel-action')!);
     expect(await screen.findByRole('heading', { name: 'Welcome back' })).toBeVisible();
