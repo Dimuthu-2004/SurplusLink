@@ -388,8 +388,8 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
         }
         // Candidate status is derived from authoritative listing facts, but it
         // becomes selectable only after the workflow's final validation passes.
-        var awaitingBuyerSelection = persisted.Values.Any(candidate =>
-            candidate.Status == MatchStatus.ROUTED && candidate.RejectionReason is null);
+        var awaitingBuyerSelection = result.Status == "MATCH_FOUND" && result.Validation.Valid && result.Validation.RequiresApproval &&
+            persisted.Values.Any(candidate => candidate.Status == MatchStatus.ROUTED && candidate.RejectionReason is null);
         workflow.Status = awaitingBuyerSelection
             ? AgentWorkflowStatus.COMPLETED
             : Enum.Parse<AgentWorkflowStatus>(result.Status);

@@ -294,8 +294,13 @@ class OfferDetailsScreen extends StatelessWidget {
       children: [
         _OfferThumbnail(offer: offer, size: 220),
         const SizedBox(height: 12),
-        Text(offer.titleFor(user), style: Theme.of(context).textTheme.headlineSmall),
-        Text('${offer.buyerId == user.id ? 'Seller' : 'Buyer'}: ${offer.counterpartyFor(user)}'),
+        Text(
+          offer.titleFor(user),
+          style: Theme.of(context).textTheme.headlineSmall,
+        ),
+        Text(
+          '${offer.buyerId == user.id ? 'Seller' : 'Buyer'}: ${offer.counterpartyFor(user)}',
+        ),
         Chip(label: Text(offerStatusLabel(offer.status))),
         Text('Quantity: ${offer.quantitySummary}'),
         Text('Material value: LKR ${offer.totalValue.toStringAsFixed(2)}'),
@@ -318,11 +323,33 @@ class _OfferThumbnail extends StatelessWidget {
   Widget build(BuildContext context) {
     final raw = offer.listingPhotoUrl;
     if (raw == null || raw.isEmpty) {
-      return SizedBox(width: size, height: size, child: const DecoratedBox(decoration: BoxDecoration(color: Color(0xffeef2f0)), child: Icon(Icons.inventory_2_outlined)));
+      return SizedBox(
+        width: size,
+        height: size,
+        child: const DecoratedBox(
+          decoration: BoxDecoration(color: Color(0xffeef2f0)),
+          child: Icon(Icons.inventory_2_outlined),
+        ),
+      );
     }
     final parsed = Uri.tryParse(raw);
-    final url = parsed != null && parsed.hasScheme ? raw : AppConfig.apiBaseUri.resolve(raw).toString();
-    return ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(url, width: size, height: size, fit: BoxFit.cover, errorBuilder: (_, _, _) => SizedBox(width: size, height: size, child: const Icon(Icons.broken_image_outlined))));
+    final url = parsed != null && parsed.hasScheme
+        ? raw
+        : AppConfig.apiBaseUri.resolve(raw).toString();
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: Image.network(
+        url,
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => SizedBox(
+          width: size,
+          height: size,
+          child: const Icon(Icons.broken_image_outlined),
+        ),
+      ),
+    );
   }
 }
 
@@ -379,11 +406,14 @@ class _OfferTransactionDetailsState extends State<OfferTransactionDetails> {
     load();
   }
 
-  Future<void> load() async {
+  Future<void> load({
+    bool preserveTransaction = false,
+    String? failureMessage,
+  }) async {
     setState(() {
       busy = true;
       error = null;
-      transaction = null;
+      if (!preserveTransaction) transaction = null;
     });
     try {
       var id = widget.transactionId;
@@ -394,20 +424,27 @@ class _OfferTransactionDetailsState extends State<OfferTransactionDetails> {
         if (page.items.isNotEmpty) id = page.items.first.id;
       }
       final result = id == null ? null : await widget.gateway.transaction(id);
-      final newlyCompleted = _hasLoaded && _lastStatus != 'COMPLETED' && result?.status == 'COMPLETED';
+      final newlyCompleted =
+          _hasLoaded &&
+          _lastStatus != 'COMPLETED' &&
+          result?.status == 'COMPLETED';
       _lastStatus = result?.status;
       _hasLoaded = true;
       if (mounted) {
         setState(() => transaction = result);
         if (newlyCompleted && !_completionShown) {
           _completionShown = true;
-          WidgetsBinding.instance.addPostFrameCallback((_) => _showCompletion());
+          WidgetsBinding.instance.addPostFrameCallback(
+            (_) => _showCompletion(),
+          );
         }
       }
     } on Object catch (failure) {
       if (mounted) {
         setState(
-          () => error = offerError(failure, 'Unable to load transaction.'),
+          () => error =
+              failureMessage ??
+              offerError(failure, 'Unable to load transaction.'),
         );
       }
     } finally {
@@ -421,13 +458,31 @@ class _OfferTransactionDetailsState extends State<OfferTransactionDetails> {
       context: context,
       barrierDismissible: true,
       builder: (dialogContext) => AlertDialog(
-        content: const Column(mainAxisSize: MainAxisSize.min, children: [
-          StatusAnimation(asset: 'assets/animations/payment-done.json', semanticLabel: 'Transaction completed', size: 210),
-          Text('Transaction completed', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
-          SizedBox(height: 8),
-          Text('Your material transaction has been completed successfully.', textAlign: TextAlign.center),
-        ]),
-        actions: [TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('View transaction'))],
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            StatusAnimation(
+              asset: 'assets/animations/payment-done.json',
+              semanticLabel: 'Transaction completed',
+              size: 210,
+            ),
+            Text(
+              'Transaction completed',
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'Your material transaction has been completed successfully.',
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('View transaction'),
+          ),
+        ],
       ),
     );
   }
@@ -439,20 +494,18 @@ class _OfferTransactionDetailsState extends State<OfferTransactionDetails> {
       error = null;
     });
     try {
-      if (handover) {
-        await widget.gateway.handover(id);
-      } else {
-        await widget.gateway.confirmReceipt(id);
-      }
-      await load();
+      final updated = handover
+          ? await widget.gateway.handover(id)
+          : await widget.gateway.confirmReceipt(id);
+      if (mounted) setState(() => transaction = updated);
+      await load(
+        preserveTransaction: true,
+        failureMessage: 'Action succeeded, but the latest transaction details could not be refreshed.',
+      );
     } on Object catch (failure) {
       if (mounted) {
         setState(() {
-          transaction = null;
-          error = offerError(
-            failure,
-            'Unable to update transaction. Refresh and retry.',
-          );
+          error = _actionError(failure, handover);
         });
       }
     } finally {
@@ -487,8 +540,25 @@ class _OfferTransactionDetailsState extends State<OfferTransactionDetails> {
             title: 'Transaction summary',
             children: [
               _DetailLine(label: 'Status', value: offerStatusLabel(row.status)),
-              _DetailLine(label: 'Reserved quantity', value: row.reservedQuantity.toStringAsFixed(2)),
-              _DetailLine(label: 'Total value', value: 'LKR ${row.totalValue.toStringAsFixed(2)}'),
+              _DetailLine(
+                label: 'Reserved quantity',
+                value: row.reservedQuantity.toStringAsFixed(2),
+              ),
+              _DetailLine(
+                label: 'Material value',
+                value: 'LKR ${row.totalValue.toStringAsFixed(2)}',
+              ),
+              if (row.transportCost != null) ...[
+                _DetailLine(
+                  label: 'Transport estimate',
+                  value: 'LKR ${row.transportCost!.toStringAsFixed(2)}',
+                ),
+                _DetailLine(
+                  label: 'Total cost',
+                  value:
+                      'LKR ${(row.totalValue + row.transportCost!).toStringAsFixed(2)}',
+                ),
+              ],
             ],
           ),
           if (!row.contactsVisible)
@@ -497,21 +567,38 @@ class _OfferTransactionDetailsState extends State<OfferTransactionDetails> {
             const Text('Counterparty contact'),
             if (contact.fullName != null) Text(contact.fullName!),
             Text(contact.email),
-            if (contact.phoneNumber case final phone? when phone.trim().isNotEmpty)
+            if (contact.phoneNumber case final phone?
+                when phone.trim().isNotEmpty)
               Semantics(
                 button: true,
-                label: '${row.buyerId == widget.user.id ? 'Call seller' : 'Call buyer'} at $phone',
+                label:
+                    '${row.buyerId == widget.user.id ? 'Call seller' : 'Call buyer'} at $phone',
                 child: FilledButton(
                   onPressed: () => launchUrl(Uri(scheme: 'tel', path: phone)),
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    const StatusAnimation(asset: 'assets/animations/smartphone-call.json', semanticLabel: 'Phone', size: 34, repeat: true),
-                    const SizedBox(width: 8),
-                    Text(row.buyerId == widget.user.id ? 'Call Seller' : 'Call Buyer'),
-                  ]),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const StatusAnimation(
+                        asset: 'assets/animations/smartphone-call.json',
+                        semanticLabel: 'Phone',
+                        size: 34,
+                        repeat: true,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        row.buyerId == widget.user.id
+                            ? 'Call Seller'
+                            : 'Call Buyer',
+                      ),
+                    ],
+                  ),
                 ),
               )
             else
-              const OutlinedButton(onPressed: null, child: Text('Seller phone number unavailable.')),
+              const OutlinedButton(
+                onPressed: null,
+                child: Text('Seller phone number unavailable.'),
+              ),
           ],
           if (row.canHandover(widget.user))
             FilledButton(
@@ -553,25 +640,56 @@ class _TransactionTimeline extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const stages = [('APPROVED', 'Approved', Icons.verified_outlined), ('HANDED_OVER', 'Handed Over', Icons.local_shipping_outlined), ('COMPLETED', 'Completed', Icons.check_circle_outline)];
+    const stages = [
+      ('APPROVED', 'Approved', Icons.verified_outlined),
+      ('HANDED_OVER', 'Handed Over', Icons.local_shipping_outlined),
+      ('COMPLETED', 'Completed', Icons.check_circle_outline),
+    ];
     final active = stages.indexWhere((stage) => stage.$1 == status);
     return Card(
       color: const Color(0xFFF8FAFC),
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('Progress', style: TextStyle(fontWeight: FontWeight.w800)),
-          const SizedBox(height: 16),
-          for (var index = 0; index < stages.length; index++) ...[
-            Row(children: [
-              Icon(stages[index].$3, color: index <= active ? const Color(0xFFF47B20) : const Color(0xFFCBD5E1)),
-              const SizedBox(width: 12),
-              Text(stages[index].$2, style: TextStyle(fontWeight: index == active ? FontWeight.w800 : FontWeight.w500)),
-              if (index == active) ...[const SizedBox(width: 8), const Chip(label: Text('Current'))],
-            ]),
-            if (index < stages.length - 1) const Padding(padding: EdgeInsets.only(left: 11), child: SizedBox(height: 20, child: VerticalDivider(width: 1))),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Progress',
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 16),
+            for (var index = 0; index < stages.length; index++) ...[
+              Row(
+                children: [
+                  Icon(
+                    stages[index].$3,
+                    color: index <= active
+                        ? const Color(0xFFF47B20)
+                        : const Color(0xFFCBD5E1),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    stages[index].$2,
+                    style: TextStyle(
+                      fontWeight: index == active
+                          ? FontWeight.w800
+                          : FontWeight.w500,
+                    ),
+                  ),
+                  if (index == active) ...[
+                    const SizedBox(width: 8),
+                    const Chip(label: Text('Current')),
+                  ],
+                ],
+              ),
+              if (index < stages.length - 1)
+                const Padding(
+                  padding: EdgeInsets.only(left: 11),
+                  child: SizedBox(height: 20, child: VerticalDivider(width: 1)),
+                ),
+            ],
           ],
-        ]),
+        ),
       ),
     );
   }
@@ -582,14 +700,35 @@ class _DetailCard extends StatelessWidget {
   final String title;
   final List<Widget> children;
   @override
-  Widget build(BuildContext context) => Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontWeight: FontWeight.w800)), const SizedBox(height: 12), ...children])));
+  Widget build(BuildContext context) => Card(
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
+          const SizedBox(height: 12),
+          ...children,
+        ],
+      ),
+    ),
+  );
 }
 
 class _DetailLine extends StatelessWidget {
   const _DetailLine({required this.label, required this.value});
   final String label, value;
   @override
-  Widget build(BuildContext context) => Padding(padding: const EdgeInsets.only(bottom: 8), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(label), Text(value, style: const TextStyle(fontWeight: FontWeight.w700))]));
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label),
+        Text(value, style: const TextStyle(fontWeight: FontWeight.w700)),
+      ],
+    ),
+  );
 }
 
 class TransactionHistoryScreen extends StatefulWidget {
@@ -717,3 +856,11 @@ String offerError(Object error, String fallback) => switch (error) {
     'Unable to load records (API $code). Please retry.',
   _ => fallback,
 };
+
+String _actionError(Object error, bool handover) {
+  final action = handover ? 'confirm handover' : 'confirm receipt';
+  if (error case ApiException(:final message) when message.trim().isNotEmpty) {
+    return 'Could not $action. $message';
+  }
+  return 'Could not $action. Please try again.';
+}

@@ -13,5 +13,6 @@ describe('offer details', () => {
     expect(api.offers).not.toHaveBeenCalled();
     expect(api.transactions).toHaveBeenCalledWith(expect.objectContaining({ offerId: 'older-offer', pageSize: 1 }));
     expect(screen.getByText('You')).toBeInTheDocument();
+    expect(screen.getByText('Material value')).toBeInTheDocument();
   });
 });

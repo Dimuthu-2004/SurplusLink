@@ -10,10 +10,14 @@ public sealed class MatchRecommendationTests
     {
         var (request, first, second) = Candidates();
         var matches = new[] { first, second };
+        first.Listing.Condition = MaterialCondition.EXCELLENT;
         var winner = MatchRecommendation.Choose(request, matches, DateTime.UtcNow);
         Assert.Equal(first.Id, winner?.Id);
         Assert.Single(matches, x => x.Id == winner?.Id);
         second.Score = .95m;
+        Assert.Equal(first.Id, MatchRecommendation.Choose(request, matches, DateTime.UtcNow)?.Id);
+        second.Listing.Condition = MaterialCondition.EXCELLENT;
+        second.Listing.UnitPrice = 1;
         Assert.Equal(second.Id, MatchRecommendation.Choose(request, matches, DateTime.UtcNow)?.Id);
     }
 

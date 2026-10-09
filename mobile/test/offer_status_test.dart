@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/auth/auth_models.dart';
+import 'package:mobile/core/api_exception.dart';
 import 'package:mobile/offers/offer_gateway.dart';
 import 'package:mobile/offers/offer_models.dart';
 import 'package:mobile/screens/my_offers_screen.dart';
@@ -98,7 +99,8 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump();
     expect(find.text('seller@test.local'), findsNothing);
     expect(
       find.text('Contact details are hidden until approval.'),
@@ -106,11 +108,100 @@ void main() {
     );
     gateway.status = 'APPROVED';
     await tester.tap(find.text('Refresh transaction'));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump();
     expect(find.text('seller@test.local'), findsOneWidget);
     expect(find.text('Received'), findsNothing);
     expect(find.byTooltip('Call seller'), findsOneWidget);
   });
+
+  testWidgets(
+    'transaction details label material value and show transport total',
+    (tester) async {
+      final gateway = FakeOffers()..transportCost = 294.41;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: TransactionDetailsScreen(
+            gateway: gateway,
+            transactionId: 'transaction',
+            user: const AppUser(
+              id: 'buyer',
+              email: 'buyer@test.local',
+              roles: [AppRole.buyer],
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('Material value'), findsOneWidget);
+      expect(find.text('Transport estimate'), findsOneWidget);
+      expect(find.text('Total cost'), findsOneWidget);
+      expect(find.text('LKR 320294.41'), findsOneWidget);
+    },
+  );
+
+  testWidgets('piece offers use a simple pieces quantity display', (
+    tester,
+  ) async {
+    final offer = Offer(
+      id: 'offer',
+      buyerId: 'buyer',
+      sellerId: 'seller',
+      quantity: 25,
+      totalValue: 100,
+      status: 'ACCEPTED',
+      createdAt: DateTime.utc(2026),
+      unit: 'piece',
+      packageType: 'PIECE',
+      packageSize: 1,
+      packageCount: 25,
+    );
+    expect(offer.quantitySummary, '25 pieces');
+  });
+
+  testWidgets(
+    'action and refresh failures remain distinguishable and keep details visible',
+    (tester) async {
+      final gateway = FakeOffers()..status = 'HANDED_OVER';
+      await tester.pumpWidget(
+        MaterialApp(
+          home: TransactionDetailsScreen(
+            gateway: gateway,
+            transactionId: 'transaction',
+            user: const AppUser(
+              id: 'buyer',
+              email: 'buyer@test.local',
+              roles: [AppRole.buyer],
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      gateway.failAction = true;
+      await tester.scrollUntilVisible(find.text('Yes, Received'), 100);
+      await tester.tap(find.text('Yes, Received'));
+      await tester.pump();
+      await tester.pump();
+      expect(find.textContaining('Could not confirm receipt.'), findsOneWidget);
+      expect(find.text('Transaction summary'), findsOneWidget);
+
+      gateway.failAction = false;
+      gateway.failRefreshAfterAction = true;
+      await tester.scrollUntilVisible(find.text('Yes, Received'), 100);
+      await tester.tap(find.text('Yes, Received'));
+      await tester.pump();
+      await tester.pump();
+      expect(
+        find.text(
+          'Action succeeded, but the latest transaction details could not be refreshed.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Transaction summary'), findsOneWidget);
+    },
+  );
 
   testWidgets('transaction history retries and loads every server page', (
     tester,
@@ -124,11 +215,13 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump();
     expect(find.text('Unable to load transaction history.'), findsOneWidget);
     gateway.failHistory = false;
     await tester.tap(find.text('Retry'));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump();
     expect(find.text('WORKFLOW APPROVED'), findsOneWidget);
     await tester.tap(find.text('Next'));
     await tester.pumpAndSettle();
@@ -140,32 +233,64 @@ void main() {
 
 class FakeOffers implements OfferGateway {
   bool failHistory = false;
+  bool failAction = false;
+  bool failRefreshAfterAction = false;
+  bool actionSucceeded = false;
+  double? transportCost;
   String status = 'APPROVED';
   @override
-  Future<Transaction> transaction(String id) async => Transaction(
-    id: id,
-    offerId: '12345678-offer',
-    buyerId: 'buyer',
-    sellerId: 'seller',
-    status: status,
-    reservedQuantity: 400,
-    totalValue: 320000,
-    updatedAt: DateTime.utc(2026),
-    sellerHandoverConfirmedAt: status == 'HANDED_OVER' || status == 'COMPLETED' ? DateTime.utc(2026, 10, 1) : null,
-    buyerReceivedConfirmedAt: status == 'COMPLETED' ? DateTime.utc(2026, 10, 2) : null,
-    buyerContact: const TransactionContact(email: 'buyer@test.local'),
-    sellerContact: const TransactionContact(email: 'seller@test.local', phoneNumber: '0771234567'),
-  );
+  Future<Transaction> transaction(String id) async {
+    if (failRefreshAfterAction && actionSucceeded) {
+      throw Exception('refresh failed');
+    }
+    return Transaction(
+      id: id,
+      offerId: '12345678-offer',
+      buyerId: 'buyer',
+      sellerId: 'seller',
+      status: status,
+      reservedQuantity: 400,
+      totalValue: 320000,
+      updatedAt: DateTime.utc(2026),
+      sellerHandoverConfirmedAt:
+          status == 'HANDED_OVER' || status == 'COMPLETED'
+          ? DateTime.utc(2026, 10, 1)
+          : null,
+      buyerReceivedConfirmedAt: status == 'COMPLETED'
+          ? DateTime.utc(2026, 10, 2)
+          : null,
+      transportCost: transportCost,
+      buyerContact: const TransactionContact(email: 'buyer@test.local'),
+      sellerContact: const TransactionContact(
+        email: 'seller@test.local',
+        phoneNumber: '0771234567',
+      ),
+    );
+  }
+
   @override
   Future<Transaction> handover(String id) async {
+    if (failAction) {
+      throw const ApiException('Server rejected handover.', statusCode: 409);
+    }
     status = 'HANDED_OVER';
-    return transaction(id);
+    final result = await transaction(id);
+    actionSucceeded = true;
+    return result;
   }
 
   @override
   Future<Transaction> confirmReceipt(String id) async {
+    if (failAction) {
+      throw const ApiException(
+        'Materials must be handed over before receipt can be confirmed.',
+        statusCode: 409,
+      );
+    }
     status = 'COMPLETED';
-    return transaction(id);
+    final result = await transaction(id);
+    actionSucceeded = true;
+    return result;
   }
 
   final historyPages = <int>[];

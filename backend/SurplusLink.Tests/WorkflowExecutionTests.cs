@@ -225,7 +225,9 @@ public sealed class WorkflowPersistenceTests(RequirementsDatabase fixture) : ICl
             Options.Create(new WorkflowExecutionOptions()), notifications: new NotificationService(db)).ProcessNextAsync(default));
         var row = await db.AgentWorkflows.SingleAsync(x => x.MaterialRequestId == id);
         Assert.Equal(AgentWorkflowStatus.REJECTED, row.Status);
+        Assert.Equal("REJECTED", row.CurrentStage);
         Assert.Null(row.MaterialMatchId);
+        Assert.Equal(MatchStatus.ROUTED, (await db.Matches.SingleAsync(x => x.MaterialRequestId == id)).Status);
         Assert.Equal(BuyerRequestStatus.MATCH_FOUND, (await db.BuyerRequests.FindAsync(id))!.Status);
         Assert.Equal(0, await db.Reservations.CountAsync(x => x.MaterialRequestId == id));
         var noMatches = await db.Notifications.SingleAsync(x => x.EntityId == id &&
@@ -251,11 +253,11 @@ public sealed class WorkflowPersistenceTests(RequirementsDatabase fixture) : ICl
         var request = await db.BuyerRequests.SingleAsync(x => x.Id == id);
         var budgetListingId = await db.Listings.Where(x => x.CategoryId == request.CategoryId)
             .Select(x => x.Id).SingleAsync();
-        request.MaximumBudget = 1000; // Seed listing material is 1,000; route adds 500.
-        var expired = new Listing { Id = Guid.NewGuid(), SellerId = Guid.NewGuid(), CategoryId = request.CategoryId,
+        request.MaximumBudget = 500; // Route cost alone consumes the entire budget.
+        var expired = new Listing { Id = Guid.NewGuid(), SellerId = fixture.Seller, CategoryId = request.CategoryId,
             Title = "Expired stock", Quantity = 20, Unit = "kg", UnitPrice = 10, Condition = MaterialCondition.GOOD,
             Status = ListingStatus.ACTIVE, AvailableUntil = DateTime.UtcNow.AddDays(-1), Latitude = 6.8m, Longitude = 79.9m };
-        var wrongUnit = new Listing { Id = Guid.NewGuid(), SellerId = Guid.NewGuid(), CategoryId = request.CategoryId,
+        var wrongUnit = new Listing { Id = Guid.NewGuid(), SellerId = fixture.Seller, CategoryId = request.CategoryId,
             Title = "Demo material", Quantity = 20, Unit = "L", UnitPrice = 10, Condition = MaterialCondition.GOOD,
             Status = ListingStatus.ACTIVE, AvailableUntil = DateTime.UtcNow.AddDays(30), Latitude = 6.8m, Longitude = 79.9m };
         db.Listings.AddRange(expired, wrongUnit);

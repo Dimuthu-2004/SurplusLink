@@ -33,7 +33,8 @@ public sealed class TransactionService(SurplusLinkDbContext db, INotificationSer
     public async Task<TransactionResponse> GetAsync(Guid id, Guid actor, bool manager, CancellationToken ct)
     {
         await AuthorizeHistoryAsync(id, actor, manager, ct);
-        var row = await db.Transactions.AsNoTracking().Include(x => x.Buyer).Include(x => x.Seller).SingleAsync(x => x.Id == id, ct);
+        var row = await db.Transactions.AsNoTracking().Include(x => x.Buyer).Include(x => x.Seller)
+            .Include(x => x.Offer).ThenInclude(x => x.MaterialMatch).SingleAsync(x => x.Id == id, ct);
         var response = ToResponse(row);
         if ((manager || row.BuyerId == actor || row.SellerId == actor) &&
             row.Status is TransactionStatus.APPROVED or TransactionStatus.HANDED_OVER or TransactionStatus.MANAGER_REVIEW_REQUIRED or TransactionStatus.COMPLETED)
@@ -77,7 +78,8 @@ public sealed class TransactionService(SurplusLinkDbContext db, INotificationSer
             .Select(x => new TransactionResponse(x.Id, x.OfferId, x.BuyerId, x.SellerId, x.Quantity, x.TotalValue,
                 x.ReservedQuantity, x.Status, x.CreatedAtUtc, x.UpdatedAtUtc, x.CompletedAtUtc, null, null,
                 x.ManagerApprovedAtUtc, x.ConfirmationDeadlineUtc, x.SellerHandoverConfirmedAtUtc, x.BuyerReceivedConfirmedAtUtc,
-                x.ResolvedAtUtc, x.ResolutionReasonCode, x.ResolutionNote)).ToListAsync(ct);
+                x.ResolvedAtUtc, x.ResolutionReasonCode, x.ResolutionNote,
+                x.Offer.MaterialMatch.EstimatedTransportCost)).ToListAsync(ct);
         return (items, total);
     }
 
@@ -186,7 +188,7 @@ public sealed class TransactionService(SurplusLinkDbContext db, INotificationSer
 
     public async Task<TransactionResponse> ApproveAsync(Guid id, Guid actor, CancellationToken ct)
     {
-        var transaction = await db.Transactions.Include(x => x.Offer).SingleOrDefaultAsync(x => x.Id == id, ct)
+        var transaction = await db.Transactions.Include(x => x.Offer).ThenInclude(x => x.MaterialMatch).SingleOrDefaultAsync(x => x.Id == id, ct)
             ?? throw new TransactionOperationException(404, "Transaction was not found.");
         if (transaction.Status is not (TransactionStatus.PENDING_APPROVAL or TransactionStatus.APPROVED))
             throw new TransactionOperationException(409, "Only pending or already approved transactions can be approved.");
@@ -468,7 +470,7 @@ public sealed class TransactionService(SurplusLinkDbContext db, INotificationSer
 
     public async Task<TransactionResponse> RejectAsync(Guid id, Guid actor, CancellationToken ct)
     {
-        var transaction = await db.Transactions.Include(x => x.Offer).SingleOrDefaultAsync(x => x.Id == id, ct)
+        var transaction = await db.Transactions.Include(x => x.Offer).ThenInclude(x => x.MaterialMatch).SingleOrDefaultAsync(x => x.Id == id, ct)
             ?? throw new TransactionOperationException(404, "Transaction was not found.");
         if (transaction.Status != TransactionStatus.PENDING_APPROVAL)
             throw new TransactionOperationException(409, "Only pending transactions can be rejected.");
@@ -538,5 +540,5 @@ public sealed class TransactionService(SurplusLinkDbContext db, INotificationSer
     private static AuditLog Log(Guid id, Guid? actor, string action, string? note = null) => new() { Id = Guid.NewGuid(), ActorUserId = actor, EntityType = nameof(Transaction), EntityId = id, Action = action, Note = note };
     private static TransactionResponse ToResponse(Transaction x) => new(x.Id, x.OfferId, x.BuyerId, x.SellerId, x.Quantity, x.TotalValue, x.ReservedQuantity, x.Status, x.CreatedAtUtc, x.UpdatedAtUtc, x.CompletedAtUtc,
         null, null, x.ManagerApprovedAtUtc, x.ConfirmationDeadlineUtc, x.SellerHandoverConfirmedAtUtc, x.BuyerReceivedConfirmedAtUtc,
-        x.ResolvedAtUtc, x.ResolutionReasonCode, x.ResolutionNote);
+        x.ResolvedAtUtc, x.ResolutionReasonCode, x.ResolutionNote, x.Offer.MaterialMatch.EstimatedTransportCost);
 }

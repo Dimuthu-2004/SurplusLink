@@ -346,6 +346,9 @@ public sealed class TransactionQueryIntegrationTests : IAsyncLifetime
             Assert.Equal(BuyerRequestStatus.APPROVED, (await db.BuyerRequests.FindAsync(seeded.RequestId))!.Status);
             Assert.Equal(TransactionStatus.COMPLETED, (await db.Transactions.FindAsync(seeded.TransactionAId))!.Status);
             Assert.Equal(TransactionStatus.HANDED_OVER, (await db.Transactions.FindAsync(seeded.TransactionBId))!.Status);
+            var bReservation = await db.Reservations.SingleAsync(x => x.TransactionId == seeded.TransactionBId);
+            Assert.Equal(ReservationStatus.ACTIVE, bReservation.Status);
+            Assert.Equal(3, (await db.Listings.SingleAsync(x => x.Id == bReservation.ListingId)).ReservedQuantity);
         }
 
         using (var db = fixture.Context())
@@ -357,6 +360,59 @@ public sealed class TransactionQueryIntegrationTests : IAsyncLifetime
             Assert.All(await db.Transactions.Where(x => x.Offer.MaterialMatch.MaterialRequestId == seeded.RequestId).ToListAsync(),
                 transaction => Assert.Equal(TransactionStatus.COMPLETED, transaction.Status));
         }
+    }
+
+    [PostgresFact]
+    public async Task Piece_exact_sell_out_completes_and_consumes_all_stock()
+    {
+        var seeded = await SeedCompletionAsync(QuantityMode.PIECE, 25, 25);
+        await AssertCompletionAsync(seeded, ListingStatus.SOLD, 0, 0);
+    }
+
+    [PostgresFact]
+    public async Task Package_exact_sell_out_completes_and_consumes_all_stock()
+    {
+        var seeded = await SeedCompletionAsync(QuantityMode.PACKAGE, 25, 25);
+        await AssertCompletionAsync(seeded, ListingStatus.SOLD, 0, 0);
+    }
+
+    [PostgresFact]
+    public async Task Continuous_exact_sell_out_completes_and_consumes_all_stock()
+    {
+        var seeded = await SeedCompletionAsync(QuantityMode.CONTINUOUS, 25, 25);
+        await AssertCompletionAsync(seeded, ListingStatus.SOLD, null, 0);
+    }
+
+    [PostgresFact]
+    public async Task Partial_completion_leaves_remaining_stock_active()
+    {
+        var seeded = await SeedCompletionAsync(QuantityMode.PIECE, 25, 20);
+        await AssertCompletionAsync(seeded, ListingStatus.ACTIVE, 5, 5);
+    }
+
+    [PostgresFact]
+    public async Task Listing_stock_constraints_reject_negative_quantity_and_package_counts()
+    {
+        using var db = fixture.Context();
+        var category = await db.Categories.FirstAsync();
+        var listing = new Listing
+        {
+            Id = Guid.NewGuid(), SellerId = fixture.Seller, CategoryId = category.Id, Title = "Constrained stock",
+            Description = "Stock constraint regression", Quantity = 1, ReservedQuantity = 0,
+            QuantityMode = QuantityMode.PIECE, PackageType = PackageType.PIECE, PackageSize = 1,
+            PackageCount = 1, ReservedPackageCount = 0, Unit = "piece", UnitPrice = 1,
+            AvailableUntil = DateTime.UtcNow.AddDays(5), Status = ListingStatus.ACTIVE, Condition = MaterialCondition.GOOD
+        };
+        db.Listings.Add(listing);
+        await db.SaveChangesAsync();
+
+        listing.Quantity = -1;
+        await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
+        db.Entry(listing).State = EntityState.Detached;
+
+        var packaged = await db.Listings.SingleAsync(x => x.Id == listing.Id);
+        packaged.ReservedPackageCount = -1;
+        await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
     }
 
     [PostgresFact]
@@ -410,6 +466,74 @@ public sealed class TransactionQueryIntegrationTests : IAsyncLifetime
         db.AddRange(request, listing, match, offer, pending, workflow);
         await db.SaveChangesAsync();
         return (offer, pending);
+    }
+
+    private async Task<(Guid TransactionId, Guid ReservationId, Guid ListingId)> SeedCompletionAsync(
+        QuantityMode mode, decimal availableQuantity, decimal selectedQuantity)
+    {
+        using var db = fixture.Context();
+        var category = await db.Categories.FirstAsync();
+        var packaged = mode is QuantityMode.PIECE or QuantityMode.PACKAGE;
+        var request = new BuyerRequest
+        {
+            Id = Guid.NewGuid(), BuyerId = fixture.Buyer, CategoryId = category.Id, Title = "Completion stock regression",
+            RequiredQuantity = selectedQuantity, MaximumBudget = 1_000, Unit = "piece", Deadline = DateTime.UtcNow.AddDays(5),
+            Status = BuyerRequestStatus.APPROVED
+        };
+        var listing = new Listing
+        {
+            Id = Guid.NewGuid(), SellerId = fixture.Seller, CategoryId = category.Id, Title = "Completion stock listing",
+            Description = "Exact sold-out completion coverage", Quantity = availableQuantity, ReservedQuantity = selectedQuantity,
+            QuantityMode = mode, PackageType = packaged ? PackageType.PIECE : null, PackageSize = packaged ? 1 : null,
+            PackageCount = packaged ? (int)availableQuantity : null, ReservedPackageCount = packaged ? (int)selectedQuantity : 0,
+            Unit = "piece", UnitPrice = 10, AvailableUntil = DateTime.UtcNow.AddDays(5),
+            Status = ListingStatus.ACTIVE, Condition = MaterialCondition.GOOD
+        };
+        var match = new MaterialMatch
+        {
+            Id = Guid.NewGuid(), MaterialRequestId = request.Id, ListingId = listing.Id, Status = MatchStatus.ROUTED,
+            Distance = 1, DurationMinutes = 1, EstimatedTransportCost = 1
+        };
+        var offer = new Offer
+        {
+            Id = Guid.NewGuid(), MaterialMatchId = match.Id, BuyerId = fixture.Buyer, SellerId = fixture.Seller,
+            Quantity = selectedQuantity, UnitValue = 10, TotalValue = selectedQuantity * 10, Status = OfferStatus.ACCEPTED,
+            PackageCount = packaged ? (int)selectedQuantity : null
+        };
+        var transaction = new Transaction
+        {
+            Id = Guid.NewGuid(), OfferId = offer.Id, BuyerId = fixture.Buyer, SellerId = fixture.Seller,
+            Quantity = selectedQuantity, PackageCount = packaged ? (int)selectedQuantity : null,
+            TotalValue = offer.TotalValue, ReservedQuantity = selectedQuantity, Status = TransactionStatus.HANDED_OVER,
+            SellerHandoverConfirmedAtUtc = DateTime.UtcNow
+        };
+        var reservation = new Reservation
+        {
+            Id = Guid.NewGuid(), MaterialRequestId = request.Id, ListingId = listing.Id, TransactionId = transaction.Id,
+            Quantity = selectedQuantity, PackageCount = packaged ? (int)selectedQuantity : null, Status = ReservationStatus.ACTIVE
+        };
+        db.AddRange(request, listing, match, offer, transaction, reservation);
+        await db.SaveChangesAsync();
+        return (transaction.Id, reservation.Id, listing.Id);
+    }
+
+    private async Task AssertCompletionAsync((Guid TransactionId, Guid ReservationId, Guid ListingId) seeded,
+        ListingStatus expectedStatus, int? expectedPackageCount, decimal expectedQuantity)
+    {
+        using (var db = fixture.Context())
+            await new TransactionService(db).CompleteAsync(seeded.TransactionId, fixture.Buyer, CancellationToken.None);
+        using var verify = fixture.Context();
+        var transaction = await verify.Transactions.SingleAsync(x => x.Id == seeded.TransactionId);
+        var reservation = await verify.Reservations.SingleAsync(x => x.Id == seeded.ReservationId);
+        var listing = await verify.Listings.SingleAsync(x => x.Id == seeded.ListingId);
+        Assert.Equal(TransactionStatus.COMPLETED, transaction.Status);
+        Assert.Equal(0, transaction.ReservedQuantity);
+        Assert.Equal(ReservationStatus.CONFIRMED, reservation.Status);
+        Assert.Equal(expectedQuantity, listing.Quantity);
+        Assert.Equal(0, listing.ReservedQuantity);
+        Assert.Equal(expectedPackageCount, listing.PackageCount);
+        Assert.Equal(0, listing.ReservedPackageCount);
+        Assert.Equal(expectedStatus, listing.Status);
     }
 
     private async Task<(Guid RequestId, Guid TransactionAId, Guid TransactionBId)> SeedMultiSellerLifecycleAsync()
