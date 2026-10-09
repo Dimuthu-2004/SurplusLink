@@ -20,7 +20,11 @@ internal static class MatchRecommendation
 
     internal static MaterialMatch? Choose(BuyerRequest request, IEnumerable<MaterialMatch> matches, DateTime now) =>
         matches.Where(x => InvalidReason(request, x, now) is null)
-            .OrderByDescending(x => x.Score)
+            .OrderByDescending(x => MatchScoring.Score(x.Listing.Condition.ToString(),
+                QuantitySemantics.MaterialCost(request, x.Listing, x.EstimatedTransportCost), request.MaximumBudget,
+                x.Distance, x.EstimatedTransportCost,
+                PreferenceCompatibility.Evaluate(request, x.Listing).MatchedCount,
+                PreferenceCompatibility.Evaluate(request, x.Listing).ConsideredCount))
             .ThenByDescending(x => MatchScoring.ConditionRank(x.Listing.Condition.ToString()))
             .ThenBy(x => QuantitySemantics.MaterialCost(request, x.Listing, x.EstimatedTransportCost) + x.EstimatedTransportCost)
             .ThenBy(x => x.Distance)

@@ -61,9 +61,10 @@ public sealed partial class MatchService
                 match.DurationMinutes > (decimal)(request.Deadline - DateTime.UtcNow).TotalMinutes)
                 reason ??= "DELIVERY_DEADLINE_EXCEEDED";
             if (reason is not null) { match.Score = 0; match.Status = MatchStatus.REJECTED; match.RejectionReason = reason; Audit(match, actor, "REJECT"); continue; }
+            var preferences = PreferenceCompatibility.Evaluate(request, match.Listing);
             match.Score = match.Status == MatchStatus.ROUTED
                 ? MatchScoring.Score(match.Listing.Condition.ToString(), QuantitySemantics.MaterialCost(request, match.Listing, match.EstimatedTransportCost),
-                    request.MaximumBudget, match.Distance, match.EstimatedTransportCost) : 0;
+                    request.MaximumBudget, match.Distance, match.EstimatedTransportCost, preferences.MatchedCount, preferences.ConsideredCount) : 0;
             if (match.Status == MatchStatus.GENERATED) match.Status = MatchStatus.RANKED;
             Audit(match, actor, "RANK");
         }
@@ -117,9 +118,10 @@ public sealed partial class MatchService
                 Audit(match, actor, "REJECT");
             }
         }
+        var preferences = PreferenceCompatibility.Evaluate(request, listing);
         match.Score = match.Status == MatchStatus.ROUTED
             ? MatchScoring.Score(listing.Condition.ToString(), QuantitySemantics.MaterialCost(request, listing, match.EstimatedTransportCost),
-                request.MaximumBudget, match.Distance, match.EstimatedTransportCost) : 0;
+                request.MaximumBudget, match.Distance, match.EstimatedTransportCost, preferences.MatchedCount, preferences.ConsideredCount) : 0;
         await Save(ct);
         await tx.CommitAsync(ct);
         return await GetAsync(id, actor, manager, ct);
@@ -156,11 +158,12 @@ public sealed partial class MatchService
     private static MatchResponse Response(MaterialMatch x)
     {
         var normalized = QuantitySemantics.FromListing(x.Listing);
+        var invalidReason = MatchRecommendation.InvalidReason(x.MaterialRequest, x, DateTime.UtcNow);
         var available = normalized.AvailableBaseQuantity;
         var required = QuantitySemantics.TryRequiredBaseQuantity(x.MaterialRequest, x.Listing, out var convertedRequired)
             ? convertedRequired : x.MaterialRequest.RequiredQuantity;
         return new(x.Id, x.MaterialRequestId, x.ListingId,
-            x.Score, x.Distance, x.EstimatedTransportCost, x.Status.ToString(), MatchRecommendation.InvalidReason(x.MaterialRequest, x, DateTime.UtcNow) is null,
+            x.Score, x.Distance, x.EstimatedTransportCost, x.Status.ToString(), invalidReason is null,
             x.Status == MatchStatus.REJECTED, x.RejectionReason, x.CreatedAtUtc, x.DurationMinutes,
             x.Listing.Title, x.Listing.Category.Name, x.Listing.SellerId, required, normalized.BaseUnit, x.Listing.UnitPrice,
             x.Listing.AvailableUntil, x.MaterialRequest.Deadline, available,
@@ -182,7 +185,8 @@ public sealed partial class MatchService
                 x.Listing.SpecificationsJson, x.Listing.Photos.OrderBy(photo => photo.SortOrder)
                     .Select(photo => new ListingPhotoResponse(photo.Id, photo.PhotoUrl, photo.SortOrder)).ToArray()),
             ToPreferenceResponse(PreferenceCompatibility.Evaluate(x.MaterialRequest, x.Listing)),
-            x.Listing.Seller.Address);
+            x.Listing.Seller.Address,
+            invalidReason);
     }
 
     private static PreferenceCompatibilityResponse? ToPreferenceResponse(PreferenceCompatibilityResult result) =>

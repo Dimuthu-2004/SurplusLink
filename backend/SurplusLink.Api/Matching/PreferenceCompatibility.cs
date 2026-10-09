@@ -4,9 +4,8 @@ using SurplusLink.Api.Models;
 namespace SurplusLink.Api.Matching;
 
 /// <summary>
-/// Compares buyer-selected template attributes with a listing without changing
-/// the established condition/cost/distance score.  The template schema owns
-/// the behaviour of each field; clients only render this structured result.
+/// Compares buyer-selected template attributes with a listing. The schema owns
+/// which selected fields are score-relevant and which are hard requirements.
 /// </summary>
 public static class PreferenceCompatibility
 {
@@ -37,11 +36,11 @@ public static class PreferenceCompatibility
                 if (!requested.RootElement.TryGetProperty(id, out var requestedValue) || IsAny(requestedValue))
                     continue;
 
-                considered++;
                 var behavior = field.TryGetProperty("matchBehavior", out var configured)
                     ? configured.GetString()?.ToUpperInvariant() ?? "SOFT_PREFERENCE"
                     : "SOFT_PREFERENCE";
                 if (behavior == "INFORMATIONAL") continue;
+                considered++;
                 var label = field.TryGetProperty("label", out var labelElement) && !string.IsNullOrWhiteSpace(labelElement.GetString())
                     ? labelElement.GetString()! : id;
                 var wanted = Display(requestedValue);

@@ -59,3 +59,20 @@ class ScoringTests(unittest.IsolatedAsyncioTestCase):
         result = score_breakdown("EXCELLENT", D(1000), D(2000))
         self.assertEqual(result["score"], 0)
         self.assertIsNone(result["totalEstimatedCost"])
+
+    def test_preferences_use_the_same_final_weights_as_backend(self):
+        wrong_but_excellent = score_breakdown("EXCELLENT", D(1000), D(2000), D(10), D(500), 0, 2)
+        matching_but_good = score_breakdown("GOOD", D(1000), D(2000), D(10), D(500), 2, 2)
+        half_matching = score_breakdown("GOOD", D(1000), D(2000), D(10), D(500), 1, 2)
+
+        self.assertEqual(wrong_but_excellent["score"], D("0.4989"))
+        self.assertEqual(matching_but_good["score"], D("0.7239"))
+        self.assertEqual(half_matching["preferencePoints"], D("0.15"))
+        self.assertEqual(half_matching["score"], D("0.5739"))
+        self.assertGreater(matching_but_good["score"], wrong_but_excellent["score"])
+
+    def test_no_preferences_preserves_the_legacy_formula(self):
+        legacy = score_breakdown("EXCELLENT", D(1000), D(2000), D(10), D(500))
+        no_preferences = score_breakdown("EXCELLENT", D(1000), D(2000), D(10), D(500), 0, 0)
+        self.assertEqual(legacy["score"], D("0.7568"))
+        self.assertEqual(no_preferences["score"], legacy["score"])

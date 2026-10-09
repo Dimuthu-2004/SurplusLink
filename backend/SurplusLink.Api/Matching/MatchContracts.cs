@@ -97,7 +97,10 @@ public sealed record MatchResponse(
     string? SellerDisplayName = null,
     MatchListingContext? ListingContext = null,
     PreferenceCompatibilityResponse? PreferenceCompatibility = null,
-    string? FullAddress = null
+    string? FullAddress = null,
+    // This is evaluated against live listing/request state. It is deliberately
+    // separate from RejectionReason, which records a persisted rejection.
+    string? InvalidReason = null
 );
 
 public sealed record MatchPage(

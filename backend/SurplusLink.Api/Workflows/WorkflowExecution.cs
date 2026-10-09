@@ -33,7 +33,8 @@ public sealed record WorkflowListingSnapshot(Guid MatchId, Guid ListingId, Guid 
     int? PackageCountAvailable = null, decimal? BaseEquivalentAvailableQuantity = null,
     decimal? MaximumContribution = null, bool? FullCoverage = null,
     string? BaseUnit = null, decimal? MinimumSellableIncrement = null, int? DecimalPrecision = null, Guid? ConstructionItemTemplateId = null, string? ItemName = null,
-    string? Description = null, string? SpecificationsJson = null, string? ItemRelevanceClassification = null);
+    string? Description = null, string? SpecificationsJson = null, string? ItemRelevanceClassification = null,
+    int PreferenceMatchedCount = 0, int PreferenceConsideredCount = 0);
 public sealed record WorkflowRunRequest(Guid WorkflowId, object BuyerRequest, IReadOnlyList<WorkflowListingSnapshot> Listings,
     string? Objective = null);
 public sealed record WorkflowValidation(bool Valid, bool RequiresApproval, Guid? RecommendedMatchId,
@@ -210,6 +211,7 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
                 routingSettings?.Value.Provider ?? "unconfigured",
                 routed ? "ROUTED" : routingFailure ?? RoutingFailureClassifier.FromEstimate(estimate));
             var quantity = QuantitySemantics.FromListing(listing);
+            var preferences = PreferenceCompatibility.Evaluate(request, listing);
             rows.Add(new(existing.GetValueOrDefault(listing.Id, Guid.NewGuid()), listing.Id, listing.SellerId,
                 listing.CategoryId, quantity.AvailableBaseQuantity, quantity.BaseUnit, listing.UnitPrice,
                 listing.Condition.ToString(), listing.Status.ToString(), listing.AvailableUntil, listing.Latitude,
@@ -221,7 +223,8 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
                 QuantitySemantics.TryRequiredBaseQuantity(request, listing, out var requestedBase) &&
                     QuantitySemantics.EffectiveAffordableQuantity(request, listing, routed ? estimate!.EstimatedTransportCost : null) >= requestedBase,
                 quantity.BaseUnit, quantity.MinimumSellableIncrement, quantity.DecimalPrecision, listing.ConstructionItemTemplateId,
-                listing.Title, listing.Description, listing.SpecificationsJson, ItemRelevance.Evaluate(request, listing).Classification));
+                listing.Title, listing.Description, listing.SpecificationsJson, ItemRelevance.Evaluate(request, listing).Classification,
+                preferences.MatchedCount, preferences.ConsideredCount));
         }
         return new(workflow.Id, new { id = request.Id, buyerId = request.BuyerId, categoryId = request.CategoryId,
             constructionItemTemplateId = request.ConstructionItemTemplateId, itemName = request.ConstructionItemTemplate?.Name ?? request.Title,
@@ -247,7 +250,7 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
                 x.DurationMinutes <= (decimal)(request.Deadline - now).TotalMinutes &&
                 MaterialCost(x) + x.TransportCost <= request.MaximumBudget)
             .Select(x => new { Row = x, Score = MatchScoring.Score(x.Condition, MaterialCost(x),
-                request.MaximumBudget, x.DistanceKm, x.TransportCost) })
+                request.MaximumBudget, x.DistanceKm, x.TransportCost, x.PreferenceMatchedCount, x.PreferenceConsideredCount) })
             .OrderByDescending(x => x.Score).ThenByDescending(x => MatchScoring.ConditionRank(x.Row.Condition))
             .ThenBy(x => MaterialCost(x.Row) + x.Row.TransportCost)
             .ThenBy(x => x.Row.DistanceKm).ThenBy(x => x.Row.ListingId.ToString(), StringComparer.Ordinal).FirstOrDefault();
@@ -375,7 +378,8 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
             candidate.EstimatedTransportCost = routeSucceeded ? row.TransportCost : null;
             candidate.Score = reason is null && routeSucceeded
                 ? MatchScoring.Score(row.Condition, MaterialCost(row),
-                    request.MaximumBudget, row.DistanceKm, row.TransportCost) : 0;
+                    request.MaximumBudget, row.DistanceKm, row.TransportCost,
+                    row.PreferenceMatchedCount, row.PreferenceConsideredCount) : 0;
             if (reason is null || routeSucceeded)
                 db.AuditLogs.Add(new AuditLog { Id = Guid.NewGuid(), EntityType = nameof(MaterialMatch), EntityId = candidate.Id,
                     Action = routeSucceeded ? "ROUTE_SUCCEEDED" : "ROUTE_FAILED" });

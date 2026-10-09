@@ -71,6 +71,8 @@ class ListingSnapshot(Contract):
     description: str | None = None
     specificationsJson: str | None = None
     itemRelevanceClassification: str | None = None
+    preferenceMatchedCount: int = Field(default=0, ge=0)
+    preferenceConsideredCount: int = Field(default=0, ge=0)
 
 
 class WorkflowRequest(Contract):
@@ -359,7 +361,8 @@ class WorkflowOrchestrator:
         output = validation.model_dump(mode="json")
         if validation.valid:
             breakdown = score_breakdown(row.condition, material_cost,
-                                        criteria.maximumBudget, value.distanceKm, value.transportCost)
+                                        criteria.maximumBudget, value.distanceKm, value.transportCost,
+                                        row.preferenceMatchedCount, row.preferenceConsideredCount)
             output["scoreBreakdown"] = breakdown
             result["recommendation"] = Recommendation(matchId=row.matchId, listingId=row.listingId,
                 score=breakdown["score"], distanceKm=value.distanceKm, transportCost=value.transportCost)

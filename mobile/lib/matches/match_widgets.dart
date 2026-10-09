@@ -119,11 +119,15 @@ class MatchListCard extends StatelessWidget {
     final isFailed = isRejected || isRouteFailed;
 
     // Coordinates are routing data, not a buyer-facing address.
-    final locationLabel = match.displayLocation != null && match.displayLocation!.trim().isNotEmpty
+    final locationLabel =
+        match.displayLocation != null &&
+            match.displayLocation!.trim().isNotEmpty
         ? match.displayLocation!.trim()
         : (match.sellerAddress != null && match.sellerAddress!.trim().isNotEmpty
-            ? match.sellerAddress!.trim()
-            : (match.latitude != null && match.longitude != null ? 'Location available' : null));
+              ? match.sellerAddress!.trim()
+              : (match.latitude != null && match.longitude != null
+                    ? 'Location available'
+                    : null));
 
     // Distance: max 1 decimal, e.g. "27.5 km away"
     final distanceLabel = match.distance != null
@@ -138,9 +142,8 @@ class MatchListCard extends StatelessWidget {
     final maximumControlQuantity = match.isPackaged
         ? (match.packageCountAvailable ?? 0).toDouble()
         : maximumQuantity ?? match.selectableQuantity ?? double.infinity;
-    double baseForControl(double value) => match.isPackaged
-        ? value * (match.packageSize ?? 1)
-        : value;
+    double baseForControl(double value) =>
+        match.isPackaged ? value * (match.packageSize ?? 1) : value;
 
     // Status chip data
     final (statusText, statusColor, statusIcon) = _statusData(
@@ -152,7 +155,10 @@ class MatchListCard extends StatelessWidget {
 
     // Seller display name
     final sellerLabel =
-        match.sellerDisplayName ?? match.sellerBusinessName ?? match.sellerName ?? 'Verified seller';
+        match.sellerDisplayName ??
+        match.sellerBusinessName ??
+        match.sellerName ??
+        'Verified seller';
 
     return RecommendedMatchCard(
       recommended: match.aiRecommended,
@@ -190,7 +196,9 @@ class MatchListCard extends StatelessWidget {
                         horizontal: 4,
                         vertical: 0,
                       ),
-                      backgroundColor: SurplusLinkTheme.amber.withValues(alpha: 0.15),
+                      backgroundColor: SurplusLinkTheme.amber.withValues(
+                        alpha: 0.15,
+                      ),
                       side: BorderSide(
                         color: SurplusLinkTheme.amber.withValues(alpha: 0.4),
                       ),
@@ -229,9 +237,8 @@ class MatchListCard extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   sellerLabel,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: SurplusLinkTheme.slate700,
-                  ),
+                  style: Theme.of(context).textTheme.bodyMedium
+                      ?.copyWith(color: SurplusLinkTheme.slate700),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -249,11 +256,7 @@ class MatchListCard extends StatelessWidget {
                       locationLabel,
                     ),
                   if (distanceLabel != null)
-                    _iconLabel(
-                      context,
-                      Icons.near_me_outlined,
-                      distanceLabel,
-                    ),
+                    _iconLabel(context, Icons.near_me_outlined, distanceLabel),
                 ],
               ),
               const SizedBox(height: 6),
@@ -263,14 +266,13 @@ class MatchListCard extends StatelessWidget {
                 color: statusColor,
                 icon: statusIcon,
               ),
-              if (isRejected && match.rejectionReason != null) ...[
+              if (!match.isSelectable && match.selectabilityReason != null) ...[
                 const SizedBox(height: 4),
                 Text(
-                  routingText(context, match.rejectionReason!),
-                  key: Key('rejection-reason-${match.id}'),
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: SurplusLinkTheme.slate600,
-                  ),
+                  routingText(context, match.selectabilityReason!),
+                  key: Key('selectability-reason-${match.id}'),
+                  style: Theme.of(context).textTheme.bodySmall
+                      ?.copyWith(color: SurplusLinkTheme.slate600),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -279,7 +281,10 @@ class MatchListCard extends StatelessWidget {
                 const SizedBox(height: 6),
                 Container(
                   key: Key('partial-warning-${match.id}'),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFFFEF3C7),
                     borderRadius: BorderRadius.circular(8),
@@ -287,7 +292,11 @@ class MatchListCard extends StatelessWidget {
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.info_outline, size: 16, color: Color(0xFFB45309)),
+                      const Icon(
+                        Icons.info_outline,
+                        size: 16,
+                        color: Color(0xFFB45309),
+                      ),
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
@@ -324,10 +333,13 @@ class MatchListCard extends StatelessWidget {
                             child: InkWell(
                               onTap: () => onToggleSelect!(!isSelected),
                               child: Text(
-                                isSelected ? 'Selected for fulfillment' : 'Select this seller',
+                                isSelected
+                                    ? 'Selected for fulfillment'
+                                    : 'Select this seller',
                                 style: TextStyle(
-                                  fontWeight:
-                                      isSelected ? FontWeight.bold : FontWeight.normal,
+                                  fontWeight: isSelected
+                                      ? FontWeight.bold
+                                      : FontWeight.normal,
                                   color: isSelected
                                       ? SurplusLinkTheme.amberDark
                                       : SurplusLinkTheme.slate900,
@@ -386,39 +398,72 @@ class MatchListCard extends StatelessWidget {
                                 children: [
                                   IconButton(
                                     key: Key('qty-decrement-${match.id}'),
-                                    icon: const Icon(Icons.remove_circle_outline, size: 20),
+                                    icon: const Icon(
+                                      Icons.remove_circle_outline,
+                                      size: 20,
+                                    ),
                                     padding: EdgeInsets.zero,
                                     constraints: const BoxConstraints(
                                       minWidth: 32,
                                       minHeight: 32,
                                     ),
-                                    onPressed: selectedControlQuantity > (match.isPackaged ? 1 : match.selectionStep)
+                                    onPressed:
+                                        selectedControlQuantity >
+                                            (match.isPackaged
+                                                ? 1
+                                                : match.selectionStep)
                                         ? () => onQuantityChanged!(
-                                            baseForControl(selectedControlQuantity - (match.isPackaged ? 1 : match.selectionStep)),
+                                            baseForControl(
+                                              selectedControlQuantity -
+                                                  (match.isPackaged
+                                                      ? 1
+                                                      : match.selectionStep),
+                                            ),
                                           )
                                         : null,
                                   ),
                                   SizedBox(
                                     width: 90,
                                     child: _QuantityInput(
-                                      fieldKey: Key('quantity-input-${match.id}'),
+                                      fieldKey: Key(
+                                        'quantity-input-${match.id}',
+                                      ),
                                       quantity: selectedControlQuantity,
-                                      unit: match.isPackaged ? '' : (match.unit ?? ''),
-                                      onChanged: (value) => onQuantityChanged!(baseForControl(value)),
+                                      unit: match.isPackaged
+                                          ? ''
+                                          : (match.unit ?? ''),
+                                      onChanged: (value) => onQuantityChanged!(
+                                        baseForControl(value),
+                                      ),
                                     ),
                                   ),
                                   IconButton(
                                     key: Key('qty-increment-${match.id}'),
-                                    icon: const Icon(Icons.add_circle_outline, size: 20),
+                                    icon: const Icon(
+                                      Icons.add_circle_outline,
+                                      size: 20,
+                                    ),
                                     padding: EdgeInsets.zero,
                                     constraints: const BoxConstraints(
                                       minWidth: 32,
                                       minHeight: 32,
                                     ),
-                                    onPressed: selectedControlQuantity < maximumControlQuantity
+                                    onPressed:
+                                        selectedControlQuantity <
+                                            maximumControlQuantity
                                         ? () => onQuantityChanged!(
-                                            baseForControl((selectedControlQuantity + (match.isPackaged ? 1 : match.selectionStep))
-                                                .clamp(0.0, maximumControlQuantity).toDouble()),
+                                            baseForControl(
+                                              (selectedControlQuantity +
+                                                      (match.isPackaged
+                                                          ? 1
+                                                          : match
+                                                                .selectionStep))
+                                                  .clamp(
+                                                    0.0,
+                                                    maximumControlQuantity,
+                                                  )
+                                                  .toDouble(),
+                                            ),
                                           )
                                         : null,
                                   ),
@@ -427,12 +472,18 @@ class MatchListCard extends StatelessWidget {
                                     onPressed: () => onQuantityChanged!(
                                       baseForControl(maximumControlQuantity),
                                     ),
-                                    child: const Text('Max', style: TextStyle(fontSize: 12)),
+                                    child: const Text(
+                                      'Max',
+                                      style: TextStyle(fontSize: 12),
+                                    ),
                                   ),
                                   TextButton(
                                     key: Key('qty-remove-${match.id}'),
                                     onPressed: onRemove,
-                                    child: const Text('Remove', style: TextStyle(fontSize: 12)),
+                                    child: const Text(
+                                      'Remove',
+                                      style: TextStyle(fontSize: 12),
+                                    ),
                                   ),
                                 ],
                               ),
@@ -443,11 +494,14 @@ class MatchListCard extends StatelessWidget {
                                     quantityError!,
                                     style: TextStyle(
                                       fontSize: 11,
-                                      color: Theme.of(context).colorScheme.error,
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .error,
                                     ),
                                   ),
                                 ),
-                              if (selectedQuantity != null && match.unitPrice != null) ...[
+                              if (selectedQuantity != null &&
+                                  match.unitPrice != null) ...[
                                 const SizedBox(height: 4),
                                 Text(
                                   'Est: ${formatCurrency(match.materialCostFor(selectedQuantity ?? 0))} + ${formatCurrency(match.estimatedTransportCost ?? 0)} transport',
@@ -459,7 +513,10 @@ class MatchListCard extends StatelessWidget {
                               ],
                               Text(
                                 'Seller available: ${quantities.formatQuantity(match.availableQuantity ?? 0, match.unit ?? '')} ${match.unit ?? ''} · Allocated: ${quantities.formatQuantity(selectedQuantity ?? 0, match.unit ?? '')} ${match.unit ?? ''}',
-                                style: const TextStyle(fontSize: 11, color: SurplusLinkTheme.slate600),
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: SurplusLinkTheme.slate600,
+                                ),
                               ),
                             ],
                           ),
@@ -505,11 +562,7 @@ class MatchListCard extends StatelessWidget {
     );
   }
 
-  Widget _iconLabel(
-    BuildContext context,
-    IconData icon,
-    String text,
-  ) => Row(
+  Widget _iconLabel(BuildContext context, IconData icon, String text) => Row(
     mainAxisSize: MainAxisSize.min,
     children: [
       Icon(icon, size: 14, color: SurplusLinkTheme.slate600),
@@ -517,9 +570,8 @@ class MatchListCard extends StatelessWidget {
       Flexible(
         child: Text(
           text,
-          style: Theme.of(
-            context,
-          ).textTheme.bodySmall?.copyWith(color: SurplusLinkTheme.slate600),
+          style: Theme.of(context).textTheme.bodySmall
+              ?.copyWith(color: SurplusLinkTheme.slate600),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),

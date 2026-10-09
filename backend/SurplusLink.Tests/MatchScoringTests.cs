@@ -8,6 +8,57 @@ namespace SurplusLink.Tests;
 public sealed class MatchScoringTests
 {
     [Fact]
+    public void No_selected_preferences_preserves_the_legacy_formula()
+    {
+        Assert.Equal(.7568m, MatchScoring.Score("EXCELLENT", 1000, 2000, 10, 500));
+        Assert.Equal(.7568m, MatchScoring.Score("EXCELLENT", 1000, 2000, 10, 500, 0, 0));
+    }
+
+    [Fact]
+    public void Soft_preferences_change_the_final_score_and_rank()
+    {
+        var wrongButExcellent = MatchScoring.Score("EXCELLENT", 1000, 2000, 10, 500, 0, 2);
+        var matchingButGood = MatchScoring.Score("GOOD", 1000, 2000, 10, 500, 2, 2);
+        var halfMatching = MatchScoring.Score("GOOD", 1000, 2000, 10, 500, 1, 2);
+
+        Assert.Equal(.4989m, wrongButExcellent);
+        Assert.Equal(.7239m, matchingButGood);
+        Assert.Equal(.5739m, halfMatching);
+        Assert.True(matchingButGood > wrongButExcellent);
+    }
+
+    [Fact]
+    public void Informational_fields_do_not_change_the_preference_score_and_hard_mismatches_remain_rejected()
+    {
+        var buyerId = Guid.NewGuid();
+        var categoryId = Guid.NewGuid();
+        var template = new ConstructionItemTemplate
+        {
+            Id = Guid.NewGuid(), CategoryId = categoryId, Name = "Paint",
+            AttributeSchema = """
+                [{"id":"colour","label":"Colour","buyerPreference":true,"matchBehavior":"SOFT_PREFERENCE"},
+                 {"id":"finish","label":"Finish","buyerPreference":true,"matchBehavior":"HARD_REQUIREMENT"},
+                 {"id":"note","label":"Note","buyerPreference":true,"matchBehavior":"INFORMATIONAL"}]
+                """
+        };
+        var request = new BuyerRequest { BuyerId = buyerId, CategoryId = categoryId, ConstructionItemTemplateId = template.Id,
+            BuyerPreferencesJson = """{"colour":"Red","finish":"Matt","note":"Anything"}""", Deadline = DateTime.UtcNow.AddDays(1) };
+        var listing = new Listing { SellerId = Guid.NewGuid(), CategoryId = categoryId, ConstructionItemTemplateId = template.Id,
+            ConstructionItemTemplate = template, Title = "Paint", Status = ListingStatus.ACTIVE, AvailableUntil = DateTime.UtcNow.AddDays(2),
+            SpecificationsJson = """{"colour":"Red","finish":"Satin","note":"Different"}""" };
+        var result = PreferenceCompatibility.Evaluate(request, listing);
+
+        Assert.Equal(1, result.MatchedCount);
+        Assert.Equal(2, result.ConsideredCount);
+        Assert.True(result.HasHardMismatch);
+        var rejection = MatchService.EligibilityReason(request, listing);
+        Assert.Equal("REQUIRED_SPECIFICATION_MISMATCH", rejection);
+        var finalScore = rejection is null
+            ? MatchScoring.Score("GOOD", 1000, 2000, 10, 500, result.MatchedCount, result.ConsideredCount) : 0m;
+        Assert.Equal(0m, finalScore);
+    }
+
+    [Fact]
     public void Equal_scores_sort_by_condition_total_cost_distance_then_listing_id()
     {
         MaterialMatch Row(int id, MaterialCondition condition, decimal transport, decimal distance) => new()
@@ -47,9 +98,9 @@ public sealed class MatchScoringTests
 
         var row = new WorkflowListingSnapshot(Guid.NewGuid(), Guid.NewGuid(), listing.SellerId,
             request.CategoryId, 20, "pcs", 10, "GOOD", "ACTIVE", listing.AvailableUntil,
-            6, 79, 10, 30, 50, null, ConstructionItemTemplateId: request.ConstructionItemTemplateId);
+            6, 79, 10, 30, 50, null, ConstructionItemTemplateId: request.ConstructionItemTemplateId) { MaximumContribution = 20 };
         var input = new WorkflowRunRequest(Guid.NewGuid(), new { }, [row]);
-        var score = MatchScoring.Score(row.Condition, row.UnitPrice * request.RequiredQuantity,
+        var score = MatchScoring.Score(row.Condition, row.UnitPrice * row.MaximumContribution!.Value,
             request.MaximumBudget, row.DistanceKm, row.TransportCost);
         var result = new WorkflowRunResult(input.WorkflowId, "MATCH_FOUND",
             new(true, true, row.MatchId, [], []), new(row.MatchId, row.ListingId, score,
@@ -67,7 +118,7 @@ public sealed class MatchScoringTests
         var request = new BuyerRequest { ConstructionItemTemplateId = Guid.Parse("00000000-0000-0000-0000-000000000203"), BuyerId = Guid.NewGuid(), CategoryId = Guid.NewGuid(),
             RequiredQuantity = 10, Unit = "kg", MaximumBudget = 2000, Deadline = DateTime.UtcNow.AddDays(2) };
         var first = new WorkflowListingSnapshot(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), request.CategoryId,
-            20, "kg", 100, firstCondition, "ACTIVE", DateTime.UtcNow.AddDays(5), 6, 79, 10, 30, firstCost, null, ConstructionItemTemplateId: request.ConstructionItemTemplateId);
+            20, "kg", 100, firstCondition, "ACTIVE", DateTime.UtcNow.AddDays(5), 6, 79, 10, 30, firstCost, null, ConstructionItemTemplateId: request.ConstructionItemTemplateId) { MaximumContribution = 10 };
         var second = first with { MatchId = Guid.NewGuid(), ListingId = Guid.NewGuid(), Condition = secondCondition,
             TransportCost = secondCost };
         var snapshot = new WorkflowRunRequest(Guid.NewGuid(), new { }, [first, second]);

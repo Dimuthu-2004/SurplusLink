@@ -1,13 +1,28 @@
 # Deterministic match scoring
 
-The backend and AI service apply the same final score after successful routing:
+The backend and AI service apply the same final score after successful routing.
+When the buyer selected at least one score-relevant preference (a selected soft
+or hard preference; never informational or `Any`/`No preference`):
 
 ```
-T = unitPrice * requiredQuantity + estimatedTransportCost
+T = materialCost + estimatedTransportCost
 C = EXCELLENT: 1, GOOD: 0.75, FAIR: 0.5, POOR: 0.25
+P = matched score-relevant preferences / selected score-relevant preferences
+score = roundToEven(0.30*C + 0.30*P + 0.25*max(0, 1-T/maximumBudget)
+                    + 0.15/(1+distanceKm/100), 4)
+```
+
+Without a selected score-relevant preference, the legacy formula is preserved:
+
+```
 score = roundToEven(0.50*C + 0.30*max(0, 1-T/maximumBudget)
                     + 0.20/(1+distanceKm/100), 4)
 ```
+
+`materialCost` is the effective affordable/contributable quantity cost, including
+package and piece rules. A hard-preference mismatch remains a rejection; a soft
+mismatch remains eligible but earns no preference points. Informational fields
+and `Any`/`No preference` selections do not participate in the denominator.
 
 The existing NEW condition is treated as EXCELLENT; unknown conditions earn zero condition points.
 The score is stored on a 0?1 scale. Missing/failed logistics earn no final score (zero), with route measurements remaining null when unavailable. Zero score does not confer eligibility.

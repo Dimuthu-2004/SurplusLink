@@ -11,6 +11,8 @@ import 'recommended_matches_test.dart' show FakeMatches;
 RecommendedMatch sample({
   String status = 'ROUTED',
   String? reason,
+  String? invalidReason,
+  bool? valid,
   String? workflow,
 }) => RecommendedMatch(
   id: 'technical-match',
@@ -30,6 +32,8 @@ RecommendedMatch sample({
   availableUntil: DateTime(2026, 9, 22),
   requiredBy: DateTime(2026, 9, 24),
   rejectionReason: reason,
+  invalidReason: invalidReason,
+  valid: valid,
   requirementStatus: workflow,
 );
 
@@ -110,11 +114,22 @@ void main() {
       'Delivery route failed',
     );
     expect(readableRejectionReason('unknown'), 'Unable to use this match.');
-    expect(readableRejectionReason('TOTAL_COST_EXCEEDS_BUDGET'),
-        'The total material and delivery cost exceeds your maximum budget.');
-    expect(readableRejectionReason('ITEM_MISMATCH'), isNot('Unable to use this match.'));
-    expect(readableRejectionReason('REQUIRED_SPECIFICATION_MISMATCH'), isNot('Unable to use this match.'));
-    expect(routingText(null, 'ROUTING_PROVIDER_ERROR'), isNot('Unable to use this match.'));
+    expect(
+      readableRejectionReason('TOTAL_COST_EXCEEDS_BUDGET'),
+      'The total material and delivery cost exceeds your maximum budget.',
+    );
+    expect(
+      readableRejectionReason('ITEM_MISMATCH'),
+      isNot('Unable to use this match.'),
+    );
+    expect(
+      readableRejectionReason('REQUIRED_SPECIFICATION_MISMATCH'),
+      isNot('Unable to use this match.'),
+    );
+    expect(
+      routingText(null, 'ROUTING_PROVIDER_ERROR'),
+      isNot('Unable to use this match.'),
+    );
   });
   test('routing follows persisted status instead of missing distance', () {
     expect(
@@ -233,13 +248,51 @@ void main() {
       findsOneWidget,
     );
   });
-  testWidgets('rejected card and details show the same readable reason', (tester) async {
-    final rejected = sample(status: 'REJECTED', reason: 'TOTAL_COST_EXCEEDS_BUDGET');
-    await tester.pumpWidget(MaterialApp(home: Scaffold(body: MatchListCard(match: rejected, onTap: () {}))));
+  testWidgets(
+    'live invalid reason is readable and keeps a routed match unselectable',
+    (tester) async {
+      final liveInvalid = sample(
+        invalidReason: 'LISTING_EXPIRES_BEFORE_DELIVERY',
+        valid: false,
+        workflow: 'MATCH_FOUND',
+      );
+      expect(liveInvalid.isSelectable, isFalse);
+      expect(liveInvalid.isRejected, isFalse);
+      await showDetails(tester, DetailsFake()..value = liveInvalid);
+      expect(find.text('Why this match cannot be selected'), findsOneWidget);
+      expect(
+        find.text(
+          'This listing becomes unavailable before your required delivery date.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.byKey(const Key('select-match')), findsNothing);
+    },
+  );
+  testWidgets('rejected card and details show the same readable reason', (
+    tester,
+  ) async {
+    final rejected = sample(
+      status: 'REJECTED',
+      reason: 'TOTAL_COST_EXCEEDS_BUDGET',
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MatchListCard(match: rejected, onTap: () {}),
+        ),
+      ),
+    );
     expect(find.text('Rejected'), findsOneWidget);
-    expect(find.text(readableRejectionReason(rejected.rejectionReason)), findsOneWidget);
+    expect(
+      find.text(readableRejectionReason(rejected.rejectionReason)),
+      findsOneWidget,
+    );
     await showDetails(tester, DetailsFake()..value = rejected);
-    expect(find.text(readableRejectionReason(rejected.rejectionReason)), findsOneWidget);
+    expect(
+      find.text(readableRejectionReason(rejected.rejectionReason)),
+      findsOneWidget,
+    );
     expect(find.textContaining('TOTAL_COST_EXCEEDS_BUDGET'), findsNothing);
   });
   testWidgets('route failure and paginated history use readable text', (

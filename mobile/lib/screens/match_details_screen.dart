@@ -1,4 +1,5 @@
 import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile/config/app_config.dart';
@@ -47,6 +48,7 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
     _quantityController.dispose();
     super.dispose();
   }
+
   @override
   void initState() {
     super.initState();
@@ -79,10 +81,15 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
         _loading = false;
         if (match.availableQuantity != null && match.quantity != null) {
           final desired = match.availableQuantity! < match.quantity!
-              ? match.availableQuantity! : match.quantity!;
-          _setSelectedQuantity(match.isPackaged
-              ? (match.packageCountFor(match.packageQuantityFor(desired)) ?? 0).toDouble()
-              : desired.clamp(0.0, match.availableQuantity!).toDouble());
+              ? match.availableQuantity!
+              : match.quantity!;
+          _setSelectedQuantity(
+            match.isPackaged
+                ? (match.packageCountFor(match.packageQuantityFor(desired)) ??
+                          0)
+                      .toDouble()
+                : desired.clamp(0.0, match.availableQuantity!).toDouble(),
+          );
           _quantityController.text = quantities.formatQuantity(
             _selectedQuantity!,
             match.unit ?? '',
@@ -130,7 +137,11 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
   }
 
   String? _readableLocation(RecommendedMatch match) {
-    for (final value in [match.fullAddress, match.sellerAddress, match.displayLocation]) {
+    for (final value in [
+      match.fullAddress,
+      match.sellerAddress,
+      match.displayLocation,
+    ]) {
       if (value?.trim().isNotEmpty == true) return value!.trim();
     }
     return null;
@@ -139,10 +150,22 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
   Uri? _mapUri(RecommendedMatch match) {
     final latitude = match.latitude;
     final longitude = match.longitude;
-    final validCoordinates = latitude != null && longitude != null &&
-        latitude.isFinite && longitude.isFinite && latitude.abs() <= 90 && longitude.abs() <= 180;
-    final query = validCoordinates ? '$latitude,$longitude' : _readableLocation(match);
-    return query == null ? null : Uri.https('www.google.com', '/maps/search/', {'api': '1', 'query': query});
+    final validCoordinates =
+        latitude != null &&
+        longitude != null &&
+        latitude.isFinite &&
+        longitude.isFinite &&
+        latitude.abs() <= 90 &&
+        longitude.abs() <= 180;
+    final query = validCoordinates
+        ? '$latitude,$longitude'
+        : _readableLocation(match);
+    return query == null
+        ? null
+        : Uri.https('www.google.com', '/maps/search/', {
+            'api': '1',
+            'query': query,
+          });
   }
 
   Future<void> _openMap(RecommendedMatch match) async {
@@ -171,7 +194,8 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
         ),
       ],
     ),
-    bottomNavigationBar: !_loading &&
+    bottomNavigationBar:
+        !_loading &&
             _error == null &&
             _match?.requirementStatus == 'MATCH_FOUND' &&
             _match!.isSelectable
@@ -191,11 +215,15 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
                     ),
                   ),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
                   margin: const EdgeInsets.only(bottom: 8),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    color: Theme.of(context)
+                        .colorScheme
+                        .surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Wrap(
@@ -218,14 +246,15 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
                               Icons.remove_circle_outline,
                               size: 20,
                             ),
-                            onPressed: (_selectionControlValue(_match!) >
+                            onPressed:
+                                (_selectionControlValue(_match!) >
                                     _stepFor(_match!.unit))
                                 ? () => setState(
-                                      () => _setSelectedQuantity(
-                                        _selectionControlValue(_match!) -
-                                            _stepFor(_match!.unit),
-                                      ),
-                                    )
+                                    () => _setSelectedQuantity(
+                                      _selectionControlValue(_match!) -
+                                          _stepFor(_match!.unit),
+                                    ),
+                                  )
                                 : null,
                           ),
                           SizedBox(
@@ -235,8 +264,8 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
                               controller: _quantityController,
                               keyboardType:
                                   const TextInputType.numberWithOptions(
-                                decimal: true,
-                              ),
+                                    decimal: true,
+                                  ),
                               textAlign: TextAlign.center,
                               decoration: InputDecoration(
                                 isDense: true,
@@ -261,19 +290,20 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
                               Icons.add_circle_outline,
                               size: 20,
                             ),
-                            onPressed: (_selectionControlValue(_match!) <
+                            onPressed:
+                                (_selectionControlValue(_match!) <
                                     _maximumSelectable(_match!))
                                 ? () => setState(
-                                      () => _setSelectedQuantity(
-                                        (_selectionControlValue(_match!) +
-                                                _stepFor(_match!.unit))
-                                            .clamp(
-                                              0.0,
-                                              _maximumSelectable(_match!),
-                                            )
-                                            .toDouble(),
-                                      ),
-                                    )
+                                    () => _setSelectedQuantity(
+                                      (_selectionControlValue(_match!) +
+                                              _stepFor(_match!.unit))
+                                          .clamp(
+                                            0.0,
+                                            _maximumSelectable(_match!),
+                                          )
+                                          .toDouble(),
+                                    ),
+                                  )
                                 : null,
                           ),
                         ],
@@ -285,7 +315,8 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
                   width: double.infinity,
                   child: FilledButton.icon(
                     key: const Key('select-match'),
-                    onPressed: _selecting ||
+                    onPressed:
+                        _selecting ||
                             ((_selectedQuantity ?? 0) <= 0 ||
                                 (_selectedQuantity ?? 0) >
                                     _maximumSelectable(_match!))
@@ -359,7 +390,9 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
                       ),
                     ),
                   ),
-                if (match.isRejected || match.status == 'ROUTE_FAILED')
+                if (!match.isSelectable &&
+                    (match.selectabilityReason != null ||
+                        match.status == 'ROUTE_FAILED'))
                   _warning(match),
                 if (match.requirementStatus == 'PENDING_APPROVAL')
                   const Text('Waiting for manager approval'),
@@ -376,39 +409,98 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
                     _quantity(match.availableQuantity, match.unit),
                   ),
                   if (match.isPackaged) ...[
-                    _detail('Physical stock', '${match.packageCountAvailable ?? 0} ${match.packageType?.toLowerCase() ?? 'packages'} (${_quantity(match.availableQuantity, match.unit)} total)'),
-                    _detail('Package size', '${quantities.formatQuantity(match.packageSize ?? 1, match.unit ?? '')} ${match.unit ?? ''} per ${match.packageType?.toLowerCase() ?? 'package'}'),
-                    _detail('Quantity to take', '${match.packageCountFor(_selectedQuantity ?? 0) ?? 0} ${match.packageType?.toLowerCase() ?? 'packages'} = ${_quantity(_selectedQuantity, match.unit)}'),
+                    _detail(
+                      'Physical stock',
+                      '${match.packageCountAvailable ?? 0} ${match.packageType?.toLowerCase() ?? 'packages'} (${_quantity(match.availableQuantity, match.unit)} total)',
+                    ),
+                    _detail(
+                      'Package size',
+                      '${quantities.formatQuantity(match.packageSize ?? 1, match.unit ?? '')} ${match.unit ?? ''} per ${match.packageType?.toLowerCase() ?? 'package'}',
+                    ),
+                    _detail(
+                      'Quantity to take',
+                      '${match.packageCountFor(_selectedQuantity ?? 0) ?? 0} ${match.packageType?.toLowerCase() ?? 'packages'} = ${_quantity(_selectedQuantity, match.unit)}',
+                    ),
                     if ((_selectedQuantity ?? 0) > (match.quantity ?? 0))
-                      _detail('Package overage', _quantity((_selectedQuantity ?? 0) - (match.quantity ?? 0), match.unit)),
+                      _detail(
+                        'Package overage',
+                        _quantity(
+                          (_selectedQuantity ?? 0) - (match.quantity ?? 0),
+                          match.unit,
+                        ),
+                      ),
                   ],
                   _detail(
                     'Required / selected quantity',
                     _quantity(match.quantity, match.unit),
                   ),
-                  _detail(match.isPackaged ? 'Price per ${match.packageType?.toLowerCase() ?? 'package'}' : 'Unit price', formatCurrency(match.unitPrice)),
+                  _detail(
+                    match.isPackaged
+                        ? 'Price per ${match.packageType?.toLowerCase() ?? 'package'}'
+                        : 'Unit price',
+                    formatCurrency(match.unitPrice),
+                  ),
                   _detail(
                     'Material value',
-                    formatCurrency(match.materialCostFor(_selectedQuantity ?? 0)),
+                    formatCurrency(
+                      match.materialCostFor(_selectedQuantity ?? 0),
+                    ),
                   ),
                 ]),
                 if (match.listingContext != null)
                   _card('Listing details', [
-                    if (match.listingContext!.templateName != null) _detail('Item', match.listingContext!.templateName!),
-                    if (match.listingContext!.description?.trim().isNotEmpty == true) _detail('Description', match.listingContext!.description!),
-                    if (match.listingContext!.photos.isNotEmpty) SizedBox(
-                      height: 112,
-                      child: ListView(scrollDirection: Axis.horizontal, children: match.listingContext!.photos
-                        .map((url) => Padding(padding: const EdgeInsets.only(right: 8), child: InkWell(
-                          onTap: () => _showPhotoViewer(match.listingContext!.photos, url),
-                          child: ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(_mediaUrl(url), width: 140, fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) => const SizedBox(width: 140, child: Center(child: Icon(Icons.broken_image_outlined))),
-                          )),
-                        )))
-                        .toList()),
-                    ),
-                    if (match.listingContext!.specificationsJson?.trim().isNotEmpty == true)
-                      _specifications(match.listingContext!.specificationsJson!),
+                    if (match.listingContext!.templateName != null)
+                      _detail('Item', match.listingContext!.templateName!),
+                    if (match.listingContext!.description?.trim().isNotEmpty ==
+                        true)
+                      _detail(
+                        'Description',
+                        match.listingContext!.description!,
+                      ),
+                    if (match.listingContext!.photos.isNotEmpty)
+                      SizedBox(
+                        height: 112,
+                        child: ListView(
+                          scrollDirection: Axis.horizontal,
+                          children: match.listingContext!.photos
+                              .map(
+                                (url) => Padding(
+                                  padding: const EdgeInsets.only(right: 8),
+                                  child: InkWell(
+                                    onTap: () => _showPhotoViewer(
+                                      match.listingContext!.photos,
+                                      url,
+                                    ),
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: Image.network(
+                                        _mediaUrl(url),
+                                        width: 140,
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (_, _, _) =>
+                                            const SizedBox(
+                                              width: 140,
+                                              child: Center(
+                                                child: Icon(
+                                                  Icons.broken_image_outlined,
+                                                ),
+                                              ),
+                                            ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                        ),
+                      ),
+                    if (match.listingContext!.specificationsJson
+                            ?.trim()
+                            .isNotEmpty ==
+                        true)
+                      _specifications(
+                        match.listingContext!.specificationsJson!,
+                      ),
                   ]),
                 if (match.preferenceCompatibility?.hasMismatch == true)
                   _preferenceWarning(match.preferenceCompatibility!),
@@ -456,7 +548,9 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
                   ),
                   _detail(
                     'Warnings',
-                    match.isRejected || match.status == 'ROUTE_FAILED'
+                    !match.isSelectable &&
+                            (match.selectabilityReason != null ||
+                                match.status == 'ROUTE_FAILED')
                         ? 'Review the warning above before continuing.'
                         : 'No additional warning information provided.',
                   ),
@@ -484,8 +578,10 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
                     if (match.sellerId != null)
                       SelectableText('Seller ID: ${match.sellerId}'),
                     SelectableText('Status: ${match.status}'),
-                    if (match.rejectionReason != null)
-                      Text('Reason: ${routingText(context, match.rejectionReason!)}'),
+                    if (match.selectabilityReason != null)
+                      Text(
+                        'Reason: ${routingText(context, match.selectabilityReason!)}',
+                      ),
                     Text('Created: ${formatMatchDateTime(match.createdAt)}'),
                   ],
                 ),
@@ -551,9 +647,7 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text(
-              'Allocation saved and sent for manager approval.',
-            ),
+            content: Text('Allocation saved and sent for manager approval.'),
           ),
         );
         context.go('/requirements/${widget.requirementId}');
@@ -568,11 +662,13 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
   double _stepFor(String? unit) => _match?.isPackaged == true
       ? 1
       : _match?.selectionStep ??
-          (quantities.isDiscreteUnit(unit ?? '') ? 1 : 0.1);
+            (quantities.isDiscreteUnit(unit ?? '') ? 1 : 0.1);
 
   double _maximumSelectable(RecommendedMatch match) => match.isPackaged
       ? (match.packageCountAvailable ?? 0).toDouble()
-      : (match.availableQuantity ?? 0).clamp(0.0, match.quantity ?? double.infinity).toDouble();
+      : (match.availableQuantity ?? 0)
+            .clamp(0.0, match.quantity ?? double.infinity)
+            .toDouble();
   double _selectionControlValue(RecommendedMatch match) => match.isPackaged
       ? (_selection?.packageCount ?? 0).toDouble()
       : _selectedQuantity ?? 0;
@@ -584,9 +680,15 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
     final double normalized = match.isPackaged
         ? base.round() * (match.packageSize ?? 1)
         : base;
-    _selection = MatchAllocation(matchId: match.id, quantity: normalized,
-        packageCount: match.packageCountFor(normalized));
-    _quantityController.text = quantities.formatQuantity(_selectionControlValue(match), match.isPackaged ? '' : (match.unit ?? ''));
+    _selection = MatchAllocation(
+      matchId: match.id,
+      quantity: normalized,
+      packageCount: match.packageCountFor(normalized),
+    );
+    _quantityController.text = quantities.formatQuantity(
+      _selectionControlValue(match),
+      match.isPackaged ? '' : (match.unit ?? ''),
+    );
   }
 
   String _quantity(double? value, String? unit) => value == null
@@ -658,13 +760,15 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
             Text(
               match.status == 'ROUTE_FAILED'
                   ? 'Delivery route failed'
-                  : 'Why this match was rejected',
+                  : match.isRejected
+                  ? 'Why this match was rejected'
+                  : 'Why this match cannot be selected',
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             Text(
-              match.rejectionReason != null
-                  ? routingText(context, match.rejectionReason!)
+              match.selectabilityReason != null
+                  ? routingText(context, match.selectabilityReason!)
                   : match.status == 'ROUTE_FAILED'
                   ? 'Delivery route could not be calculated. Please try again later.'
                   : readableRejectionReason(null),
@@ -676,7 +780,11 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
               OutlinedButton.icon(
                 onPressed: _routing ? null : _retryRoute,
                 icon: _routing
-                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
                     : const Icon(Icons.refresh),
                 label: Text(routingText(context, 'retryRoute')),
               ),
@@ -689,7 +797,9 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
 
   String _mediaUrl(String value) {
     final uri = Uri.tryParse(value);
-    if (uri != null && uri.hasScheme && (uri.scheme == 'http' || uri.scheme == 'https')) {
+    if (uri != null &&
+        uri.hasScheme &&
+        (uri.scheme == 'http' || uri.scheme == 'https')) {
       return value;
     }
     return AppConfig.apiBaseUri.resolve(value).toString();
@@ -699,36 +809,84 @@ class _MatchDetailsScreenState extends State<MatchDetailsScreen> {
     try {
       final data = jsonDecode(source);
       if (data is Map) {
-        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Specifications', style: TextStyle(fontWeight: FontWeight.w600)),
-        ...data.entries.where((e) => e.value != null && e.value.toString().trim().isNotEmpty).map((e) => _detail(_label(e.key.toString()), e.value.toString())),
-        ]);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Specifications',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            ...data.entries
+                .where(
+                  (e) =>
+                      e.value != null && e.value.toString().trim().isNotEmpty,
+                )
+                .map(
+                  (e) => _detail(_label(e.key.toString()), e.value.toString()),
+                ),
+          ],
+        );
       }
     } catch (_) {}
     return const SizedBox.shrink();
   }
 
-  String _label(String key) => key.replaceAllMapped(RegExp(r'([a-z])([A-Z])'), (m) => '${m[1]} ${m[2]}').replaceFirst(key.isEmpty ? '' : key[0], key.isEmpty ? '' : key[0].toUpperCase());
+  String _label(String key) => key
+      .replaceAllMapped(RegExp(r'([a-z])([A-Z])'), (m) => '${m[1]} ${m[2]}')
+      .replaceFirst(
+        key.isEmpty ? '' : key[0],
+        key.isEmpty ? '' : key[0].toUpperCase(),
+      );
 
   Widget _preferenceWarning(PreferenceCompatibility preference) => Container(
-    margin: const EdgeInsets.only(top: 12), padding: const EdgeInsets.all(12),
-    decoration: BoxDecoration(color: const Color(0xfffff4e5), borderRadius: BorderRadius.circular(10), border: Border.all(color: const Color(0xfff59e0b))),
-    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      const Text('Preference mismatch', style: TextStyle(fontWeight: FontWeight.bold)),
-      const SizedBox(height: 4),
-      ...preference.mismatches.map((m) => Text('${m.label}: requested ${m.requestedValue}; seller ${m.sellerValue?.isNotEmpty == true ? 'has ${m.sellerValue}' : 'did not provide this information'}')),
-    ]),
+    margin: const EdgeInsets.only(top: 12),
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: const Color(0xfffff4e5),
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: const Color(0xfff59e0b)),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Preference mismatch',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 4),
+        ...preference.mismatches.map(
+          (m) => Text(
+            '${m.label}: requested ${m.requestedValue}; seller ${m.sellerValue?.isNotEmpty == true ? 'has ${m.sellerValue}' : 'did not provide this information'}',
+          ),
+        ),
+      ],
+    ),
   );
 
   void _showPhotoViewer(List<String> photos, String selected) {
     final initial = photos.indexOf(selected);
-    showDialog<void>(context: context, builder: (context) => Dialog.fullscreen(child: Scaffold(
-      appBar: AppBar(title: const Text('Listing photos')),
-      body: PageView.builder(controller: PageController(initialPage: initial < 0 ? 0 : initial), itemCount: photos.length,
-        itemBuilder: (_, index) => InteractiveViewer(child: Center(child: Image.network(_mediaUrl(photos[index]), fit: BoxFit.contain,
-          errorBuilder: (_, _, _) => const Icon(Icons.broken_image_outlined, size: 48),
-        )))),
-    )));
+    showDialog<void>(
+      context: context,
+      builder: (context) => Dialog.fullscreen(
+        child: Scaffold(
+          appBar: AppBar(title: const Text('Listing photos')),
+          body: PageView.builder(
+            controller: PageController(initialPage: initial < 0 ? 0 : initial),
+            itemCount: photos.length,
+            itemBuilder: (_, index) => InteractiveViewer(
+              child: Center(
+                child: Image.network(
+                  _mediaUrl(photos[index]),
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, _, _) =>
+                      const Icon(Icons.broken_image_outlined, size: 48),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _card(String title, List<Widget> children) => Card(
@@ -927,7 +1085,9 @@ class _SummaryCardState extends State<_SummaryCard>
               match.sellerDisplayName ??
                   match.sellerBusinessName ??
                   match.sellerName ??
-                  (match.sellerId == null ? 'Seller not recorded' : 'Verified seller'),
+                  (match.sellerId == null
+                      ? 'Seller not recorded'
+                      : 'Verified seller'),
               style: Theme.of(context).textTheme.titleMedium,
             ),
             if (match.sellerBusinessName != null && match.sellerName != null)
