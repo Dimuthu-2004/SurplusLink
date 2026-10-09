@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 using SurplusLink.Api.Data;
 using SurplusLink.Api.Materials;
 using SurplusLink.Api.Models;
+using SurplusLink.Api.Workflows;
 
 namespace SurplusLink.Api.Matching;
 
@@ -36,6 +38,18 @@ internal static class MatchRecommendation
     internal static async Task<BuyerRequest> RefreshAsync(SurplusLinkDbContext db, Guid requirementId, CancellationToken ct)
     {
         var request = await db.BuyerRequests.SingleAsync(x => x.Id == requirementId, ct);
+        var latestWorkflow = await db.AgentWorkflows.AsNoTracking()
+            .Where(x => x.MaterialRequestId == requirementId)
+            .OrderByDescending(x => x.StartedAtUtc).ThenByDescending(x => x.Id)
+            .Select(x => new { x.Status, x.ValidationJson })
+            .FirstOrDefaultAsync(ct);
+        if (latestWorkflow?.Status == AgentWorkflowStatus.REJECTED &&
+            FinalValidationRejected(latestWorkflow.ValidationJson))
+        {
+            request.RecommendedMatchId = null;
+            await db.SaveChangesAsync(ct);
+            return request;
+        }
         var matches = await db.Matches.Include(x => x.Listing).ThenInclude(x => x.ConstructionItemTemplate)
             .Where(x => x.MaterialRequestId == requirementId).ToListAsync(ct);
         var now = DateTime.UtcNow;
@@ -45,5 +59,11 @@ internal static class MatchRecommendation
             : string.Join("; ", matches.OrderBy(x => x.Id).Select(x => $"{x.Id}:{InvalidReason(request, x, now)}"));
         await db.SaveChangesAsync(ct);
         return request;
+    }
+
+    private static bool FinalValidationRejected(string json)
+    {
+        try { return JsonSerializer.Deserialize<WorkflowValidation>(json, AgentWorkflowClient.Json)?.Valid == false; }
+        catch (JsonException) { return false; }
     }
 }

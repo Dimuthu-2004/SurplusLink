@@ -170,7 +170,8 @@ public sealed class MatchIntegrationTests(RequirementsDatabase fixture) : IClass
         var (unaffordableRequest, unaffordableListing) = await Seed();
         using (var unaffordableDb = fixture.Context())
         {
-            (await unaffordableDb.Listings.SingleAsync(x => x.Id == unaffordableListing.Id)).UnitPrice = 11000;
+            // Intentionally makes even the minimum continuous 0.001 kg increment unaffordable.
+            (await unaffordableDb.Listings.SingleAsync(x => x.Id == unaffordableListing.Id)).UnitPrice = 10_000_001m;
             await unaffordableDb.SaveChangesAsync();
             var unaffordable = await new MatchService(unaffordableDb).GenerateAsync(unaffordableRequest.Id, unaffordableListing.Id, null, default);
             Assert.Equal(MatchStatus.REJECTED, unaffordable.Status);

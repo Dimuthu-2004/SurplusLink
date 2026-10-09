@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.DependencyInjection;
 using SurplusLink.Api.Models;
+using SurplusLink.Api.Matching;
 using SurplusLink.Api.Notifications;
 using SurplusLink.Api.Requirements;
 using SurplusLink.Api.Routing;
@@ -219,16 +220,27 @@ public sealed class WorkflowPersistenceTests(RequirementsDatabase fixture) : ICl
     {
         var id = await Seed();
         using var db = fixture.Context();
-        var client = new FakeClient(request => new(request.WorkflowId, "REJECTED",
-            new(false, false, null, ["TOTAL_COST_UNKNOWN"], []), null, [], null));
+        var attempts = 0;
+        var client = new FakeClient(request => attempts++ == 0
+            ? new(request.WorkflowId, "REJECTED", new(false, false, null, ["TOTAL_COST_UNKNOWN"], []), null, [], null)
+            : WorkflowExecutionTests.Success(request));
         Assert.True(await new WorkflowQueueProcessor(db, client, new DemoTransport(),
             Options.Create(new WorkflowExecutionOptions()), notifications: new NotificationService(db)).ProcessNextAsync(default));
         var row = await db.AgentWorkflows.SingleAsync(x => x.MaterialRequestId == id);
         Assert.Equal(AgentWorkflowStatus.REJECTED, row.Status);
         Assert.Equal("REJECTED", row.CurrentStage);
         Assert.Null(row.MaterialMatchId);
-        Assert.Equal(MatchStatus.ROUTED, (await db.Matches.SingleAsync(x => x.MaterialRequestId == id)).Status);
-        Assert.Equal(BuyerRequestStatus.MATCH_FOUND, (await db.BuyerRequests.FindAsync(id))!.Status);
+        var factualCandidate = await db.Matches.SingleAsync(x => x.MaterialRequestId == id);
+        Assert.Equal(MatchStatus.ROUTED, factualCandidate.Status);
+        Assert.Null(factualCandidate.RejectionReason);
+        var rejectedRequest = (await db.BuyerRequests.FindAsync(id))!;
+        Assert.Equal(BuyerRequestStatus.MATCH_FOUND, rejectedRequest.Status);
+        Assert.Null(rejectedRequest.RecommendedMatchId);
+        Assert.Equal("TOTAL_COST_UNKNOWN", rejectedRequest.RecommendationReason);
+        await MatchRecommendation.RefreshAsync(db, id, default);
+        rejectedRequest = (await db.BuyerRequests.FindAsync(id))!;
+        Assert.Null(rejectedRequest.RecommendedMatchId);
+        Assert.Equal("TOTAL_COST_UNKNOWN", rejectedRequest.RecommendationReason);
         Assert.Equal(0, await db.Reservations.CountAsync(x => x.MaterialRequestId == id));
         var noMatches = await db.Notifications.SingleAsync(x => x.EntityId == id &&
             x.Type == NotificationTypes.NoSuitableMatches);
@@ -243,6 +255,12 @@ public sealed class WorkflowPersistenceTests(RequirementsDatabase fixture) : ICl
         var retry = await new RequirementService(retryDb, starter).StartMatchingAsync(id, fixture.Buyer, default);
         Assert.NotEqual(row.Id, retry.WorkflowId);
         await new WorkflowQueueProcessor(retryDb, client, new DemoTransport(), Options.Create(new WorkflowExecutionOptions())).ProcessNextAsync(default);
+        var retriedRequest = await retryDb.BuyerRequests.FindAsync(id);
+        Assert.NotNull(retriedRequest!.RecommendedMatchId);
+        var latestWorkflow = await retryDb.AgentWorkflows.Where(x => x.MaterialRequestId == id)
+            .OrderByDescending(x => x.StartedAtUtc).FirstAsync();
+        Assert.Equal(AgentWorkflowStatus.COMPLETED, latestWorkflow.Status);
+        Assert.Equal("AWAITING_BUYER_SELECTION", latestWorkflow.CurrentStage);
     }
 
     [PostgresFact]
