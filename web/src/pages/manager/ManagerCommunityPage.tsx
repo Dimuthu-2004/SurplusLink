@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { PageHeader } from '../../components/DesignSystem';
 import { UserAvatar } from '../../components/UserAvatar';
 import { managerCommunityApi, type CommunityUser, type CommunityUserDetails } from '../../features/community/managerCommunityApi';
@@ -33,6 +34,18 @@ export function ManagerCommunityPage() {
     }, 250);
     return () => clearTimeout(timer);
   }, [fetchUsers]);
+
+  useEffect(() => {
+    if (!selectedUser) return;
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') setSelectedUser(null); };
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [selectedUser]);
 
   const openUserDetails = async (user: CommunityUser) => {
     setLoadingDetails(true);
@@ -165,15 +178,14 @@ export function ManagerCommunityPage() {
       </section>
 
       {/* User Details Modal (Read-Only) */}
-      {selectedUser && (
-        <div className="modal-backdrop" role="presentation" onClick={() => setSelectedUser(null)}>
+      {selectedUser && createPortal(
+        <div className="community-member-modal-backdrop" data-testid="community-member-modal-backdrop" role="presentation" onMouseDown={() => setSelectedUser(null)}>
           <div
-            className="manager-panel"
+            className="community-member-modal"
             role="dialog"
             aria-modal="true"
             aria-labelledby="user-modal-title"
-            style={{ maxWidth: 540, width: '100%', margin: 'auto' }}
-            onClick={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
           >
             <div className="section-heading" style={{ marginBottom: '1rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
@@ -185,7 +197,7 @@ export function ManagerCommunityPage() {
                   </h2>
                 </div>
               </div>
-              <button type="button" className="text-button" onClick={() => setSelectedUser(null)}>
+              <button type="button" className="text-button" aria-label="Close member details" onClick={() => setSelectedUser(null)}>
                 ✕ Close
               </button>
             </div>
@@ -245,7 +257,7 @@ export function ManagerCommunityPage() {
               🔒 Community members manage their own account details. Manager view is strictly read-only.
             </p>
           </div>
-        </div>
+        </div>, document.body
       )}
     </div>
   );

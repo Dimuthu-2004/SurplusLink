@@ -2,6 +2,7 @@ import 'package:mobile/widgets/profile_fields.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mobile/auth/auth_controller.dart';
+import 'package:mobile/auth/password_validation.dart';
 import 'package:mobile/auth/auth_models.dart';
 import 'package:mobile/routing/app_router.dart';
 import 'package:mobile/widgets/auth_error_message.dart';
@@ -175,8 +176,5 @@ String? _validateEmail(String? value) {
 }
 
 String? _validatePassword(String? value) {
-  if (value == null || value.length < 8) {
-    return 'Password must contain at least 8 characters.';
-  }
-  return null;
+  return validatePasswordPolicy(value);
 }

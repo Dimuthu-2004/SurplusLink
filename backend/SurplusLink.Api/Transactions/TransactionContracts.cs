@@ -60,14 +60,15 @@ public sealed record TransactionResponse(Guid Id, Guid OfferId, Guid BuyerId, Gu
     TransactionContact? BuyerContact = null, TransactionContact? SellerContact = null,
     DateTime? ManagerApprovedAt = null, DateTime? ConfirmationDeadline = null,
     DateTime? SellerHandoverConfirmedAt = null, DateTime? BuyerReceivedConfirmedAt = null,
-    DateTime? ResolvedAt = null, string? ResolutionReasonCode = null, string? ResolutionNote = null);
+    DateTime? ResolvedAt = null, string? ResolutionReasonCode = null, string? ResolutionNote = null,
+    decimal? TransportCost = null);
 public sealed record TransactionContact(string? FullName, string Email, string? PhoneNumber);
 public sealed record TransactionHistoryEntry(Guid Id, Guid? ActorUserId, string Action, DateTime CreatedAt, string? Note,
     string? TransactionReference = null, string? ItemTitle = null, decimal? Quantity = null, string? Unit = null);
 public sealed record TransactionHistoryPage(IReadOnlyList<TransactionHistoryEntry> Items, int Total, int TotalPages, int Page, int PageSize);
 public sealed record TransactionFollowUpResponse(Guid Id, string Reference, string MaterialTitle, string? Unit,
     decimal Quantity, int? PackageCount, decimal TotalValue, DateTime? ManagerApprovedAt,
-    DateTime? ConfirmationDeadline, int DaysRemaining, TransactionStatus Status,
+    DateTime? ConfirmationDeadline, int DaysRemaining, [property: JsonConverter(typeof(JsonStringEnumConverter))] TransactionStatus Status,
     DateTime? SellerHandoverConfirmedAt, DateTime? BuyerReceivedConfirmedAt,
     TransactionContact Buyer, TransactionContact Seller);
 public sealed class ManagerTransactionResolutionRequest

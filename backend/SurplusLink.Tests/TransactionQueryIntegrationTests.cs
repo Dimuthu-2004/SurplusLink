@@ -322,6 +322,117 @@ public sealed class TransactionQueryIntegrationTests : IAsyncLifetime
         }
     }
 
+    [PostgresFact]
+    public async Task Multi_seller_allocations_complete_parent_only_after_every_child_transaction_completes()
+    {
+        var seeded = await SeedMultiSellerLifecycleAsync();
+        using (var db = fixture.Context())
+        {
+            var offers = await db.Offers.Where(x => x.MaterialMatch.MaterialRequestId == seeded.RequestId).ToListAsync();
+            var transactions = await db.Transactions.Where(x => x.Offer.MaterialMatch.MaterialRequestId == seeded.RequestId).ToListAsync();
+
+            Assert.Equal(2, offers.Count);
+            Assert.Equal(2, transactions.Count);
+            Assert.Equal(2, offers.Select(x => x.Id).Distinct().Count());
+            Assert.Equal(2, transactions.Select(x => x.Id).Distinct().Count());
+            Assert.Equal(2, offers.Select(x => x.SellerId).Distinct().Count());
+        }
+
+        using (var db = fixture.Context())
+            await new TransactionService(db).CompleteAsync(seeded.TransactionAId, fixture.Buyer, CancellationToken.None);
+
+        using (var db = fixture.Context())
+        {
+            Assert.Equal(BuyerRequestStatus.APPROVED, (await db.BuyerRequests.FindAsync(seeded.RequestId))!.Status);
+            Assert.Equal(TransactionStatus.COMPLETED, (await db.Transactions.FindAsync(seeded.TransactionAId))!.Status);
+            Assert.Equal(TransactionStatus.HANDED_OVER, (await db.Transactions.FindAsync(seeded.TransactionBId))!.Status);
+            var bReservation = await db.Reservations.SingleAsync(x => x.TransactionId == seeded.TransactionBId);
+            Assert.Equal(ReservationStatus.ACTIVE, bReservation.Status);
+            Assert.Equal(3, (await db.Listings.SingleAsync(x => x.Id == bReservation.ListingId)).ReservedQuantity);
+        }
+
+        using (var db = fixture.Context())
+            await new TransactionService(db).CompleteAsync(seeded.TransactionBId, fixture.Buyer, CancellationToken.None);
+
+        using (var db = fixture.Context())
+        {
+            Assert.Equal(BuyerRequestStatus.COMPLETED, (await db.BuyerRequests.FindAsync(seeded.RequestId))!.Status);
+            Assert.All(await db.Transactions.Where(x => x.Offer.MaterialMatch.MaterialRequestId == seeded.RequestId).ToListAsync(),
+                transaction => Assert.Equal(TransactionStatus.COMPLETED, transaction.Status));
+        }
+    }
+
+    [PostgresFact]
+    public async Task Piece_exact_sell_out_completes_and_consumes_all_stock()
+    {
+        var seeded = await SeedCompletionAsync(QuantityMode.PIECE, 25, 25);
+        await AssertCompletionAsync(seeded, ListingStatus.SOLD, 0, 0);
+    }
+
+    [PostgresFact]
+    public async Task Package_exact_sell_out_completes_and_consumes_all_stock()
+    {
+        var seeded = await SeedCompletionAsync(QuantityMode.PACKAGE, 25, 25);
+        await AssertCompletionAsync(seeded, ListingStatus.SOLD, 0, 0);
+    }
+
+    [PostgresFact]
+    public async Task Continuous_exact_sell_out_completes_and_consumes_all_stock()
+    {
+        var seeded = await SeedCompletionAsync(QuantityMode.CONTINUOUS, 25, 25);
+        await AssertCompletionAsync(seeded, ListingStatus.SOLD, null, 0);
+    }
+
+    [PostgresFact]
+    public async Task Partial_completion_leaves_remaining_stock_active()
+    {
+        var seeded = await SeedCompletionAsync(QuantityMode.PIECE, 25, 20);
+        await AssertCompletionAsync(seeded, ListingStatus.ACTIVE, 5, 5);
+    }
+
+    [PostgresFact]
+    public async Task Listing_stock_constraints_reject_negative_quantity_and_package_counts()
+    {
+        using var db = fixture.Context();
+        var category = await db.Categories.FirstAsync();
+        var listing = new Listing
+        {
+            Id = Guid.NewGuid(), SellerId = fixture.Seller, CategoryId = category.Id, Title = "Constrained stock",
+            Description = "Stock constraint regression", Quantity = 1, ReservedQuantity = 0,
+            QuantityMode = QuantityMode.PIECE, PackageType = PackageType.PIECE, PackageSize = 1,
+            PackageCount = 1, ReservedPackageCount = 0, Unit = "piece", UnitPrice = 1,
+            AvailableUntil = DateTime.UtcNow.AddDays(5), Status = ListingStatus.ACTIVE, Condition = MaterialCondition.GOOD
+        };
+        db.Listings.Add(listing);
+        await db.SaveChangesAsync();
+
+        listing.Quantity = -1;
+        await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
+        db.Entry(listing).State = EntityState.Detached;
+
+        var packaged = await db.Listings.SingleAsync(x => x.Id == listing.Id);
+        packaged.ReservedPackageCount = -1;
+        await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
+    }
+
+    [PostgresFact]
+    public async Task Multi_seller_parent_is_not_completed_when_one_child_is_completed_and_another_is_not_completed()
+    {
+        var seeded = await SeedMultiSellerLifecycleAsync();
+
+        using (var db = fixture.Context())
+            await new TransactionService(db).CompleteAsync(seeded.TransactionAId, fixture.Buyer, CancellationToken.None);
+
+        using (var db = fixture.Context())
+            await new TransactionService(db).ResolveNotCompletedAsync(seeded.TransactionBId, fixture.Manager,
+                "The second seller allocation was not handed over.", CancellationToken.None);
+
+        using var verify = fixture.Context();
+        Assert.Equal(BuyerRequestStatus.APPROVED, (await verify.BuyerRequests.FindAsync(seeded.RequestId))!.Status);
+        Assert.Equal(TransactionStatus.COMPLETED, (await verify.Transactions.FindAsync(seeded.TransactionAId))!.Status);
+        Assert.Equal(TransactionStatus.NOT_COMPLETED, (await verify.Transactions.FindAsync(seeded.TransactionBId))!.Status);
+    }
+
     private async Task<(Offer Offer, Transaction Pending)> Seed()
     {
         using var db = fixture.Context();
@@ -355,5 +466,129 @@ public sealed class TransactionQueryIntegrationTests : IAsyncLifetime
         db.AddRange(request, listing, match, offer, pending, workflow);
         await db.SaveChangesAsync();
         return (offer, pending);
+    }
+
+    private async Task<(Guid TransactionId, Guid ReservationId, Guid ListingId)> SeedCompletionAsync(
+        QuantityMode mode, decimal availableQuantity, decimal selectedQuantity)
+    {
+        using var db = fixture.Context();
+        var category = await db.Categories.FirstAsync();
+        var packaged = mode is QuantityMode.PIECE or QuantityMode.PACKAGE;
+        var request = new BuyerRequest
+        {
+            Id = Guid.NewGuid(), BuyerId = fixture.Buyer, CategoryId = category.Id, Title = "Completion stock regression",
+            RequiredQuantity = selectedQuantity, MaximumBudget = 1_000, Unit = "piece", Deadline = DateTime.UtcNow.AddDays(5),
+            Status = BuyerRequestStatus.APPROVED
+        };
+        var listing = new Listing
+        {
+            Id = Guid.NewGuid(), SellerId = fixture.Seller, CategoryId = category.Id, Title = "Completion stock listing",
+            Description = "Exact sold-out completion coverage", Quantity = availableQuantity, ReservedQuantity = selectedQuantity,
+            QuantityMode = mode, PackageType = packaged ? PackageType.PIECE : null, PackageSize = packaged ? 1 : null,
+            PackageCount = packaged ? (int)availableQuantity : null, ReservedPackageCount = packaged ? (int)selectedQuantity : 0,
+            Unit = "piece", UnitPrice = 10, AvailableUntil = DateTime.UtcNow.AddDays(5),
+            Status = ListingStatus.ACTIVE, Condition = MaterialCondition.GOOD
+        };
+        var match = new MaterialMatch
+        {
+            Id = Guid.NewGuid(), MaterialRequestId = request.Id, ListingId = listing.Id, Status = MatchStatus.ROUTED,
+            Distance = 1, DurationMinutes = 1, EstimatedTransportCost = 1
+        };
+        var offer = new Offer
+        {
+            Id = Guid.NewGuid(), MaterialMatchId = match.Id, BuyerId = fixture.Buyer, SellerId = fixture.Seller,
+            Quantity = selectedQuantity, UnitValue = 10, TotalValue = selectedQuantity * 10, Status = OfferStatus.ACCEPTED,
+            PackageCount = packaged ? (int)selectedQuantity : null
+        };
+        var transaction = new Transaction
+        {
+            Id = Guid.NewGuid(), OfferId = offer.Id, BuyerId = fixture.Buyer, SellerId = fixture.Seller,
+            Quantity = selectedQuantity, PackageCount = packaged ? (int)selectedQuantity : null,
+            TotalValue = offer.TotalValue, ReservedQuantity = selectedQuantity, Status = TransactionStatus.HANDED_OVER,
+            SellerHandoverConfirmedAtUtc = DateTime.UtcNow
+        };
+        var reservation = new Reservation
+        {
+            Id = Guid.NewGuid(), MaterialRequestId = request.Id, ListingId = listing.Id, TransactionId = transaction.Id,
+            Quantity = selectedQuantity, PackageCount = packaged ? (int)selectedQuantity : null, Status = ReservationStatus.ACTIVE
+        };
+        db.AddRange(request, listing, match, offer, transaction, reservation);
+        await db.SaveChangesAsync();
+        return (transaction.Id, reservation.Id, listing.Id);
+    }
+
+    private async Task AssertCompletionAsync((Guid TransactionId, Guid ReservationId, Guid ListingId) seeded,
+        ListingStatus expectedStatus, int? expectedPackageCount, decimal expectedQuantity)
+    {
+        using (var db = fixture.Context())
+            await new TransactionService(db).CompleteAsync(seeded.TransactionId, fixture.Buyer, CancellationToken.None);
+        using var verify = fixture.Context();
+        var transaction = await verify.Transactions.SingleAsync(x => x.Id == seeded.TransactionId);
+        var reservation = await verify.Reservations.SingleAsync(x => x.Id == seeded.ReservationId);
+        var listing = await verify.Listings.SingleAsync(x => x.Id == seeded.ListingId);
+        Assert.Equal(TransactionStatus.COMPLETED, transaction.Status);
+        Assert.Equal(0, transaction.ReservedQuantity);
+        Assert.Equal(ReservationStatus.CONFIRMED, reservation.Status);
+        Assert.Equal(expectedQuantity, listing.Quantity);
+        Assert.Equal(0, listing.ReservedQuantity);
+        Assert.Equal(expectedPackageCount, listing.PackageCount);
+        Assert.Equal(0, listing.ReservedPackageCount);
+        Assert.Equal(expectedStatus, listing.Status);
+    }
+
+    private async Task<(Guid RequestId, Guid TransactionAId, Guid TransactionBId)> SeedMultiSellerLifecycleAsync()
+    {
+        using var db = fixture.Context();
+        var category = await db.Categories.FirstAsync();
+        var sellerB = Guid.NewGuid();
+        db.Users.Add(new User { Id = sellerB, Email = sellerB + "@requirements.test", PasswordHash = "unused-test-hash" });
+        db.Set<UserRoleAssignment>().Add(new UserRoleAssignment { UserId = sellerB, Role = UserRole.SELLER });
+        var request = new BuyerRequest
+        {
+            Id = Guid.NewGuid(), BuyerId = fixture.Buyer, CategoryId = category.Id, Title = "Multi-seller transaction lifecycle",
+            RequiredQuantity = 5, MaximumBudget = 1000, Unit = "kg", Deadline = DateTime.UtcNow.AddDays(5),
+            Status = BuyerRequestStatus.APPROVED
+        };
+        var allocations = new[]
+        {
+            (SellerId: fixture.Seller, Quantity: 2m, Title: "Seller A allocation"),
+            (SellerId: sellerB, Quantity: 3m, Title: "Seller B allocation")
+        };
+        var transactions = new List<Transaction>();
+        foreach (var allocation in allocations)
+        {
+            var listing = new Listing
+            {
+                Id = Guid.NewGuid(), SellerId = allocation.SellerId, CategoryId = category.Id, Title = allocation.Title,
+                Quantity = 10, ReservedQuantity = allocation.Quantity, Unit = "kg", UnitPrice = 10,
+                AvailableUntil = DateTime.UtcNow.AddDays(5), Status = ListingStatus.ACTIVE, Condition = MaterialCondition.GOOD
+            };
+            var match = new MaterialMatch
+            {
+                Id = Guid.NewGuid(), MaterialRequestId = request.Id, ListingId = listing.Id, Status = MatchStatus.ROUTED,
+                Distance = 10, DurationMinutes = 30, EstimatedTransportCost = 100
+            };
+            var offer = new Offer
+            {
+                Id = Guid.NewGuid(), MaterialMatchId = match.Id, BuyerId = fixture.Buyer, SellerId = allocation.SellerId,
+                Quantity = allocation.Quantity, UnitValue = 10, TotalValue = allocation.Quantity * 10, Status = OfferStatus.ACCEPTED
+            };
+            var transaction = new Transaction
+            {
+                Id = Guid.NewGuid(), OfferId = offer.Id, BuyerId = fixture.Buyer, SellerId = allocation.SellerId,
+                Quantity = allocation.Quantity, TotalValue = offer.TotalValue, ReservedQuantity = allocation.Quantity,
+                Status = TransactionStatus.HANDED_OVER, SellerHandoverConfirmedAtUtc = DateTime.UtcNow
+            };
+            var reservation = new Reservation
+            {
+                Id = Guid.NewGuid(), MaterialRequestId = request.Id, ListingId = listing.Id, TransactionId = transaction.Id,
+                Quantity = allocation.Quantity, Status = ReservationStatus.ACTIVE
+            };
+            db.AddRange(listing, match, offer, transaction, reservation);
+            transactions.Add(transaction);
+        }
+        db.BuyerRequests.Add(request);
+        await db.SaveChangesAsync();
+        return (request.Id, transactions[0].Id, transactions[1].Id);
     }
 }

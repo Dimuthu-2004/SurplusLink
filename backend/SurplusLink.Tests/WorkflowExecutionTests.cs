@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.DependencyInjection;
 using SurplusLink.Api.Models;
+using SurplusLink.Api.Matching;
 using SurplusLink.Api.Notifications;
 using SurplusLink.Api.Requirements;
 using SurplusLink.Api.Routing;
@@ -34,9 +35,13 @@ public sealed class WorkflowExecutionTests
     private static decimal TestScore(WorkflowRunRequest request, WorkflowListingSnapshot row)
     {
         var criteria = JsonSerializer.SerializeToElement(request.BuyerRequest);
-        return criteria.TryGetProperty("requiredQuantity", out var quantity)
-            ? SurplusLink.Api.Matching.MatchScoring.Score(row.Condition, row.UnitPrice * quantity.GetDecimal(),
-                criteria.GetProperty("maximumBudget").GetDecimal(), row.DistanceKm, row.TransportCost) : .85m;
+        var contribution = row.MaximumContribution ?? row.AvailableQuantity;
+        var materialCost = row.QuantityMode is "PACKAGE" or "PIECE" && row.PackageSize is > 0
+            ? decimal.Floor(contribution / row.PackageSize.Value) * row.UnitPrice
+            : contribution * row.UnitPrice;
+        return criteria.TryGetProperty("maximumBudget", out var budget)
+            ? SurplusLink.Api.Matching.MatchScoring.Score(row.Condition, materialCost,
+                budget.GetDecimal(), row.DistanceKm, row.TransportCost) : .85m;
     }
 
     private static WorkflowRunRequest Request() => new(Guid.NewGuid(), new { }, [new(Guid.NewGuid(), Guid.NewGuid(),
@@ -215,14 +220,27 @@ public sealed class WorkflowPersistenceTests(RequirementsDatabase fixture) : ICl
     {
         var id = await Seed();
         using var db = fixture.Context();
-        var client = new FakeClient(request => new(request.WorkflowId, "REJECTED",
-            new(false, false, null, ["TOTAL_COST_EXCEEDS_BUDGET_OR_UNKNOWN"], []), null, [], null));
+        var attempts = 0;
+        var client = new FakeClient(request => attempts++ == 0
+            ? new(request.WorkflowId, "REJECTED", new(false, false, null, ["TOTAL_COST_UNKNOWN"], []), null, [], null)
+            : WorkflowExecutionTests.Success(request));
         Assert.True(await new WorkflowQueueProcessor(db, client, new DemoTransport(),
             Options.Create(new WorkflowExecutionOptions()), notifications: new NotificationService(db)).ProcessNextAsync(default));
         var row = await db.AgentWorkflows.SingleAsync(x => x.MaterialRequestId == id);
         Assert.Equal(AgentWorkflowStatus.REJECTED, row.Status);
+        Assert.Equal("REJECTED", row.CurrentStage);
         Assert.Null(row.MaterialMatchId);
-        Assert.Equal(BuyerRequestStatus.MATCH_FOUND, (await db.BuyerRequests.FindAsync(id))!.Status);
+        var factualCandidate = await db.Matches.SingleAsync(x => x.MaterialRequestId == id);
+        Assert.Equal(MatchStatus.ROUTED, factualCandidate.Status);
+        Assert.Null(factualCandidate.RejectionReason);
+        var rejectedRequest = (await db.BuyerRequests.FindAsync(id))!;
+        Assert.Equal(BuyerRequestStatus.MATCH_FOUND, rejectedRequest.Status);
+        Assert.Null(rejectedRequest.RecommendedMatchId);
+        Assert.Equal("TOTAL_COST_UNKNOWN", rejectedRequest.RecommendationReason);
+        await MatchRecommendation.RefreshAsync(db, id, default);
+        rejectedRequest = (await db.BuyerRequests.FindAsync(id))!;
+        Assert.Null(rejectedRequest.RecommendedMatchId);
+        Assert.Equal("TOTAL_COST_UNKNOWN", rejectedRequest.RecommendationReason);
         Assert.Equal(0, await db.Reservations.CountAsync(x => x.MaterialRequestId == id));
         var noMatches = await db.Notifications.SingleAsync(x => x.EntityId == id &&
             x.Type == NotificationTypes.NoSuitableMatches);
@@ -237,6 +255,43 @@ public sealed class WorkflowPersistenceTests(RequirementsDatabase fixture) : ICl
         var retry = await new RequirementService(retryDb, starter).StartMatchingAsync(id, fixture.Buyer, default);
         Assert.NotEqual(row.Id, retry.WorkflowId);
         await new WorkflowQueueProcessor(retryDb, client, new DemoTransport(), Options.Create(new WorkflowExecutionOptions())).ProcessNextAsync(default);
+        var retriedRequest = await retryDb.BuyerRequests.FindAsync(id);
+        Assert.NotNull(retriedRequest!.RecommendedMatchId);
+        var latestWorkflow = await retryDb.AgentWorkflows.Where(x => x.MaterialRequestId == id)
+            .OrderByDescending(x => x.StartedAtUtc).FirstAsync();
+        Assert.Equal(AgentWorkflowStatus.COMPLETED, latestWorkflow.Status);
+        Assert.Equal("AWAITING_BUYER_SELECTION", latestWorkflow.CurrentStage);
+    }
+
+    [PostgresFact]
+    public async Task Rejected_workflow_preserves_each_candidates_factual_reason()
+    {
+        var id = await Seed();
+        using var db = fixture.Context();
+        var request = await db.BuyerRequests.SingleAsync(x => x.Id == id);
+        var budgetListingId = await db.Listings.Where(x => x.CategoryId == request.CategoryId)
+            .Select(x => x.Id).SingleAsync();
+        request.MaximumBudget = 500; // Route cost alone consumes the entire budget.
+        var expired = new Listing { Id = Guid.NewGuid(), SellerId = fixture.Seller, CategoryId = request.CategoryId,
+            Title = "Expired stock", Quantity = 20, Unit = "kg", UnitPrice = 10, Condition = MaterialCondition.GOOD,
+            Status = ListingStatus.ACTIVE, AvailableUntil = DateTime.UtcNow.AddDays(-1), Latitude = 6.8m, Longitude = 79.9m };
+        var wrongUnit = new Listing { Id = Guid.NewGuid(), SellerId = fixture.Seller, CategoryId = request.CategoryId,
+            Title = "Demo material", Quantity = 20, Unit = "L", UnitPrice = 10, Condition = MaterialCondition.GOOD,
+            Status = ListingStatus.ACTIVE, AvailableUntil = DateTime.UtcNow.AddDays(30), Latitude = 6.8m, Longitude = 79.9m };
+        db.Listings.AddRange(expired, wrongUnit);
+        await db.SaveChangesAsync();
+
+        var client = new FakeClient(snapshot => new(snapshot.WorkflowId, "REJECTED",
+            new(false, false, null, ["NO_VALID_SELECTABLE_CANDIDATE"], []), null, [], "NO_VALID_SELECTABLE_CANDIDATE"));
+        Assert.True(await new WorkflowQueueProcessor(db, client, new DemoTransport(),
+            Options.Create(new WorkflowExecutionOptions())).ProcessNextAsync(default));
+
+        var reasons = await db.Matches.Where(x => x.MaterialRequestId == id)
+            .ToDictionaryAsync(x => x.ListingId, x => x.RejectionReason);
+        Assert.Equal("TOTAL_COST_EXCEEDS_BUDGET", reasons[budgetListingId]);
+        Assert.Equal("LISTING_EXPIRED", reasons[expired.Id]);
+        Assert.Equal("UNIT_MISMATCH", reasons[wrongUnit.Id]);
+        Assert.DoesNotContain(reasons.Values, x => x is "NO_MATCHING_CANDIDATE" or "NO_VALID_SELECTABLE_CANDIDATE");
     }
 
     [PostgresFact]

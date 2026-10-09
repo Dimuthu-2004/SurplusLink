@@ -20,9 +20,9 @@ SurplusLink uses a multi-agent AI orchestration workflow to match buyer requirem
 3. **Matching & Scoring**: Evaluates eligible active seller listings based on:
    - Available quantity
    - Material unit price
-   - Condition score (New = 1.0, Excellent = 0.9, Good = 0.8, Fair = 0.6, Poor = 0.4)
-   - Distance & transport cost (LKR per km)
-   - Preference compatibility (Hard vs Soft preference filters)
+   - Condition, delivered-cost headroom, and route distance
+   - Selected score-relevant preference compatibility: soft matches affect the
+     score, hard mismatches reject, and informational fields are excluded
 4. **Logistics Engine**: Calculates optimal single-seller or multi-seller combinations to fulfill 100% of required quantity while minimizing total delivered cost (material + transport).
 5. **Validation & Persistence**: Validates final match allocation and persists recommendation reason and score breakdown to the database.
 6. **Manager Approval**: Batched match recommendations await human manager approval before reserving inventory.

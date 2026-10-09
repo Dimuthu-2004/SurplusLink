@@ -78,6 +78,41 @@ public sealed class MatchingReevaluationTests(RequirementsDatabase fixture) : IC
     }
 
     [PostgresFact]
+    public async Task Routed_candidate_exposes_live_invalid_reason_without_persisting_a_rejection()
+    {
+        using var db = fixture.Context();
+        var category = (await db.Categories.FirstAsync()).Id;
+        var request = new BuyerRequest
+        {
+            Id = Guid.NewGuid(), BuyerId = fixture.Buyer, CategoryId = category,
+            Title = "Expiry reason regression", RequiredQuantity = 10, MaximumBudget = 2_000,
+            Unit = "kg", Deadline = DateTime.UtcNow.AddDays(5), Status = BuyerRequestStatus.MATCH_FOUND
+        };
+        var listing = new Listing
+        {
+            Id = Guid.NewGuid(), SellerId = fixture.Seller, CategoryId = category,
+            Title = "Expiry reason regression", Quantity = 20, Unit = "kg", UnitPrice = 100,
+            Condition = MaterialCondition.GOOD, Status = ListingStatus.ACTIVE,
+            AvailableUntil = DateTime.UtcNow.AddDays(2)
+        };
+        var match = new MaterialMatch
+        {
+            Id = Guid.NewGuid(), MaterialRequest = request, Listing = listing, Status = MatchStatus.ROUTED,
+            Distance = 10, DurationMinutes = 30, EstimatedTransportCost = 100
+        };
+        db.Add(match);
+        await db.SaveChangesAsync();
+
+        var response = await new MatchService(db).GetAsync(match.Id, fixture.Buyer, false, default);
+
+        Assert.Equal(MatchStatus.ROUTED.ToString(), response.Status);
+        Assert.False(response.Valid);
+        Assert.False(response.Rejected);
+        Assert.Null(response.RejectionReason);
+        Assert.Equal("LISTING_EXPIRES_BEFORE_DELIVERY", response.InvalidReason);
+    }
+
+    [PostgresFact]
     public async Task Both_verification_orders_reuse_candidates_and_publish_routes_to_buyer_and_manager()
     {
         foreach (var verifyFirst in new[] { false, true })

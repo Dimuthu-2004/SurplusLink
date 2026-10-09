@@ -7,7 +7,7 @@ import paymentDone from '../assets/animations/payment-done.json';
 const animations = { approval: thumbsUp, phone: smartphone, login: loginReady, completed: paymentDone } as const;
 const Lottie = lazy(() => import('lottie-react'));
 
-class OptionalAnimationBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+class OptionalAnimationBoundary extends Component<{ children: ReactNode; fallback: ReactNode }, { failed: boolean }> {
   state = { failed: false };
 
   static getDerivedStateFromError() {
@@ -19,8 +19,19 @@ class OptionalAnimationBoundary extends Component<{ children: ReactNode }, { fai
   }
 
   render() {
-    return this.state.failed ? null : this.props.children;
+    return this.state.failed ? this.props.fallback : this.props.children;
   }
+}
+
+/** Keeps an acknowledgement visible while the optional renderer loads or fails. */
+function ApprovalFallback() {
+  return <div className="status-animation-fallback" data-testid="status-animation-fallback" data-approval-animation="true" aria-hidden="true">
+    <span>🐦</span><strong>✓</strong>
+  </div>;
+}
+
+function GenericFallback() {
+  return <div className="status-animation-fallback" data-testid="status-animation-fallback" aria-hidden="true"><span>&#x21BB;</span></div>;
 }
 
 function isAnimationData(value: unknown): value is Record<string, unknown> {
@@ -42,12 +53,14 @@ export function StatusAnimation({ kind, size = 200, loop = false, label, decorat
     return () => query.removeEventListener?.('change', update);
   }, []);
   if (!isAnimationData(animationData)) return null;
+  const fallback = kind === 'approval' ? <ApprovalFallback /> : <GenericFallback />;
   return <div className={`status-animation ${className}`} style={{ width: size, maxWidth: '100%', aspectRatio: '1' }} {...(decorative ? { 'aria-hidden': true } : { role: 'img', 'aria-label': label })}>
-    <OptionalAnimationBoundary>
-      <Suspense fallback={null}>
-        <Lottie animationData={animationData} loop={reduced ? false : loop} autoplay={!reduced} onComplete={onComplete} />
+    {reduced ? fallback :
+    <OptionalAnimationBoundary fallback={fallback}>
+      <Suspense fallback={fallback}>
+        <Lottie animationData={animationData} loop={loop} autoplay onComplete={onComplete} />
       </Suspense>
-    </OptionalAnimationBoundary>
+    </OptionalAnimationBoundary>}
   </div>;
 }
 

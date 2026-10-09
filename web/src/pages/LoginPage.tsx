@@ -6,7 +6,6 @@ import emailLottieData from '../assets/animations/email.json';
 import { useAuth } from '../auth/AuthContext';
 import type { PublicRegistration, UserRole } from '../auth/authTypes';
 import { SurplusLinkLogo } from '../components/SurplusLinkLogo';
-import { StatusAnimation } from '../components/StatusAnimation';
 import './loginPage.css';
 
 type AuthMode = 'signIn' | 'signUp';
@@ -229,7 +228,7 @@ export function LoginPage() {
             )}
           </div>
         </div>
-        <aside className="auth-brand-panel" aria-label="SurplusLink introduction"><div className="auth-panel-texture" aria-hidden="true" /><div className="auth-panel-content"><Brand /><div className={`auth-login-ready ${changing || leaving || pending || !['signIn', 'signUp'].includes(step) ? 'is-hidden' : ''}`} aria-hidden={changing || leaving || pending}><StatusAnimation kind="login" size={220} loop label="Ready to use SurplusLink" /></div><div className="auth-panel-copy"><p className="auth-panel-kicker">SURPLUS, CONNECTED</p><h2>{signUp ? 'Already part of the exchange?' : 'New to SurplusLink?'}</h2><p>{signUp ? 'Sign in to return to your materials, opportunities, and project activity.' : 'Create your account to list surplus materials, source what your project needs, and keep useful materials in circulation.'}</p></div><button className="auth-panel-action" type="button" onClick={() => switchMode(signUp ? 'signIn' : 'signUp')} disabled={pending || changing}>{signUp ? 'Sign in' : 'Create account'} <Arrow /></button><div className="auth-panel-line" aria-hidden="true"><span /><span /><span /></div></div></aside>
+        <aside className="auth-brand-panel" aria-label="SurplusLink introduction"><div className="auth-panel-texture" aria-hidden="true" /><div className="auth-panel-content"><Brand /><div className="auth-panel-copy"><p className="auth-panel-kicker">SURPLUS, CONNECTED</p><h2>{signUp ? 'Already part of the exchange?' : 'New to SurplusLink?'}</h2><p>{signUp ? 'Sign in to return to your materials, opportunities, and project activity.' : 'Create your account to list surplus materials, source what your project needs, and keep useful materials in circulation.'}</p></div><button className="auth-panel-action" type="button" onClick={() => switchMode(signUp ? 'signIn' : 'signUp')} disabled={pending || changing}>{signUp ? 'Sign in' : 'Create account'} <Arrow /></button><div className="auth-panel-line" aria-hidden="true"><span /><span /><span /></div></div></aside>
       </section>
     </main>
   );
@@ -293,17 +292,8 @@ class SafeLottie extends React.Component<SafeLottieProps, SafeLottieState> {
   }
 
   render() {
-    if (this.state.hasError) {
-      return this.props.fallback;
-    }
-    return (
-      <Lottie
-        animationData={this.props.animationData}
-        loop={this.props.loop ?? true}
-        style={this.props.style}
-        onError={() => this.setState({ hasError: true })}
-      />
-    );
+    if (this.state.hasError) return this.props.fallback;
+    return <Lottie animationData={this.props.animationData} loop={this.props.loop ?? true} style={this.props.style} onError={() => this.setState({ hasError: true })} />;
   }
 }
 
@@ -328,12 +318,7 @@ function VerificationIcon({ state }: { state: 'attention' | 'code' | 'success' }
 
   return (
     <div className="auth-verification-lottie-container" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%', margin: '0 auto 0.75rem' }}>
-      <SafeLottie
-        animationData={emailLottieData}
-        loop={true}
-        style={{ width: 130, height: 130 }}
-        fallback={fallbackSvg}
-      />
+      <SafeLottie animationData={emailLottieData} loop style={{ width: 130, height: 130 }} fallback={fallbackSvg} />
     </div>
   );
 }

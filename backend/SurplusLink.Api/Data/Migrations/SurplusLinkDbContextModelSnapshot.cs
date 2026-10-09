@@ -1589,11 +1589,11 @@ namespace SurplusLink.Api.Data.Migrations
                         {
                             t.HasCheckConstraint("CK_Listings_Coordinates_Valid", "(\"Latitude\" IS NULL AND \"Longitude\" IS NULL) OR (\"Latitude\" BETWEEN -90 AND 90 AND \"Longitude\" BETWEEN -180 AND 180)");
 
-                            t.HasCheckConstraint("CK_Listings_Package_Stock", "(\"QuantityMode\" NOT IN ('PACKAGE','PIECE')) OR (\"PackageCount\" IS NOT NULL AND \"PackageSize\" IS NOT NULL AND \"PackageCount\" > 0 AND \"PackageSize\" > 0 AND \"ReservedPackageCount\" >= 0 AND \"ReservedPackageCount\" <= \"PackageCount\")");
+                            t.HasCheckConstraint("CK_Listings_Package_Stock", "(\"QuantityMode\" NOT IN ('PACKAGE','PIECE')) OR (\"PackageCount\" IS NOT NULL AND \"PackageSize\" IS NOT NULL AND \"PackageSize\" > 0 AND \"ReservedPackageCount\" >= 0 AND \"ReservedPackageCount\" <= \"PackageCount\" AND ((\"Status\" = 'SOLD' AND \"PackageCount\" = 0 AND \"ReservedPackageCount\" = 0) OR (\"Status\" <> 'SOLD' AND \"PackageCount\" > 0)))");
 
                             t.HasCheckConstraint("CK_Listings_Price_Positive", "\"UnitPrice\" > 0");
 
-                            t.HasCheckConstraint("CK_Listings_Quantity_Positive", "\"Quantity\" > 0");
+                            t.HasCheckConstraint("CK_Listings_Quantity_Positive", "(\"Status\" = 'SOLD' AND \"Quantity\" = 0 AND \"ReservedQuantity\" = 0) OR (\"Status\" <> 'SOLD' AND \"Quantity\" > 0)");
 
                             t.HasCheckConstraint("CK_Listings_ReservedQuantity_Range", "\"ReservedQuantity\" >= 0 AND \"ReservedQuantity\" <= \"Quantity\"");
                         });

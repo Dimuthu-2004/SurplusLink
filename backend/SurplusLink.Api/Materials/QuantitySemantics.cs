@@ -150,11 +150,50 @@ public static class QuantitySemantics
         quantity.QuantityMode is QuantityMode.PACKAGE or QuantityMode.PIECE && quantity.PackageSize is > 0
             ? decimal.Ceiling(requiredBaseQuantity / quantity.PackageSize.Value) : 0;
 
-    public static decimal MaterialCost(BuyerRequest request, Listing listing)
+    /// <summary>
+    /// Returns the largest physical contribution this listing can make to this
+    /// requirement. It is candidate metadata only: allocation remains an
+    /// explicit buyer action. When routing is known, transport is included in
+    /// the same budget envelope before determining the contribution.
+    /// </summary>
+    public static decimal EffectiveAffordableQuantity(BuyerRequest request, Listing listing, decimal? transportCost = null)
+    {
+        if (!TryRequiredBaseQuantity(request, listing, out var requiredBase)) return 0;
+        var normalized = FromListing(listing);
+        var maxPossibleBase = Math.Min(normalized.AvailableBaseQuantity, requiredBase);
+        if (maxPossibleBase <= 0) return 0;
+
+        var availableBudget = Math.Max(0, request.MaximumBudget - Math.Max(0, transportCost ?? 0));
+        if (normalized.QuantityMode is QuantityMode.PACKAGE or QuantityMode.PIECE && normalized.PackageSize is > 0)
+        {
+            var maxPossiblePackages = (int)Math.Floor(maxPossibleBase / normalized.PackageSize.Value);
+            var maxAffordablePackages = listing.UnitPrice > 0 ? (int)Math.Floor(availableBudget / listing.UnitPrice) : maxPossiblePackages;
+            var effectivePackages = Math.Min(maxPossiblePackages, maxAffordablePackages);
+            return effectivePackages >= 1 ? effectivePackages * normalized.PackageSize.Value : 0;
+        }
+        else
+        {
+            var maxAffordableBase = listing.UnitPrice > 0 ? availableBudget / listing.UnitPrice : maxPossibleBase;
+            var effectiveBase = Math.Min(maxPossibleBase, maxAffordableBase);
+            var minIncrement = normalized.MinimumSellableIncrement;
+            // Continuous inventory may be decimal, but it must still be sold
+            // in complete configured increments.
+            effectiveBase = decimal.Floor(effectiveBase / minIncrement) * minIncrement;
+            return effectiveBase >= minIncrement ? effectiveBase : 0;
+        }
+    }
+
+    public static decimal MaterialCost(BuyerRequest request, Listing listing, decimal? transportCost = null)
     {
         if (!TryRequiredBaseQuantity(request, listing, out var requiredBase)) return decimal.MaxValue;
+        var effectiveQty = EffectiveAffordableQuantity(request, listing, transportCost);
+        if (effectiveQty <= 0) return decimal.MaxValue;
         var normalized = FromListing(listing);
-        var packages = RequiredPackageCount(requiredBase, normalized);
-        return packages > 0 ? packages * listing.UnitPrice : requiredBase * listing.UnitPrice;
+        if (normalized.QuantityMode is QuantityMode.PACKAGE or QuantityMode.PIECE && normalized.PackageSize is > 0)
+        {
+            var packages = (int)Math.Floor(effectiveQty / normalized.PackageSize.Value);
+            return packages * listing.UnitPrice;
+        }
+        return effectiveQty * listing.UnitPrice;
     }
 }

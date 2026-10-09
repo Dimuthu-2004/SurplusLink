@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 using SurplusLink.Api.Data;
 using SurplusLink.Api.Materials;
 using SurplusLink.Api.Models;
+using SurplusLink.Api.Workflows;
 
 namespace SurplusLink.Api.Matching;
 
@@ -15,14 +17,18 @@ internal static class MatchRecommendation
         ?? (match.Distance is null or < 0 || match.DurationMinutes is null or < 0 ||
             match.EstimatedTransportCost is null or < 0 ? "ROUTE_DATA_INCOMPLETE" : null)
         ?? (match.DurationMinutes > (decimal)(request.Deadline - now).TotalMinutes ? "DELIVERY_DEADLINE_EXCEEDED" : null)
-        ?? (QuantitySemantics.MaterialCost(request, match.Listing) + match.EstimatedTransportCost > request.MaximumBudget
+        ?? (QuantitySemantics.MaterialCost(request, match.Listing, match.EstimatedTransportCost) + match.EstimatedTransportCost > request.MaximumBudget
             ? "TOTAL_COST_EXCEEDS_BUDGET" : null);
 
     internal static MaterialMatch? Choose(BuyerRequest request, IEnumerable<MaterialMatch> matches, DateTime now) =>
         matches.Where(x => InvalidReason(request, x, now) is null)
-            .OrderByDescending(x => x.Score)
+            .OrderByDescending(x => MatchScoring.Score(x.Listing.Condition.ToString(),
+                QuantitySemantics.MaterialCost(request, x.Listing, x.EstimatedTransportCost), request.MaximumBudget,
+                x.Distance, x.EstimatedTransportCost,
+                PreferenceCompatibility.Evaluate(request, x.Listing).MatchedCount,
+                PreferenceCompatibility.Evaluate(request, x.Listing).ConsideredCount))
             .ThenByDescending(x => MatchScoring.ConditionRank(x.Listing.Condition.ToString()))
-            .ThenBy(x => QuantitySemantics.MaterialCost(request, x.Listing) + x.EstimatedTransportCost)
+            .ThenBy(x => QuantitySemantics.MaterialCost(request, x.Listing, x.EstimatedTransportCost) + x.EstimatedTransportCost)
             .ThenBy(x => x.Distance)
             .ThenBy(x => x.ListingId.ToString(), StringComparer.Ordinal)
             .ThenBy(x => x.Id.ToString(), StringComparer.Ordinal).FirstOrDefault();
@@ -32,6 +38,18 @@ internal static class MatchRecommendation
     internal static async Task<BuyerRequest> RefreshAsync(SurplusLinkDbContext db, Guid requirementId, CancellationToken ct)
     {
         var request = await db.BuyerRequests.SingleAsync(x => x.Id == requirementId, ct);
+        var latestWorkflow = await db.AgentWorkflows.AsNoTracking()
+            .Where(x => x.MaterialRequestId == requirementId)
+            .OrderByDescending(x => x.StartedAtUtc).ThenByDescending(x => x.Id)
+            .Select(x => new { x.Status, x.ValidationJson })
+            .FirstOrDefaultAsync(ct);
+        if (latestWorkflow?.Status == AgentWorkflowStatus.REJECTED &&
+            FinalValidationRejected(latestWorkflow.ValidationJson))
+        {
+            request.RecommendedMatchId = null;
+            await db.SaveChangesAsync(ct);
+            return request;
+        }
         var matches = await db.Matches.Include(x => x.Listing).ThenInclude(x => x.ConstructionItemTemplate)
             .Where(x => x.MaterialRequestId == requirementId).ToListAsync(ct);
         var now = DateTime.UtcNow;
@@ -41,5 +59,11 @@ internal static class MatchRecommendation
             : string.Join("; ", matches.OrderBy(x => x.Id).Select(x => $"{x.Id}:{InvalidReason(request, x, now)}"));
         await db.SaveChangesAsync(ct);
         return request;
+    }
+
+    private static bool FinalValidationRejected(string json)
+    {
+        try { return JsonSerializer.Deserialize<WorkflowValidation>(json, AgentWorkflowClient.Json)?.Valid == false; }
+        catch (JsonException) { return false; }
     }
 }

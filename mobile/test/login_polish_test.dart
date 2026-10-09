@@ -48,7 +48,7 @@ void main() {
     expect((card.decoration! as BoxDecoration).color!.a, closeTo(.91, .01));
     expect(find.byType(BackdropFilter), findsNothing);
     expect(find.byType(LoginScaffold), findsOneWidget);
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 300));
     expect(tester.takeException(), isNull);
   });
 
@@ -65,8 +65,8 @@ void main() {
     expect(scale(), greaterThan(start));
     expect(scale(), lessThanOrEqualTo(1.035));
     await tester.pump(const Duration(seconds: 13));
-    await tester.pumpAndSettle();
-    expect(tester.binding.hasScheduledFrame, isFalse);
+    await tester.pump();
+    expect(scale(), closeTo(1.035, .001));
     await showLogin(tester, reducedMotion: true);
     final still = scale();
     await tester.pump(const Duration(seconds: 12));

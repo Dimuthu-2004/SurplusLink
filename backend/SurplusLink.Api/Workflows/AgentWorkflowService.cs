@@ -181,7 +181,7 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db, INotificationS
                     match.Listing.AvailableUntil <= DateTime.UtcNow || match.MaterialRequest.Deadline <= DateTime.UtcNow ||
                     match.DurationMinutes > (decimal)(match.MaterialRequest.Deadline - DateTime.UtcNow).TotalMinutes ||
                     !QuantitySemantics.IsCompatible(match.MaterialRequest, match.Listing) ||
-                    QuantitySemantics.MaterialCost(match.MaterialRequest, match.Listing) + match.EstimatedTransportCost > match.MaterialRequest.MaximumBudget)
+                    QuantitySemantics.MaterialCost(match.MaterialRequest, match.Listing, match.EstimatedTransportCost) + match.EstimatedTransportCost > match.MaterialRequest.MaximumBudget)
                     throw new AgentWorkflowException(409, "The recommendation is no longer eligible. Request a revision.");
 
                 if (MarketplaceMatchPolicy.RejectionReason(match.MaterialRequest.BuyerId, match.Listing.SellerId) is not null)
@@ -193,21 +193,25 @@ public sealed class AgentWorkflowService(SurplusLinkDbContext db, INotificationS
                 if (match.Listing.CategoryId != match.MaterialRequest.CategoryId)
                     throw new AgentWorkflowException(409, "The workflow match categories do not match.");
 
+                var quantity = match.MaterialRequest.RequiredQuantity;
+                int? packageCount = null;
+                if (match.Listing.QuantityMode is QuantityMode.PACKAGE or QuantityMode.PIECE)
+                {
+                    var size = match.Listing.PackageSize ?? 0;
+                    packageCount = size <= 0 ? null : (int)Math.Ceiling(quantity / size);
+                    quantity = packageCount is null ? quantity : packageCount.Value * size;
+                    if (packageCount is null || match.Listing.ReservedPackageCount + packageCount > match.Listing.PackageCount)
+                        throw new AgentWorkflowException(409, "Insufficient available packages.");
+                }
+                var exactMaterialValue = packageCount is null ? quantity * match.Listing.UnitPrice : packageCount.Value * match.Listing.UnitPrice;
+                if (exactMaterialValue + match.EstimatedTransportCost.Value > match.MaterialRequest.MaximumBudget)
+                    throw new AgentWorkflowException(409, "Total cost exceeds the requirement maximum budget.");
+
                 var existingRes = await db.Reservations.AnyAsync(x => x.ListingId == match.ListingId &&
                     x.MaterialRequestId == match.MaterialRequestId && x.Status != ReservationStatus.RELEASED &&
                     x.Status != ReservationStatus.CANCELLED, ct);
                 if (!existingRes)
                 {
-                    var quantity = match.MaterialRequest.RequiredQuantity;
-                    int? packageCount = null;
-                    if (match.Listing.QuantityMode is QuantityMode.PACKAGE or QuantityMode.PIECE)
-                    {
-                        var size = match.Listing.PackageSize ?? 0;
-                        packageCount = size <= 0 ? null : (int)Math.Ceiling(quantity / size);
-                        quantity = packageCount is null ? quantity : packageCount.Value * size;
-                        if (packageCount is null || match.Listing.ReservedPackageCount + packageCount > match.Listing.PackageCount)
-                            throw new AgentWorkflowException(409, "Insufficient available packages.");
-                    }
                     if (match.Listing.ReservedQuantity + quantity > match.Listing.Quantity)
                         throw new AgentWorkflowException(409, "Insufficient available quantity.");
                     match.Listing.ReservedQuantity += quantity;

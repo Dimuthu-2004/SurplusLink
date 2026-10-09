@@ -100,7 +100,7 @@ class _RecommendedMatchesScreenState extends State<RecommendedMatchesScreen> {
         final currentTotal =
             _selectedQuantities.values.fold(0.0, (s, q) => s + q);
         final remainingNeeded = requestedQuantity - currentTotal;
-        final avail = match.availableQuantity ?? requestedQuantity;
+        final avail = match.selectableQuantity ?? requestedQuantity;
         var defaultQty = (remainingNeeded > 0 && remainingNeeded <= avail)
             ? remainingNeeded
             : (avail > 0 ? avail : 1.0);
@@ -135,7 +135,7 @@ class _RecommendedMatchesScreenState extends State<RecommendedMatchesScreen> {
         .where((entry) => entry.key != match.id)
         .fold(0.0, (total, entry) => total + entry.value);
     final remaining = (requestedQuantity - otherTotal).clamp(0.0, double.infinity);
-    final maximum = (match.availableQuantity ?? 0).clamp(0.0, match.isPackaged ? double.infinity : remaining).toDouble();
+    final maximum = (match.selectableQuantity ?? 0).clamp(0.0, match.isPackaged ? double.infinity : remaining).toDouble();
     return quantities.isDiscreteUnit(match.unit ?? '')
         ? maximum.floorToDouble()
         : maximum;
@@ -151,7 +151,7 @@ class _RecommendedMatchesScreenState extends State<RecommendedMatchesScreen> {
     if (!match.isWholePackageQuantity(qty)) {
       return 'Packaged materials must use whole ${match.packageType?.toLowerCase() ?? 'packages'}.';
     }
-    final avail = match.availableQuantity ?? 0;
+    final avail = match.selectableQuantity ?? 0;
     if (qty > avail) {
       return 'Exceeds seller available stock (${quantities.formatQuantity(avail, match.unit ?? '')}).';
     }
@@ -180,12 +180,13 @@ class _RecommendedMatchesScreenState extends State<RecommendedMatchesScreen> {
       errorMsg = 'Total selected quantity must be greater than 0.';
     } else if (isOver && !minimalOverage) {
       hasErrors = true;
-      errorMsg =
-          'Remove unnecessary packages before submitting.';
+      errorMsg = _selectedMatches.values.any((match) => match.isPackaged)
+          ? 'Remove unnecessary packages before submitting.'
+          : 'Total selected exceeds requirement by ${quantities.formatQuantity(overage, unit)} $unit.';
     } else {
       for (final entry in _selectedQuantities.entries) {
         final match = _selectedMatches[entry.key];
-        final avail = match?.availableQuantity ?? 0;
+        final avail = match?.selectableQuantity ?? 0;
         if (match == null || !match.isSelectable || !match.isWholePackageQuantity(entry.value)) {
           hasErrors = true;
           errorMsg = 'Select available stock in whole sellable quantities.';
@@ -388,7 +389,7 @@ class _RecommendedMatchesScreenState extends State<RecommendedMatchesScreen> {
       for (final match in current) {
         final previous = _selectedMatches[match.id]!;
         final quantity = _selectedQuantities[match.id]!;
-        if (!match.isSelectable || quantity > (match.availableQuantity ?? 0)) {
+        if (!match.isSelectable || quantity > (match.selectableQuantity ?? 0)) {
           changed = 'Seller stock changed. Only ${match.packageCountAvailable ?? match.availableQuantity ?? 0} ${match.isPackaged ? match.packageType?.toLowerCase() ?? "packages" : match.unit ?? "units"} are now available.';
         } else if (match.unitPrice != previous.unitPrice || match.estimatedTransportCost != previous.estimatedTransportCost || match.packageSize != previous.packageSize) {
           changed = 'Listing terms changed. Review the updated allocation before submitting.';

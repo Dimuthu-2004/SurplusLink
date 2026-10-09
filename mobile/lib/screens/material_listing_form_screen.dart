@@ -696,7 +696,10 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
       leading: const DashboardBackButton(fallback: '/materials'),
       title: Text(widget.isEditing ? 'Edit Material' : 'Add Material'),
     ),
-    bottomNavigationBar: _isLoading || _loadFailed || _categories.isEmpty || !_hasListingIdentity ? null : SafeArea(
+    // Keep the actions available before an item is selected.  The form then
+    // reports the required category/item fields instead of making the primary
+    // action disappear, which is both clearer and keyboard-accessible.
+    bottomNavigationBar: _isLoading || _loadFailed || _categories.isEmpty ? null : SafeArea(
       minimum: const EdgeInsets.all(12),
       child: Row(children: [
         Expanded(child: OutlinedButton(
@@ -1226,7 +1229,11 @@ class _MaterialListingFormScreenState extends State<MaterialListingFormScreen> {
                                 key: const Key('material-unit'),
                                 categoryId: _category,
                                 initialUnit: _unit,
-                                load: (_) async => const ['kg', 'g', 'tonne', 'L', 'ml', 'm', 'sqm', 'm3'],
+                                // Units are managed per category.  Do not
+                                // substitute a client-side global list: it
+                                // would allow sellers to submit disallowed
+                                // measurements and masks manager changes.
+                                load: widget.gateway.categoryUnits,
                                 enabled: !_isSaving,
                                 onChanged: (value) => setState(() => _unit = value),
                               ),

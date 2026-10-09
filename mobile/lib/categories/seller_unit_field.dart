@@ -33,8 +33,7 @@ class _SellerUnitFieldState extends State<SellerUnitField> {
   @override
   void didUpdateWidget(covariant SellerUnitField oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.categoryId != widget.categoryId ||
-        oldWidget.initialUnit != widget.initialUnit) {
+    if (oldWidget.categoryId != widget.categoryId) {
       _load();
     }
   }

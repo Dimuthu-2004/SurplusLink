@@ -27,40 +27,96 @@ final match = RecommendedMatch(
 );
 
 void main() {
-  testWidgets('equal scores highlight exactly one card by current recommendation ID', (tester) async {
-    tester.view.physicalSize = const Size(1200, 2400);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    final gateway = FakeMatches();
-    List<RecommendedMatch> rows(String? recommendation) => ['m1', 'm2'].map((id) =>
-      RecommendedMatch.fromJson({
-        'id': id, 'requirementId': 'r1', 'listingId': 'l$id', 'score': .8,
-        'status': 'ROUTED', 'valid': true, 'createdAt': '2026-09-25T00:00:00Z',
-        'recommendedMatchId': recommendation, 'aiRecommended': true,
-      })).toList();
-    Future<void> show(String? recommendation) async {
-      gateway.rows = rows(recommendation);
-      await tester.pumpWidget(MaterialApp(home: RecommendedMatchesScreen(
-        key: UniqueKey(), gateway: gateway, requirementId: 'r1')));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
-    }
-    await show('m2');
-    expect(find.text('AI Recommended'), findsOneWidget);
-    final highlighted = find.byKey(const Key('ai-recommended-card'));
-    expect(highlighted, findsOneWidget);
-    expect(find.descendant(of: highlighted, matching: find.byKey(const Key('match-m2'))), findsOneWidget);
-    final before = tester.widget<Card>(highlighted).shape;
-    await tester.pump(const Duration(milliseconds: 1000));
-    expect(tester.widget<Card>(highlighted).shape, isNot(before));
-    await show('m1');
-    expect(find.text('AI Recommended'), findsOneWidget);
-    expect(find.descendant(of: highlighted, matching: find.byKey(const Key('match-m1'))), findsOneWidget);
-    await show(null);
-    expect(find.text('AI Recommended'), findsNothing);
-    expect(highlighted, findsNothing);
+  test('partial piece candidate keeps five-door contribution selectable without rejection', () {
+    final doors = RecommendedMatch.fromJson({
+      'id': 'doors',
+      'requirementId': 'r1',
+      'listingId': 'l1',
+      'score': .7,
+      'status': 'ROUTED',
+      'valid': true,
+      'rejected': false,
+      'createdAt': '2026-09-25T00:00:00Z',
+      'quantity': 10,
+      'availableQuantity': 5,
+      'maximumContribution': 5,
+      'unit': 'piece',
+      'unitPrice': 5000,
+      'quantityMode': 'PIECE',
+      'packageSize': 1,
+      'packageCountAvailable': 5,
+    });
+    expect(doors.isRejected, isFalse);
+    expect(doors.isSelectable, isTrue);
+    expect(doors.selectableQuantity, 5);
   });
+
+  testWidgets(
+    'equal scores highlight exactly one card by current recommendation ID',
+    (tester) async {
+      tester.view.physicalSize = const Size(1200, 2400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final gateway = FakeMatches();
+      List<RecommendedMatch> rows(String? recommendation) => ['m1', 'm2']
+          .map(
+            (id) => RecommendedMatch.fromJson({
+              'id': id,
+              'requirementId': 'r1',
+              'listingId': 'l$id',
+              'score': .8,
+              'status': 'ROUTED',
+              'valid': true,
+              'createdAt': '2026-09-25T00:00:00Z',
+              'recommendedMatchId': recommendation,
+              'aiRecommended': true,
+            }),
+          )
+          .toList();
+      Future<void> show(String? recommendation) async {
+        gateway.rows = rows(recommendation);
+        await tester.pumpWidget(
+          MaterialApp(
+            home: RecommendedMatchesScreen(
+              key: UniqueKey(),
+              gateway: gateway,
+              requirementId: 'r1',
+            ),
+          ),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+
+      await show('m2');
+      expect(find.text('AI Recommended'), findsOneWidget);
+      final highlighted = find.byKey(const Key('ai-recommended-card'));
+      expect(highlighted, findsOneWidget);
+      expect(
+        find.descendant(
+          of: highlighted,
+          matching: find.byKey(const Key('match-m2')),
+        ),
+        findsOneWidget,
+      );
+      final before = tester.widget<Card>(highlighted).shape;
+      await tester.pump(const Duration(milliseconds: 1000));
+      expect(tester.widget<Card>(highlighted).shape, isNot(before));
+      await show('m1');
+      expect(find.text('AI Recommended'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: highlighted,
+          matching: find.byKey(const Key('match-m1')),
+        ),
+        findsOneWidget,
+      );
+      await show(null);
+      expect(find.text('AI Recommended'), findsNothing);
+      expect(highlighted, findsNothing);
+    },
+  );
   for (final roles in <List<AppRole>?>[
     null,
     [AppRole.seller],
@@ -92,8 +148,9 @@ void main() {
                   '/requirements/r1/matches${details ? '/m1' : ''}',
             ),
           );
-          await tester.pumpAndSettle();
           final allowed = roles?.contains(AppRole.buyer) == true;
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 50));
           expect(
             find.text(details ? 'Match Details' : 'Recommended Matches'),
             allowed ? findsOneWidget : findsNothing,
@@ -101,7 +158,8 @@ void main() {
           expect(gateway.reads > 0, allowed);
           if (allowed) {
             await auth.logout();
-            await tester.pumpAndSettle();
+            await tester.pump();
+            await tester.pump(const Duration(milliseconds: 50));
             expect(find.byKey(const Key('login-submit')), findsOneWidget);
           }
         },
@@ -176,7 +234,10 @@ void main() {
       expect(find.byType(RecommendedMatchesScreen), findsOneWidget);
       router.go('/home');
       await tester.pumpAndSettle();
-      expect(find.byKey(const Key('marketplace-mode-switcher')), findsOneWidget);
+      expect(
+        find.byKey(const Key('marketplace-mode-switcher')),
+        findsOneWidget,
+      );
     },
   );
   testWidgets('loading empty error retry and pagination keep query state', (
@@ -214,8 +275,10 @@ void main() {
     await tester.tap(find.text('Retry'));
     await tester.pumpAndSettle();
     expect(gateway.queries.last.rejected, isTrue);
-    await tester.scrollUntilVisible(find.text('Next'), 300);
-    await tester.tap(find.text('Next'));
+    final next = find.text('Next');
+    await tester.ensureVisible(next);
+    await tester.pump();
+    await tester.tap(next);
     await tester.pumpAndSettle();
     expect(gateway.queries.last.page, 2);
     expect(gateway.queries.last.rejected, isTrue);
@@ -289,7 +352,12 @@ class FakeMatches implements MatchGateway {
   Future<RecommendedMatch> retryRoute(String matchId) async => match;
 
   @override
-  Future<void> select(String requirementId, String matchId, {double? quantity, int? packageCount}) async {}
+  Future<void> select(
+    String requirementId,
+    String matchId, {
+    double? quantity,
+    int? packageCount,
+  }) async {}
 
   @override
   Future<void> selectMatches(

@@ -33,7 +33,8 @@ public sealed record WorkflowListingSnapshot(Guid MatchId, Guid ListingId, Guid 
     int? PackageCountAvailable = null, decimal? BaseEquivalentAvailableQuantity = null,
     decimal? MaximumContribution = null, bool? FullCoverage = null,
     string? BaseUnit = null, decimal? MinimumSellableIncrement = null, int? DecimalPrecision = null, Guid? ConstructionItemTemplateId = null, string? ItemName = null,
-    string? Description = null, string? SpecificationsJson = null, string? ItemRelevanceClassification = null);
+    string? Description = null, string? SpecificationsJson = null, string? ItemRelevanceClassification = null,
+    int PreferenceMatchedCount = 0, int PreferenceConsideredCount = 0);
 public sealed record WorkflowRunRequest(Guid WorkflowId, object BuyerRequest, IReadOnlyList<WorkflowListingSnapshot> Listings,
     string? Objective = null);
 public sealed record WorkflowValidation(bool Valid, bool RequiresApproval, Guid? RecommendedMatchId,
@@ -210,6 +211,7 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
                 routingSettings?.Value.Provider ?? "unconfigured",
                 routed ? "ROUTED" : routingFailure ?? RoutingFailureClassifier.FromEstimate(estimate));
             var quantity = QuantitySemantics.FromListing(listing);
+            var preferences = PreferenceCompatibility.Evaluate(request, listing);
             rows.Add(new(existing.GetValueOrDefault(listing.Id, Guid.NewGuid()), listing.Id, listing.SellerId,
                 listing.CategoryId, quantity.AvailableBaseQuantity, quantity.BaseUnit, listing.UnitPrice,
                 listing.Condition.ToString(), listing.Status.ToString(), listing.AvailableUntil, listing.Latitude,
@@ -217,11 +219,12 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
                 routed ? estimate!.EstimatedTransportCost : null, routed ? null : routingFailure ?? RoutingFailureClassifier.FromEstimate(estimate),
                 quantity.QuantityMode.ToString(), quantity.PackageType, quantity.PackageSize,
                 quantity.AvailablePackageCount, quantity.AvailableBaseQuantity,
-                QuantitySemantics.TryRequiredBaseQuantity(request, listing, out var requestedBase)
-                    ? Math.Min(quantity.AvailableBaseQuantity, requestedBase) : 0,
-                QuantitySemantics.TryRequiredBaseQuantity(request, listing, out requestedBase) && quantity.AvailableBaseQuantity >= requestedBase,
+                QuantitySemantics.EffectiveAffordableQuantity(request, listing, routed ? estimate!.EstimatedTransportCost : null),
+                QuantitySemantics.TryRequiredBaseQuantity(request, listing, out var requestedBase) &&
+                    QuantitySemantics.EffectiveAffordableQuantity(request, listing, routed ? estimate!.EstimatedTransportCost : null) >= requestedBase,
                 quantity.BaseUnit, quantity.MinimumSellableIncrement, quantity.DecimalPrecision, listing.ConstructionItemTemplateId,
-                listing.Title, listing.Description, listing.SpecificationsJson, ItemRelevance.Evaluate(request, listing).Classification));
+                listing.Title, listing.Description, listing.SpecificationsJson, ItemRelevance.Evaluate(request, listing).Classification,
+                preferences.MatchedCount, preferences.ConsideredCount));
         }
         return new(workflow.Id, new { id = request.Id, buyerId = request.BuyerId, categoryId = request.CategoryId,
             constructionItemTemplateId = request.ConstructionItemTemplateId, itemName = request.ConstructionItemTemplate?.Name ?? request.Title,
@@ -245,11 +248,11 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
                 x.AvailableQuantity > 0 && request.Deadline > now &&
                 x.RoutingError is null && x.DistanceKm is >= 0 && x.DurationMinutes is >= 0 && x.TransportCost is >= 0 &&
                 x.DurationMinutes <= (decimal)(request.Deadline - now).TotalMinutes &&
-                MaterialCost(request, x) + x.TransportCost <= request.MaximumBudget)
-            .Select(x => new { Row = x, Score = MatchScoring.Score(x.Condition, MaterialCost(request, x),
-                request.MaximumBudget, x.DistanceKm, x.TransportCost) })
+                MaterialCost(x) + x.TransportCost <= request.MaximumBudget)
+            .Select(x => new { Row = x, Score = MatchScoring.Score(x.Condition, MaterialCost(x),
+                request.MaximumBudget, x.DistanceKm, x.TransportCost, x.PreferenceMatchedCount, x.PreferenceConsideredCount) })
             .OrderByDescending(x => x.Score).ThenByDescending(x => MatchScoring.ConditionRank(x.Row.Condition))
-            .ThenBy(x => MaterialCost(request, x.Row) + x.Row.TransportCost)
+            .ThenBy(x => MaterialCost(x.Row) + x.Row.TransportCost)
             .ThenBy(x => x.Row.DistanceKm).ThenBy(x => x.Row.ListingId.ToString(), StringComparer.Ordinal).FirstOrDefault();
         if (winner is null || winner.Row.MatchId != recommendation.MatchId || winner.Score != recommendation.Score)
             throw new JsonException("Recommendation must follow deterministic ranking of valid routed candidates.");
@@ -260,13 +263,8 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
         listing.Status == ListingStatus.ACTIVE && listing.AvailableUntil > DateTime.UtcNow &&
         listing.SellerId != request.BuyerId && listing.CategoryId == request.CategoryId &&
         QuantitySemantics.IsCompatible(request, listing) &&
-        QuantitySemantics.FromListing(listing).AvailableBaseQuantity > 0 && transportCost >= 0 &&
-        QuantitySemantics.MaterialCost(request, listing) + transportCost <= request.MaximumBudget;
-
-    internal static decimal MaterialCost(decimal requiredQuantity, decimal unitPrice, string? quantityMode, decimal? packageSize) =>
-        quantityMode is "PACKAGE" or "PIECE" && packageSize is > 0
-            ? decimal.Ceiling(requiredQuantity / packageSize.Value) * unitPrice
-            : requiredQuantity * unitPrice;
+        QuantitySemantics.EffectiveAffordableQuantity(request, listing, transportCost) > 0 && transportCost >= 0 &&
+        QuantitySemantics.MaterialCost(request, listing, transportCost) + transportCost <= request.MaximumBudget;
 
     internal static bool SnapshotCompatible(BuyerRequest request, WorkflowListingSnapshot listing)
     {
@@ -278,10 +276,14 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
             QuantitySemantics.TryConvert(request.RequiredQuantity, request.Unit, listing.BaseUnit ?? listing.Unit, out _);
     }
 
-    internal static decimal MaterialCost(BuyerRequest request, WorkflowListingSnapshot listing) =>
-        QuantitySemantics.TryConvert(request.RequiredQuantity, request.Unit, listing.BaseUnit ?? listing.Unit, out var requiredBase)
-            ? MaterialCost(requiredBase, listing.UnitPrice, listing.QuantityMode, listing.PackageSize)
-            : decimal.MaxValue;
+    internal static decimal MaterialCost(WorkflowListingSnapshot listing)
+    {
+        var contribution = listing.MaximumContribution ?? 0;
+        if (contribution <= 0) return decimal.MaxValue;
+        return listing.QuantityMode is "PACKAGE" or "PIECE" && listing.PackageSize is > 0
+            ? decimal.Floor(contribution / listing.PackageSize.Value) * listing.UnitPrice
+            : contribution * listing.UnitPrice;
+    }
 
     internal static void ValidateResult(WorkflowRunRequest input, WorkflowRunResult result)
     {
@@ -341,26 +343,17 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
     private async Task PersistAsync(AgentWorkflow workflow, BuyerRequest request, WorkflowRunResult result, int retries,
         WorkflowRunRequest snapshot, CancellationToken ct)
     {
-        // Complete potentially failing reads before modifying tracked entities.
-        var existingMatch = result.Recommendation is { } selected
-            ? await db.Matches.SingleOrDefaultAsync(x => x.Id == selected.MatchId, ct) : null;
-        var listing = result.Recommendation is { } chosen
-            ? await db.Listings.AsNoTracking().SingleAsync(x => x.Id == chosen.ListingId, ct) : null;
         var persisted = await db.Matches.Where(x => x.MaterialRequestId == request.Id).ToDictionaryAsync(x => x.Id, ct);
-        var finalValidationPassed = result.Status == "MATCH_FOUND" && result.Validation.Valid && result.Validation.RequiresApproval;
         foreach (var row in snapshot.Listings)
         {
-            // A snapshot is an input to the agent, not a final candidate set.
-            // If final validation rejected the workflow, its rows must not be
-            // resurfaced as selectable or recommended by the later refresh.
-            var reason = !finalValidationPassed
-                ? result.ErrorCode ?? result.Validation.Violations.FirstOrDefault() ?? "WORKFLOW_REJECTED"
-                : row.Status != "ACTIVE" ? "LISTING_NOT_ACTIVE"
+            // Candidate facts always win over a workflow-level summary.  A
+            // rejected workflow commonly contains several different failures.
+            var reason = row.Status != "ACTIVE" ? "LISTING_NOT_ACTIVE"
                 : row.AvailableUntil <= DateTime.UtcNow ? "LISTING_EXPIRED"
                 : !SnapshotCompatible(request, row) ? "UNIT_MISMATCH"
                 : row.AvailableQuantity <= 0 ? "INSUFFICIENT_QUANTITY"
-                : MaterialCost(request, row) > request.MaximumBudget ? "BUDGET_EXCEEDED"
-                : MaterialCost(request, row) + (row.TransportCost ?? 0) > request.MaximumBudget && row.TransportCost is not null ? "TOTAL_COST_EXCEEDS_BUDGET"
+                : (row.MaximumContribution ?? 0) <= 0 ? "TOTAL_COST_EXCEEDS_BUDGET"
+                : MaterialCost(row) + (row.TransportCost ?? 0) > request.MaximumBudget && row.TransportCost is not null ? "TOTAL_COST_EXCEEDS_BUDGET"
                 : null;
             if (!persisted.TryGetValue(row.MatchId, out var candidate))
             {
@@ -384,8 +377,9 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
             candidate.DurationMinutes = routeSucceeded ? row.DurationMinutes : null;
             candidate.EstimatedTransportCost = routeSucceeded ? row.TransportCost : null;
             candidate.Score = reason is null && routeSucceeded
-                ? MatchScoring.Score(row.Condition, MaterialCost(request, row),
-                    request.MaximumBudget, row.DistanceKm, row.TransportCost) : 0;
+                ? MatchScoring.Score(row.Condition, MaterialCost(row),
+                    request.MaximumBudget, row.DistanceKm, row.TransportCost,
+                    row.PreferenceMatchedCount, row.PreferenceConsideredCount) : 0;
             if (reason is null || routeSucceeded)
                 db.AuditLogs.Add(new AuditLog { Id = Guid.NewGuid(), EntityType = nameof(MaterialMatch), EntityId = candidate.Id,
                     Action = routeSucceeded ? "ROUTE_SUCCEEDED" : "ROUTE_FAILED" });
@@ -394,8 +388,8 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
         }
         // Candidate status is derived from authoritative listing facts, but it
         // becomes selectable only after the workflow's final validation passes.
-        var awaitingBuyerSelection = finalValidationPassed && persisted.Values.Any(candidate =>
-            candidate.Status == MatchStatus.ROUTED && candidate.RejectionReason is null);
+        var awaitingBuyerSelection = result.Status == "MATCH_FOUND" && result.Validation.Valid && result.Validation.RequiresApproval &&
+            persisted.Values.Any(candidate => candidate.Status == MatchStatus.ROUTED && candidate.RejectionReason is null);
         workflow.Status = awaitingBuyerSelection
             ? AgentWorkflowStatus.COMPLETED
             : Enum.Parse<AgentWorkflowStatus>(result.Status);
@@ -413,36 +407,6 @@ public sealed class WorkflowQueueProcessor(SurplusLinkDbContext db, IAgentWorkfl
         request.RecommendedMatchId = null;
         request.RecommendationReason = awaitingBuyerSelection ? null
             : result.ErrorCode ?? string.Join("; ", result.Validation.Violations);
-        // A workflow recommendation is informative only. It must never create an
-        // offer, transaction, or manager queue entry until the buyer confirms it.
-        if (false && result.Recommendation is { } rec)
-        {
-            var match = persisted.GetValueOrDefault(rec.MatchId) ?? existingMatch;
-            if (match is null)
-            {
-                match = new MaterialMatch { Id = rec.MatchId, ListingId = rec.ListingId, MaterialRequestId = request.Id };
-                db.Matches.Add(match);
-            }
-            match.Score = rec.Score; match.Distance = rec.DistanceKm; match.EstimatedTransportCost = rec.TransportCost;
-            match.Status = MatchStatus.ROUTED; match.RejectionReason = null;
-            workflow.MaterialMatchId = match.Id;
-            var offer = new Offer
-            {
-                Id = Guid.NewGuid(), MaterialMatchId = match.Id, BuyerId = request.BuyerId,
-                SellerId = listing!.SellerId, Quantity = request.RequiredQuantity, UnitValue = listing.UnitPrice,
-                TotalValue = request.RequiredQuantity * listing.UnitPrice, Status = OfferStatus.PENDING
-            };
-            var transaction = new Transaction
-            {
-                Id = Guid.NewGuid(), OfferId = offer.Id, BuyerId = offer.BuyerId, SellerId = offer.SellerId,
-                Quantity = offer.Quantity, TotalValue = offer.TotalValue, Status = TransactionStatus.PENDING_APPROVAL
-            };
-            db.Offers.Add(offer);
-            db.AuditLogs.Add(new AuditLog { Id = Guid.NewGuid(), EntityType = nameof(Offer), EntityId = offer.Id, Action = "OFFER_CREATED" });
-            db.Transactions.Add(transaction);
-            db.AuditLogs.Add(new AuditLog { Id = Guid.NewGuid(), EntityType = nameof(Transaction),
-                EntityId = transaction.Id, Action = "PENDING_APPROVAL" });
-        }
         // Keep every generated candidate available to the buyer, including a
         // route failure. A retry is still explicit through Start Matching.
         // REJECTED is a completed matching outcome: retain the requirement in

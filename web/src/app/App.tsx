@@ -13,6 +13,7 @@ import { ManagerMatchComparisonPage } from '../pages/manager/ManagerMatchCompari
 import { ManagerApprovalsPage } from '../pages/manager/ManagerApprovalsPage';
 import { ManagerWorkflowDetailsPage } from '../pages/manager/ManagerWorkflowDetailsPage';
 import { ManagerCommunityPage } from '../pages/manager/ManagerCommunityPage';
+import { ManagerTransactionDetailsPage } from '../pages/manager/ManagerTransactionDetailsPage';
 import { NotFoundPage } from '../pages/NotFoundPage';
 import { RoleHomePage } from '../pages/RoleHomePage';
 import { MyOffersPage } from '../pages/MyOffersPage';
@@ -78,6 +79,7 @@ export function App() {
             <Route path="manager/listing-approvals" element={<ManagerListingsPage key="listing-approvals" approvalsOnly />} />
             <Route path="manager/requirement-approvals" element={<ManagerApprovalsPage />} />
             <Route path="manager/workflows/:workflowId" element={<ManagerWorkflowDetailsPage />} />
+            <Route path="manager/transactions/:transactionId" element={<ManagerTransactionDetailsPage />} />
             <Route path="manager/community" element={<ManagerCommunityPage />} />
           </Route>
         </Route>

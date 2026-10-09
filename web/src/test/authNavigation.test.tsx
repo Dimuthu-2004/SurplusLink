@@ -129,11 +129,15 @@ describe('authentication navigation', { timeout: 20000 }, () => {
     const client = fakeClient();
     const storage = memoryStorage();
     client.post.mockResolvedValue({ data: { token: 'new-account-jwt', user: { ...seller, roles: ['SELLER', 'BUYER'] } } });
-    renderApp('/login', client, storage);
+    renderApp('/register', client, storage);
     const visitor = userEvent.setup();
 
-    await visitor.click(panelAction());
-    await waitFor(() => expect(screen.getByLabelText('Full name')).toBeEnabled());
+    await screen.findByRole('heading', { name: 'Build with less waste.' });
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Build with less waste.' })).toBeVisible();
+      expect(screen.getByLabelText('Full name')).toBeEnabled();
+      expect(screen.getByRole('button', { name: 'Create account' })).toBeEnabled();
+    });
     await visitor.type(screen.getByLabelText('Full name'), 'Ava Builder');
     await visitor.type(screen.getByLabelText('NIC'), '199912345678');
     await visitor.type(screen.getByLabelText('Email'), ' ava@example.com ');
@@ -164,10 +168,10 @@ describe('authentication navigation', { timeout: 20000 }, () => {
 
   it('rejects a mismatched confirmation before calling public registration', async () => {
     const client = fakeClient();
-    renderApp('/login', client);
+    renderApp('/register', client);
     const visitor = userEvent.setup();
-    await visitor.click(panelAction());
-    await waitFor(() => expect(screen.getByLabelText('Full name')).toBeEnabled(), { timeout: 5000 });
+    await screen.findByRole('heading', { name: 'Build with less waste.' });
+    await waitFor(() => expect(screen.getByLabelText('Full name')).toBeEnabled());
     await visitor.type(screen.getByLabelText('Full name'), 'Ava Builder');
     await visitor.type(screen.getByLabelText('NIC'), '199912345678');
     await visitor.type(screen.getByLabelText('Email'), 'ava@example.com');
@@ -186,10 +190,10 @@ describe('authentication navigation', { timeout: 20000 }, () => {
   it('shows server-side registration validation errors inline', async () => {
     const client = fakeClient();
     client.post.mockRejectedValue(new ApiError('An account with that email already exists.', 409));
-    renderApp('/login', client);
+    renderApp('/register', client);
     const visitor = userEvent.setup();
-    await visitor.click(panelAction());
-    await waitFor(() => expect(screen.getByLabelText('Full name')).toBeEnabled(), { timeout: 5000 });
+    await screen.findByRole('heading', { name: 'Build with less waste.' });
+    await waitFor(() => expect(screen.getByLabelText('Full name')).toBeEnabled());
     await visitor.type(screen.getByLabelText('Full name'), 'Ava Builder');
     await visitor.type(screen.getByLabelText('NIC'), '199912345678');
     await visitor.type(screen.getByLabelText('Email'), 'ava@example.com');

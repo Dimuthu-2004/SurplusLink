@@ -144,7 +144,6 @@ public sealed class MatchIntegrationTests(RequirementsDatabase fixture) : IClass
             ("UNIT_MISMATCH", listing => listing.Unit = "unit"),
             (null, listing => listing.ReservedQuantity = 99),
             ("INSUFFICIENT_QUANTITY", listing => listing.ReservedQuantity = listing.Quantity),
-            ("BUDGET_EXCEEDED", listing => listing.UnitPrice = 3000),
         };
         foreach (var (reason, change) in cases)
         {
@@ -156,6 +155,27 @@ public sealed class MatchIntegrationTests(RequirementsDatabase fixture) : IClass
             var match = await new MatchService(db).GenerateAsync(request.Id, listing.Id, null, default);
             Assert.Equal(reason, match.RejectionReason);
             Assert.Equal(reason is null ? MatchStatus.GENERATED : MatchStatus.REJECTED, match.Status);
+        }
+
+        var (partialRequest, partialListing) = await Seed();
+        using (var partialDb = fixture.Context())
+        {
+            (await partialDb.Listings.SingleAsync(x => x.Id == partialListing.Id)).UnitPrice = 3000;
+            await partialDb.SaveChangesAsync();
+            var partial = await new MatchService(partialDb).GenerateAsync(partialRequest.Id, partialListing.Id, null, default);
+            Assert.Equal(MatchStatus.GENERATED, partial.Status);
+            Assert.Null(partial.RejectionReason);
+        }
+
+        var (unaffordableRequest, unaffordableListing) = await Seed();
+        using (var unaffordableDb = fixture.Context())
+        {
+            // Intentionally makes even the minimum continuous 0.001 kg increment unaffordable.
+            (await unaffordableDb.Listings.SingleAsync(x => x.Id == unaffordableListing.Id)).UnitPrice = 10_000_001m;
+            await unaffordableDb.SaveChangesAsync();
+            var unaffordable = await new MatchService(unaffordableDb).GenerateAsync(unaffordableRequest.Id, unaffordableListing.Id, null, default);
+            Assert.Equal(MatchStatus.REJECTED, unaffordable.Status);
+            Assert.Equal("TOTAL_COST_EXCEEDS_BUDGET", unaffordable.RejectionReason);
         }
 
         var (categoryRequest, categoryListing) = await Seed();

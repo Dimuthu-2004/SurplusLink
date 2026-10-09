@@ -84,6 +84,71 @@ public sealed class QuantitySemanticsTests
         Assert.Equal(8, QuantitySemantics.FromListing(listing).AvailableBaseQuantity);
     }
 
+    [Fact]
+    public void Packaged_partial_contributions_use_whole_cans_and_their_own_material_cost()
+    {
+        var request = Request(50, "L", Paint);
+        request.MaximumBudget = 10000;
+        var sellerA = Packaged("L", 4, 20, "CAN", Paint);
+        sellerA.UnitPrice = 1000;
+        var sellerB = Packaged("L", 4, 15, "CAN", Paint);
+        sellerB.UnitPrice = 1100;
+
+        Assert.Equal(40, QuantitySemantics.EffectiveAffordableQuantity(request, sellerA));
+        Assert.Equal(10000, QuantitySemantics.MaterialCost(request, sellerA));
+        Assert.Equal(36, QuantitySemantics.EffectiveAffordableQuantity(request, sellerB));
+        Assert.Equal(9900, QuantitySemantics.MaterialCost(request, sellerB));
+    }
+
+    [Theory]
+    [InlineData(QuantityMode.CONTINUOUS, "L", 50, 20, 1, 100, 20, false)]
+    [InlineData(QuantityMode.PIECE, "piece", 10, 5, 1, 5000, 5, false)]
+    [InlineData(QuantityMode.PACKAGE, "L", 50, 5, 4, 1000, 20, false)]
+    public void Every_quantity_mode_keeps_a_stock_limited_partial_candidate(
+        QuantityMode mode, string unit, decimal required, int availablePackages, decimal packageSize,
+        decimal unitPrice, decimal expectedContribution, bool expectedFullCoverage)
+    {
+        var request = Request(required, unit, Paint);
+        request.MaximumBudget = 100000;
+        var listing = mode == QuantityMode.CONTINUOUS
+            ? new Listing { SellerId = Guid.NewGuid(), CategoryId = Category, ConstructionItemTemplateId = Paint,
+                QuantityMode = mode, BaseUnit = unit, Unit = unit, Quantity = availablePackages,
+                UnitPrice = unitPrice, Status = ListingStatus.ACTIVE, AvailableUntil = DateTime.UtcNow.AddDays(2) }
+            : Packaged(unit, packageSize, availablePackages, mode == QuantityMode.PIECE ? "PIECE" : "CAN", Paint, mode);
+        listing.UnitPrice = unitPrice;
+
+        var contribution = QuantitySemantics.EffectiveAffordableQuantity(request, listing);
+        Assert.Equal(expectedContribution, contribution);
+        Assert.Equal(expectedFullCoverage, contribution >= required);
+        Assert.Null(MatchService.EligibilityReason(request, listing));
+    }
+
+    [Fact]
+    public void Doors_piece_partial_with_route_cost_is_valid_and_priced_for_five_not_ten()
+    {
+        var request = Request(10, "piece", Paint);
+        request.MaximumBudget = 30_000;
+        var doors = Packaged("piece", 1, 5, "PIECE", Paint, QuantityMode.PIECE);
+        doors.UnitPrice = 5_000;
+
+        Assert.Equal(5, QuantitySemantics.EffectiveAffordableQuantity(request, doors, transportCost: 5_000));
+        Assert.Equal(25_000, QuantitySemantics.MaterialCost(request, doors, transportCost: 5_000));
+        Assert.Null(MatchService.EligibilityReason(request, doors));
+    }
+
+    [Fact]
+    public void Budget_and_route_reduce_contribution_or_reject_when_no_minimum_increment_fits()
+    {
+        var request = Request(10, "piece", Paint);
+        var listing = Packaged("piece", 1, 5, "PIECE", Paint, QuantityMode.PIECE);
+        listing.UnitPrice = 5_000;
+        request.MaximumBudget = 16_000;
+        Assert.Equal(3, QuantitySemantics.EffectiveAffordableQuantity(request, listing, transportCost: 1_000));
+
+        request.MaximumBudget = 5_999;
+        Assert.Equal(0, QuantitySemantics.EffectiveAffordableQuantity(request, listing, transportCost: 1_000));
+    }
+
     [Theory]
     [InlineData("L", 8, "CAN", 2, 4, "L", 8)]
     [InlineData("kg", 350, "BAG", 7, 50, "kg", 350)]

@@ -52,11 +52,25 @@ public sealed class CategoryUnitCatalogTests(RequirementsDatabase fixture) : ICl
             {
                 var row = await db.Listings.SingleAsync(x => x.Id == listing.Id);
                 row.Status = status;
+                row.Quantity = status == SurplusLink.Api.Models.ListingStatus.SOLD ? 0 : 12.25m;
+                row.ReservedQuantity = 0;
+                if (status == SurplusLink.Api.Models.ListingStatus.SOLD)
+                {
+                    Assert.Equal(0, row.Quantity);
+                }
                 await db.SaveChangesAsync();
             }
             using var response = await manager.DeleteAsync($"/api/material-categories/{category.Id}");
             Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
             Assert.Contains("This category cannot be deleted because material listings are using it.", await response.Content.ReadAsStringAsync());
+        }
+        using (var db = fixture.Context())
+        {
+            var row = await db.Listings.SingleAsync(x => x.Id == listing.Id);
+            row.Status = SurplusLink.Api.Models.ListingStatus.ACTIVE;
+            row.Quantity = 12.25m;
+            row.ReservedQuantity = 0;
+            await db.SaveChangesAsync();
         }
         using var verify = fixture.Context();
         Assert.True(await verify.Categories.AnyAsync(x => x.Id == category.Id));

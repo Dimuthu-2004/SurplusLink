@@ -7,8 +7,7 @@ export function resolveNotificationRoute(item: NotificationItem, userRoles: stri
   // Fallback heuristic based on entity type
   if (item.entityType === 'Transaction' && item.entityId) {
     if (userRoles.includes('MANAGER')) {
-      // There is no manager transaction-detail route; use the actual manager workspace.
-      return '/app/manager';
+      return `/app/manager/transactions/${item.entityId}`;
     }
     return `/app/offers`;
   }
@@ -42,6 +41,7 @@ function knownRoute(actionRoute?: string | null): string | null {
     /^\/app\/buyer\/materials\/[^/]+$/,
     /^\/app\/offers\/[^/]+$/,
     /^\/app\/manager\/?$/,
+    /^\/app\/manager\/transactions\/[^/]+$/,
     /^\/app\/manager\/(materials|requirements|workflows)\/[^/]+$/,
     /^\/app\/manager\/(materials|categories|catalog|requirements|matches|listing-approvals|requirement-approvals|community)\/?$/,
   ];

@@ -61,6 +61,8 @@ export function ManagerDashboardPage() {
         </AnalyticsPanel>
       </div>
 
+      <TransactionFollowUps />
+
       {/* HIERARCHY 2: Core KPIs */}
       <div className="dashboard-grid kpis-grid" style={{ marginBottom: '1.5rem' }}>
         <AnalyticsPanel title="Inventory" load={managerDashboardApi.inventory}>
@@ -231,6 +233,18 @@ export function ManagerDashboardPage() {
       </section>
     </div>
   );
+}
+
+function TransactionFollowUps() {
+  const [rows, setRows] = useState<Awaited<ReturnType<typeof transactionConfirmationsApi.followUps>>>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  useEffect(() => { transactionConfirmationsApi.followUps().then(setRows).catch(() => setError('Unable to load transaction follow-ups.')).finally(() => setLoading(false)); }, []);
+  return <section className="manager-panel" aria-label="Transaction follow-ups" aria-busy={loading} style={{ marginBottom: '1.5rem' }}><div className="section-heading"><h2>Transaction follow-ups</h2></div>{loading && <p className="analytics-loading" role="status">Loading transaction follow-ups…</p>}{error && <p className="error-message" role="alert">{error}</p>}{!loading && !error && rows.length === 0 && <p className="empty-state">No transaction follow-ups need attention.</p>}{!loading && rows.length > 0 && <div className="table-scroll"><table><thead><tr><th>Reference</th><th>Material</th><th>Status</th><th>Deadline</th><th>Handover / receipt</th></tr></thead><tbody>{rows.map(row => <tr key={row.id}><td><Link to={`/app/manager/transactions/${row.id}`}>{row.reference}</Link></td><td>{row.materialTitle}</td><td>{followUpStatusLabel(row.status)}</td><td>{row.confirmationDeadline ? `${row.daysRemaining} days remaining` : 'Not recorded'}</td><td>{row.sellerHandoverConfirmedAt ? 'Seller handed over' : 'Awaiting seller'} / {row.buyerReceivedConfirmedAt ? 'Buyer received' : 'Awaiting buyer'}</td></tr>)}</tbody></table></div>}</section>;
+}
+
+function followUpStatusLabel(status: string) {
+  return status === 'UNKNOWN' ? 'Unknown status' : status.split('_').map(word => word.charAt(0) + word.slice(1).toLowerCase()).join(' ');
 }
 
 function AnimatedTransactionAnalyticsSection() {

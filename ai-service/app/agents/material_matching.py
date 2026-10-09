@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from decimal import Decimal, ROUND_CEILING
+from decimal import Decimal
 from typing import Any, Literal, Mapping, TypedDict, cast
 
 from langgraph.graph import END, START, StateGraph
@@ -29,6 +29,39 @@ class MatchingState(TypedDict, total=False):
     request: MatchingRequest
     search_results: list[MaterialListingRecord]
     response: MatchingResponse
+
+
+def _effective_contribution(listing: MaterialListingRecord, required_quantity: Decimal, maximum_budget: Decimal) -> tuple[Decimal, int | None, Decimal]:
+    """Uses the backend contribution contract; local math is only a legacy fallback.
+
+    The snapshot's maximum_contribution already accounts for the route when one
+    is known. It is eligibility metadata, never a final allocation.
+    """
+    available_budget = max(Decimal("0"), maximum_budget)
+    max_possible_base = min(listing.available_quantity, required_quantity)
+    if listing.maximum_contribution is not None:
+        max_possible_base = min(max_possible_base, listing.maximum_contribution)
+    if max_possible_base <= 0:
+        return Decimal("0"), 0 if listing.quantity_mode in {"PACKAGE", "PIECE"} else None, Decimal("0")
+
+    if listing.quantity_mode in {"PACKAGE", "PIECE"} and listing.package_size and listing.package_size > 0:
+        max_possible_packages = int(max_possible_base // listing.package_size)
+        max_affordable_packages = int(available_budget // listing.unit_price) if listing.unit_price > 0 else max_possible_packages
+        effective_packages = min(max_possible_packages, max_affordable_packages)
+        if effective_packages < 1:
+            return Decimal("0"), 0, Decimal("0")
+        effective_quantity = Decimal(effective_packages) * listing.package_size
+        cost = Decimal(effective_packages) * listing.unit_price
+        return effective_quantity, effective_packages, cost
+    else:
+        max_affordable_base = available_budget / listing.unit_price if listing.unit_price > 0 else max_possible_base
+        effective_quantity = min(max_possible_base, max_affordable_base)
+        min_increment = listing.minimum_sellable_increment or Decimal("0.001")
+        effective_quantity = (effective_quantity // min_increment) * min_increment
+        if effective_quantity < min_increment:
+            return Decimal("0"), None, Decimal("0")
+        cost = effective_quantity * listing.unit_price
+        return effective_quantity, None, cost
 
 
 class MaterialMatchingAgent:
@@ -192,10 +225,11 @@ class MaterialMatchingAgent:
             return False
         if listing.available_until.astimezone(timezone.utc).date() < request.deadline.astimezone(timezone.utc).date():
             return False
-        required_packages = (required_quantity / listing.package_size).to_integral_value(rounding=ROUND_CEILING) if listing.quantity_mode in {"PACKAGE", "PIECE"} and listing.package_size else None
-        expected_cost = listing.unit_price * (required_packages if required_packages is not None else required_quantity)
-        if expected_cost > request.maximumBudget:
+
+        eff_qty, eff_pkgs, eff_cost = _effective_contribution(listing, required_quantity, request.maximumBudget)
+        if eff_qty <= 0:
             return False
+
         if request.categoryId and listing.category_id != request.categoryId:
             return False
         return not (
@@ -207,9 +241,8 @@ class MaterialMatchingAgent:
     @staticmethod
     def _candidate(listing: MaterialListingRecord, request: MatchingRequest) -> Candidate:
         required_quantity = request.normalizedRequiredQuantity or request.requiredQuantity
-        required_packages = (required_quantity / listing.package_size).to_integral_value(rounding=ROUND_CEILING) if listing.quantity_mode in {"PACKAGE", "PIECE"} and listing.package_size else None
-        total_cost = listing.unit_price * (required_packages if required_packages is not None else required_quantity)
-        budget_headroom = (request.maximumBudget - total_cost) / request.maximumBudget
+        eff_qty, eff_pkgs, eff_cost = _effective_contribution(listing, required_quantity, request.maximumBudget)
+        budget_headroom = (request.maximumBudget - eff_cost) / request.maximumBudget if request.maximumBudget > 0 else Decimal("0")
         # Preliminary score only: routing is required for the final score.
         score = round(float(Decimal("50") * condition_rank(listing.condition) / 4
                             + Decimal("30") * budget_headroom), 2)
@@ -221,16 +254,16 @@ class MaterialMatchingAgent:
             basicFitScore=score,
             reason=(
                 (f"Seller has {listing.package_count_available} {listing.package_type.lower() if listing.package_type else 'packages'} "
-                 f"of {listing.package_size}{listing.unit}; can contribute {listing.maximum_contribution or listing.available_quantity} {listing.unit}. "
+                 f"of {listing.package_size}{listing.unit}; can contribute {eff_qty} {listing.unit}. "
                  if listing.quantity_mode in {"PACKAGE", "PIECE"} else "") +
                 f"Active verified {listing.condition.lower()} listing with {listing.available_quantity} {listing.unit} available; "
-                f"estimated cost {total_cost} is within the maximum budget."
+                f"estimated cost {eff_cost} is within the maximum budget."
             ),
             quantityMode=listing.quantity_mode, packageType=listing.package_type, packageSize=listing.package_size,
             packageCountAvailable=listing.package_count_available,
             baseEquivalentAvailableQuantity=listing.base_equivalent_available_quantity or listing.available_quantity,
-            maximumContribution=listing.maximum_contribution or min(listing.available_quantity, required_quantity),
-            fullCoverage=listing.full_coverage if listing.full_coverage is not None else listing.available_quantity >= required_quantity,
+            maximumContribution=eff_qty,
+            fullCoverage=listing.full_coverage if listing.full_coverage is not None else eff_qty >= required_quantity,
             baseUnit=listing.base_unit or listing.unit,
             minimumSellableIncrement=listing.minimum_sellable_increment,
             decimalPrecision=listing.decimal_precision,

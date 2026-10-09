@@ -41,7 +41,9 @@ public static class MatchQueryBuilder
                 : x.Listing.Condition == MaterialCondition.GOOD ? 3 : x.Listing.Condition == MaterialCondition.FAIR ? 2
                 : x.Listing.Condition == MaterialCondition.POOR ? 1 : 0)
                 .ThenBy(x => x.EstimatedTransportCost == null)
-                .ThenBy(x => x.Listing.UnitPrice * x.MaterialRequest.RequiredQuantity + x.EstimatedTransportCost)
+                // Score already used the authoritative feasible contribution.
+                // Do not reintroduce full-request pricing as a tie-breaker.
+                .ThenBy(x => x.EstimatedTransportCost)
                 .ThenBy(x => x.Distance == null).ThenBy(x => x.Distance).ThenBy(x => x.ListingId);
         return ordered.ThenBy(x => x.Id);
     }

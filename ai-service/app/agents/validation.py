@@ -116,9 +116,10 @@ class DeterministicValidationTools:
         return self._result(value.availableQuantity > 0, "INSUFFICIENT_QUANTITY")
 
     async def check_budget(self, value):
-        return self._result(value.transportCost is not None and
-                            value.quantity * value.unitPrice + value.transportCost <= value.maximumBudget,
-                            "TOTAL_COST_EXCEEDS_BUDGET_OR_UNKNOWN")
+        if value.transportCost is None:
+            return CheckResult(passed=False, code="TOTAL_COST_UNKNOWN")
+        return self._result(value.quantity * value.unitPrice + value.transportCost <= value.maximumBudget,
+                            "TOTAL_COST_EXCEEDS_BUDGET")
 
     async def check_match_data_complete(self, value):
         complete = (value.buyerId != value.sellerId and value.categoryMatches and value.unitMatches
