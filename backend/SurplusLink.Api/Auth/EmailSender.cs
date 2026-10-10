@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Mail;
+using System.Net.Http.Json;
 using Microsoft.Extensions.Options;
 
 namespace SurplusLink.Api.Auth;
@@ -24,10 +25,95 @@ public sealed class EmailDeliveryException : Exception
     public EmailDeliveryException(string message, Exception? innerException = null) : base(message, innerException) { }
 }
 
+public sealed class BrevoEmailOptions
+{
+    public string ApiKey { get; set; } = string.Empty;
+    public string FromEmail { get; set; } = string.Empty;
+    public string FromName { get; set; } = "SurplusLink";
+
+    public bool IsConfigured => !string.IsNullOrWhiteSpace(ApiKey) && IsValidEmail(FromEmail);
+
+    private static bool IsValidEmail(string email)
+    {
+        try { _ = new MailAddress(email); return true; }
+        catch (FormatException) { return false; }
+        catch (ArgumentException) { return false; }
+    }
+}
+
 public interface IAuthEmailSender
 {
     Task SendVerificationAsync(string email, string code, CancellationToken cancellationToken);
     Task SendPasswordResetAsync(string email, string code, CancellationToken cancellationToken);
+}
+
+public sealed class BrevoAuthEmailSender(IHttpClientFactory httpClientFactory, IOptions<BrevoEmailOptions> options, ILogger<BrevoAuthEmailSender> logger) : IAuthEmailSender
+{
+    public const string HttpClientName = "BrevoAuthEmail";
+
+    public Task SendVerificationAsync(string email, string code, CancellationToken cancellationToken) =>
+        SendAsync(email, "Verify your SurplusLink email", "Verify your SurplusLink email", code,
+            "This code expires in 10 minutes. Do not share this code. If you did not create this account, you can ignore this email.", cancellationToken);
+
+    public Task SendPasswordResetAsync(string email, string code, CancellationToken cancellationToken) =>
+        SendAsync(email, "Reset your SurplusLink password", "Reset your SurplusLink password", code,
+            "This code expires in 10 minutes. Do not share this code with anyone.", cancellationToken);
+
+    private async Task SendAsync(string to, string subject, string heading, string code, string note, CancellationToken cancellationToken)
+    {
+        var config = options.Value;
+        if (!config.IsConfigured)
+        {
+            logger.LogError("Brevo email delivery was requested but its configuration is invalid.");
+            throw new EmailDeliveryException("Brevo email delivery is not configured.");
+        }
+
+        var htmlContent = $"<main style=\"font-family:Arial,sans-serif;color:#263238;max-width:560px\"><h1 style=\"color:#d96a20\">SurplusLink</h1><h2>{heading}</h2><p>Your six-digit code is:</p><p style=\"font-size:32px;font-weight:bold;letter-spacing:8px\">{code}</p><p>{note}</p></main>";
+        var textContent = $"SurplusLink\n\n{heading}\n\nYour six-digit code: {code}\n\n{note}";
+        using var request = new HttpRequestMessage(HttpMethod.Post, "v3/smtp/email")
+        {
+            Content = JsonContent.Create(new
+            {
+                sender = new { name = config.FromName, email = config.FromEmail },
+                to = new[] { new { email = to } },
+                subject,
+                htmlContent,
+                textContent
+            })
+        };
+        request.Headers.Add("api-key", config.ApiKey);
+
+        try
+        {
+            using var response = await httpClientFactory.CreateClient(HttpClientName)
+                .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                logger.LogError("Brevo email delivery failed with status code {StatusCode}.", (int)response.StatusCode);
+                throw new EmailDeliveryException("Brevo email delivery failed.");
+            }
+        }
+        catch (EmailDeliveryException) { throw; }
+        catch (OperationCanceledException exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            logger.LogError("Brevo email delivery timed out.");
+            throw new EmailDeliveryException("Brevo email delivery timed out.", exception);
+        }
+        catch (HttpRequestException exception)
+        {
+            logger.LogError(exception, "Brevo email delivery failed.");
+            throw new EmailDeliveryException("Brevo email delivery failed.", exception);
+        }
+    }
+}
+
+public sealed class InvalidAuthEmailSender : IAuthEmailSender
+{
+    public Task SendVerificationAsync(string email, string code, CancellationToken cancellationToken) =>
+        Task.FromException(new EmailDeliveryException("Email provider configuration is invalid."));
+
+    public Task SendPasswordResetAsync(string email, string code, CancellationToken cancellationToken) =>
+        Task.FromException(new EmailDeliveryException("Email provider configuration is invalid."));
 }
 
 public sealed class SmtpAuthEmailSender(IOptions<EmailOptions> options, ILogger<SmtpAuthEmailSender> logger) : IAuthEmailSender

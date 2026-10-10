@@ -129,7 +129,28 @@ builder.Services.AddOptions<EmailOptions>()
         options.FromEmail = builder.Configuration["SMTP_FROM_EMAIL"] ?? options.FromEmail;
         options.FromName = builder.Configuration["SMTP_FROM_NAME"] ?? options.FromName;
     });
-builder.Services.AddScoped<IAuthEmailSender, SmtpAuthEmailSender>();
+builder.Services.AddOptions<BrevoEmailOptions>()
+    .Configure(options =>
+    {
+        options.ApiKey = builder.Configuration["BREVO_API_KEY"] ?? string.Empty;
+        options.FromEmail = builder.Configuration["BREVO_FROM_EMAIL"] ?? string.Empty;
+        options.FromName = builder.Configuration["BREVO_FROM_NAME"] ?? options.FromName;
+    });
+builder.Services.AddHttpClient(BrevoAuthEmailSender.HttpClientName, client =>
+{
+    client.BaseAddress = new Uri("https://api.brevo.com/");
+    client.Timeout = TimeSpan.FromSeconds(10);
+});
+var emailProvider = builder.Configuration["EMAIL_PROVIDER"]?.Trim();
+builder.Services.AddScoped<SmtpAuthEmailSender>();
+builder.Services.AddScoped<BrevoAuthEmailSender>();
+builder.Services.AddScoped<InvalidAuthEmailSender>();
+builder.Services.AddScoped<IAuthEmailSender>(services =>
+    string.IsNullOrWhiteSpace(emailProvider) || string.Equals(emailProvider, "smtp", StringComparison.OrdinalIgnoreCase)
+        ? services.GetRequiredService<SmtpAuthEmailSender>()
+        : string.Equals(emailProvider, "brevo", StringComparison.OrdinalIgnoreCase)
+            ? services.GetRequiredService<BrevoAuthEmailSender>()
+            : services.GetRequiredService<InvalidAuthEmailSender>());
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IReservationService, ReservationService>();
 builder.Services.AddScoped<IMaterialInventoryService, MaterialInventoryService>();
@@ -235,11 +256,26 @@ builder.Services.AddHealthChecks();
 
 var app = builder.Build();
 
-var smtp = app.Services.GetRequiredService<IOptions<EmailOptions>>().Value;
-if (smtp.IsConfigured)
-    app.Logger.LogInformation("SMTP email service configured.");
+if (string.Equals(emailProvider, "brevo", StringComparison.OrdinalIgnoreCase))
+{
+    var brevo = app.Services.GetRequiredService<IOptions<BrevoEmailOptions>>().Value;
+    if (brevo.IsConfigured)
+        app.Logger.LogInformation("Brevo email service configured.");
+    else
+        app.Logger.LogWarning("Brevo email service is not configured; authentication emails will return EMAIL_DELIVERY_FAILED.");
+}
+else if (string.IsNullOrWhiteSpace(emailProvider) || string.Equals(emailProvider, "smtp", StringComparison.OrdinalIgnoreCase))
+{
+    var smtp = app.Services.GetRequiredService<IOptions<EmailOptions>>().Value;
+    if (smtp.IsConfigured)
+        app.Logger.LogInformation("SMTP email service configured.");
+    else
+        app.Logger.LogWarning("SMTP email service is not configured; authentication emails will return EMAIL_DELIVERY_FAILED.");
+}
 else
-    app.Logger.LogWarning("SMTP email service is not configured; authentication emails will return EMAIL_DELIVERY_FAILED.");
+{
+    app.Logger.LogWarning("Email provider configuration is invalid; authentication emails will return EMAIL_DELIVERY_FAILED.");
+}
 
 var routing = app.Services.GetRequiredService<RoutingOptions>();
 if (!routing.CanRoute)
